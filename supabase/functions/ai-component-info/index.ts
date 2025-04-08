@@ -1,4 +1,4 @@
-/// supabase/functions/ai-component-info/index.ts
+// supabase/functions/ai-component-info/index.ts
 // VERSION SIMPLIFIÉE - Recherche d'équivalents uniquement
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
