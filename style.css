@@ -211,13 +211,24 @@ main.view-section.active-view { /* Cibler les <main> avec la classe */
 }
 #search-button:hover { background-color: var(--primary-color-dark); border-color: var(--primary-color-dark); z-index: 2;}
 .response-section { margin-top: 30px; }
+
 .chat-box {
-    background-color: var(--light-gray); border: 1px solid var(--border-color); border-radius: var(--border-radius);
-    padding: 20px; min-height: 300px; max-height: 500px; overflow-y: auto;
+    background-color: var(--light-gray);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 20px;
+    /* min-height: 300px; */ /* MODIFICATION: Supprimé */
+    /* max-height: 500px; */ /* MODIFICATION: Supprimé */
+    overflow-y: auto; /* MODIFICATION: Conservé (active le défilement) */
     display: flex;
     flex-direction: column-reverse; /* Messages récents en bas */
     gap: 15px;
+
+    /* --- MODIFICATION: Hauteur fixe --- */
+    height: 450px; /* Hauteur fixe souhaitée (ajustez si besoin) */
+    /* --- FIN MODIFICATION --- */
 }
+
 .message {
     padding: 10px 16px; border-radius: 18px; max-width: 80%; line-height: 1.5; box-shadow: var(--box-shadow);
     word-wrap: break-word; font-size: 0.95em;
@@ -231,7 +242,7 @@ main.view-section.active-view { /* Cibler les <main> avec la classe */
 }
 .message.ai a { color: var(--link-color); font-weight: 500; }
 .message.ai strong { font-weight: 600; color: var(--primary-color-dark);}
-.typing-indicator { text-align: left; margin-bottom: 10px; height: 20px; padding-left: 10px; }
+.typing-indicator { text-align: left; margin-bottom: 10px; height: 20px; padding-left: 10px; order: -1; /* Pour être en bas avec column-reverse */ }
 .typing-indicator i { color: var(--text-muted); font-style: italic; font-size: 0.9em; }
 
 /* Boutons et Liens dans le Chat */
@@ -328,11 +339,32 @@ body.user-logged-in #inventory-table th:nth-child(4), body.user-logged-in #inven
     border: 1px solid var(--border-color); border-radius: var(--border-radius);
     padding: 30px; background-color: #ffffff; margin-bottom: 30px; box-shadow: var(--box-shadow);
 }
-.admin-section h3 {
+.admin-section h3 { /* Titre principal de la section */
     margin-top: 0; color: var(--primary-color-dark); border-bottom: 1px solid #eee;
     padding-bottom: 12px; margin-bottom: 25px; font-size: 1.4em; font-weight: 600;
 }
-.admin-section h4 { color: var(--text-color); margin-bottom: 18px; font-size: 1.15em; font-weight: 600; }
+.admin-section h4 { /* Sous-titres de section */
+    color: var(--text-color); margin-bottom: 18px; font-size: 1.15em; font-weight: 600;
+}
+/* AJOUT: Style pour les sous-sections dans Admin (pour encadrer un peu) */
+.admin-subsection {
+    border: 1px solid #eee;
+    padding: 15px 20px;
+    margin-bottom: 20px; /* Espace entre sous-sections */
+    background-color: #fdfdfd; /* Léger fond pour distinguer */
+    border-radius: var(--border-radius);
+}
+/* Titre spécifique pour sous-section (plus discret que h3/h4 de section) */
+.admin-subsection h4 {
+    margin-top: 0;
+    margin-bottom: 18px;
+    color: var(--text-muted); /* Couleur plus discrète */
+    font-size: 1.1em;
+    font-weight: 600;
+    border-bottom: 1px dashed #eee;
+    padding-bottom: 8px;
+}
+
 .admin-columns { display: flex; gap: 35px; flex-wrap: wrap; }
 .category-list-section, .category-form-section { flex: 1; min-width: 320px; }
 .form-group { margin-bottom: 20px; }
@@ -354,8 +386,8 @@ body.user-logged-in #inventory-table th:nth-child(4), body.user-logged-in #inven
 .form-actions { margin-top: 30px; text-align: right; }
 .form-actions button { margin-left: 10px;} /* Espace entre boutons actions */
 
-/* Styles spécifiques formulaire Admin */
-#stock-form .form-group label + input + button { /* Style pour bouton Vérifier/Maj à côté d'input */
+/* Styles spécifiques formulaire Admin Stock */
+#stock-form .form-group label + input + button { /* Style pour bouton Vérifier à côté d'input */
    margin-left: 10px;
    padding: 10px 15px; /* Taille bouton cohérente */
    font-size: 0.9em;
@@ -402,6 +434,25 @@ button.delete-cat { background-color: #dc3545; color: white; padding: 5px 10px; 
 button.delete-cat:hover { background-color: #bb2d3b; box-shadow: var(--box-shadow);}
 button.edit-cat { background-color: #6c757d; color: white; padding: 5px 10px; font-size: 0.8em; }
 button.edit-cat:hover { background-color: #5a6268; box-shadow: var(--box-shadow);}
+
+/* AJOUT: Style pour le bouton supprimer composant */
+#delete-component-button.danger {
+    background-color: var(--error-color); /* Utilise la variable CSS existante pour le rouge */
+    color: white;
+    margin-left: 0; /* Pour qu'il soit aligné à gauche sous le bloc de quantité */
+    padding: 10px 16px; /* Taille cohérente avec autres boutons d'action */
+    font-size: 0.9em;
+}
+#delete-component-button.danger:hover:not(:disabled) {
+    background-color: #a01821; /* Rouge plus sombre au survol */
+    box-shadow: var(--box-shadow);
+}
+#delete-component-button.danger:disabled {
+    background-color: #b3656b;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
 /* Liste Catégories */
 #category-list { list-style: none; padding: 0; max-height: 350px; overflow-y: auto; border: 1px solid var(--border-color); padding: 15px; background: #ffffff; margin:0; border-radius: var(--border-radius); }
 #category-list li { padding: 10px 8px; border-bottom: 1px dashed #eee; display: flex; justify-content: space-between; align-items: center; font-size:0.95em; }
@@ -420,16 +471,23 @@ button.edit-cat:hover { background-color: #5a6268; box-shadow: var(--box-shadow)
 .feedback-area.error { background-color: var(--error-bg); color: var(--error-color); border-color: #f5c2c7; display: block; }
 .feedback-area.warning { background-color: var(--warning-bg); color: var(--warning-color); border-color: #ffeeba; display: block; text-align: center;}
 .feedback-area.info { background-color: var(--info-bg); color: var(--info-color); border-color: #b8daff; display: block; text-align: center;}
-/* Formulaire Admin Stock */
-#component-info { border: 1px dashed var(--border-color); padding: 15px 20px; margin: 20px 0; background-color: var(--light-gray); border-radius: var(--border-radius); }
+
+/* Formulaire Admin Stock - Détails */
+#component-actions { /* Le wrapper pour les actions rapides et bouton supprimer */
+    margin-top: 15px; /* Espace après le champ de référence */
+    margin-bottom: 20px;
+}
 #component-details { margin-top: 20px; } /* Ajout marge pour détails */
-#category-specific-attributes { border: 1px dashed #a2a2a2; padding: 20px 25px; margin-top: 25px; background-color: #f0f5f9; border-radius: var(--border-radius); }
-#category-specific-attributes h4{ margin-top: 0; color:#2c3e50; margin-bottom: 18px; font-size: 1.05em; font-weight: 600;}
-#category-specific-attributes .form-group{ margin-bottom: 15px; }
+/* Style pour la section des attributs spécifiques (devient aussi une sous-section) */
+#category-specific-attributes {
+    border: 1px dashed #a2a2a2; padding: 20px 25px; margin-top: 25px; background-color: #f0f5f9; border-radius: var(--border-radius);
+}
+#category-specific-attributes h4 { margin-top: 0; color:#2c3e50; margin-bottom: 18px; font-size: 1.05em; font-weight: 600; border-bottom: none; padding-bottom: 0;} /* Titre interne */
+#category-specific-attributes .form-group { margin-bottom: 15px; }
 #category-specific-attributes label { font-weight: 500; font-size: 0.88em; }
 hr { border: 0; height: 1px; background-color: #e9ecef; margin: 30px 0; }
 
-/* --- Style pour Choix Mode Import (AJOUTÉ) --- */
+/* --- Style pour Choix Mode Import --- */
 .import-mode-choice label {
     font-weight: normal; /* Label moins gras que les labels principaux */
     margin-bottom: 8px; /* Espace sous le label principal */
@@ -498,9 +556,12 @@ hr { border: 0; height: 1px; background-color: #e9ecef; margin: 30px 0; }
     gap: 8px;
     font-size: 0.9em;
     text-align: left;
-    max-height: none;
+    max-height: none; /* Pas de limite de hauteur ici */
     overflow-y: visible;
     padding: 5px 0;
+    margin-top: 15px; /* Ajout espace au-dessus */
+    border-top: 1px dashed #eee; /* Séparateur léger */
+    padding-top: 15px; /* Espace après séparateur */
 }
 .attribute-badge {
     display: inline-block;
@@ -576,7 +637,7 @@ hr { border: 0; height: 1px; background-color: #e9ecef; margin: 30px 0; }
     .attribute-badge { padding: 4px 8px; }
 }
 @media (max-width: 480px) {
-    body { padding-top: 0; }
+    body { padding-top: 0; } /* Pas d'afficheur sur mobile */
     .nav-button { font-size: 0.85em; padding: 8px 10px; }
     th, td { padding: 6px 6px; font-size: 0.85em;}
     #inventory-table th:nth-child(2), #inventory-table td:nth-child(2), /* Description */
@@ -585,7 +646,7 @@ hr { border: 0; height: 1px; background-color: #e9ecef; margin: 30px 0; }
     .message.ai a.external-link { font-size: 0.80em; padding: 4px 8px; margin-right: 6px;}
     .user-info { flex-direction: column; gap: 5px;}
     .user-info button { margin-left: 0;}
-    #seven-segment-display { display: none; }
+    #seven-segment-display { display: none; } /* Cacher l'afficheur sur mobile */
     #quantity-change-modal { min-width: 90%; max-width: 280px; padding: 15px 20px; }
     #quantity-change-modal h3 { font-size: 1.1em; }
     .adjust-button { width: 30px; height: 30px; font-size: 1.3em;}
