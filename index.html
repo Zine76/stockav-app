@@ -248,6 +248,24 @@
                         <input type="file" id="import-csv-file" accept=".csv">
                         <small>Le fichier doit avoir les colonnes : <strong>ref</strong> (obligatoire), <strong>description</strong>, <strong>manufacturer</strong>, <strong>quantity</strong> (obligatoire, nombre >= 0), <strong>datasheet</strong>, <strong>drawer</strong>, <strong>category_name</strong> (nom exact de la catégorie existante, optionnel), <strong>critical_threshold</strong> (nombre >= 0, optionnel), <strong>attributes</strong> (JSON valide ou vide, optionnel, ex: {"Type":"Axial"}). La première ligne doit être l'en-tête.</small>
                     </div>
+
+                    <!-- ***** AJOUT POUR LE CHOIX DU MODE D'IMPORT ***** -->
+                    <div class="form-group import-mode-choice">
+                        <label>Mode d'importation :</label>
+                        <div class="radio-group">
+                            <label for="import-mode-enrich">
+                                <input type="radio" name="import-mode" id="import-mode-enrich" value="enrich" checked>
+                                Enrichir / Mettre à jour (Défaut)
+                            </label>
+                            <label for="import-mode-overwrite">
+                                <input type="radio" name="import-mode" id="import-mode-overwrite" value="overwrite">
+                                Écraser l'inventaire existant
+                            </label>
+                        </div>
+                        <small style="color: var(--error-color); font-weight: bold;">Attention : Écraser supprime tout l'inventaire actuel avant l'import !</small>
+                    </div>
+                    <!-- ***** FIN AJOUT ***** -->
+
                     <button id="import-inventory-csv-button" class="action-button success">Lancer l'Importation</button>
                 </div>
                 <div id="import-feedback" class="feedback-area" style="margin-top: 15px;"></div>
@@ -263,10 +281,19 @@
 
     <!-- Fenêtre Modale pour Modifier Quantité (+/-) -->
     <div id="modal-overlay"></div>
-    <div id="quantity-change-modal">
+    <div id="quantity-change-modal"> <!-- S'assurer que cet ID est utilisé par le JS -->
         <h3>Modifier le Stock</h3>
         <p>Composant: <strong id="modal-component-ref">N/A</strong></p>
         <p>Quantité actuelle: <strong id="modal-current-quantity">N/A</strong></p>
+
+        <!-- Bloc pour afficher les attributs (requis par le JS pour les badges) -->
+        <div id="modal-current-attributes" style="display: none; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+            <h4 style="text-align: center; margin-bottom: 10px; color: var(--text-muted); font-size: 0.9em;">Attributs :</h4>
+            <div id="modal-attributes-list" style="font-size: 0.9em; text-align: center; max-height: 100px; overflow-y: auto;">
+                <!-- Les badges d'attributs seront insérés ici par le JavaScript -->
+            </div>
+        </div>
+
         <div class="quantity-adjuster">
             <button id="modal-decrease-button" class="adjust-button" title="Diminuer la quantité">-</button>
             <span id="modal-change-amount" class="change-amount-display">0</span>
