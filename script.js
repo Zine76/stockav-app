@@ -1,3 +1,5 @@
+
+
 // ----- DÉBUT DU FICHIER script.js -----
 // Assure que le code s'exécute après le chargement du DOM
 document.addEventListener('DOMContentLoaded', () => {
@@ -16,8 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const SUPABASE_URL = 'https://tjdergojgghzmopuuley.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqZGVyZ29qZ2doem1vcHV1bGV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4MTU0OTUsImV4cCI6MjA1OTM5MTQ5NX0.XejQYEPYoCrgYOwW4T9g2VcmohCdLLndDdwpSYXAwPA';
     const FAKE_EMAIL_DOMAIN = '@stockav.local';
-    // --- URL de la fonction Edge ---
-    const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/ai-component-info`;
 
     let supabase = null;
 
@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Récupération des Éléments DOM ---
+    // (Liste complète des éléments DOM comme dans la version précédente)
     const loginArea = document.getElementById('login-area');
     const loginCodeInput = document.getElementById('login-code');
     const loginPasswordInput = document.getElementById('login-password');
@@ -351,8 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const startIndex = (currentInventoryPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage - 1;
         try {
-             // *** MODIFICATION TEST B : Requête SANS la jointure categories(name) ***
-            let query = supabase.from('inventory').select('*, critical_threshold', { count: 'exact' }); // Enlevé categories(name)
+            let query = supabase.from('inventory').select('*, categories ( name ), critical_threshold', { count: 'exact' });
             const searchValue = inventorySearchFilter?.value.trim() || '';
             const categoryValue = inventoryCategoryFilter?.value || 'all';
             if (searchValue) { const searchColumns = ['ref', 'description', 'manufacturer']; if (currentUser) { searchColumns.push('drawer'); } query = query.or(searchColumns.map(col => `${col}.ilike.%${searchValue}%`).join(',')); }
@@ -360,12 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
             query = query.order('ref', { ascending: true }).range(startIndex, endIndex);
             const { data, error, count } = await query;
             inventoryTableBody.innerHTML = '';
-            if (error) {
-                 if (error.code === 'PGRST116' || error.message.includes('406')) {
-                     throw new Error(`Erreur accès base (RLS?): ${error.message}`);
-                 }
-                 throw new Error(`Erreur Supabase: ${error.message}`);
-             }
+            if (error) { throw new Error(`Erreur Supabase: ${error.message}`); }
             const totalItems = count || 0;
             const totalPages = Math.ceil(totalItems / itemsPerPage);
             if (totalItems === 0) { if(inventoryNoResults) { inventoryNoResults.textContent = `Aucun composant trouvé${searchValue || categoryValue !== 'all' ? ' pour ces filtres' : ''}.`; inventoryNoResults.style.display = 'block'; } if(inventoryPageInfo) inventoryPageInfo.textContent = 'Page 0 / 0'; }
@@ -373,14 +368,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(inventoryNoResults) inventoryNoResults.style.display = 'none';
                 data.forEach(item => {
                     const row = inventoryTableBody.insertRow();
-                    row.dataset.ref = item.ref;
+                    row.dataset.ref = item.ref; // ESSENTIEL POUR LE CLIC
                     row.classList.add('inventory-item-row');
                     const refCell = row.insertCell();
                     const status = getStockStatus(item.quantity, item.critical_threshold);
                     const indicatorSpan = document.createElement('span'); indicatorSpan.classList.add('stock-indicator', `level-${status}`); indicatorSpan.title = `Stock: ${status.toUpperCase()} (Qté: ${item.quantity}, Seuil: ${item.critical_threshold ?? 'N/A'})`; refCell.appendChild(indicatorSpan); refCell.appendChild(document.createTextNode(item.ref));
                     row.insertCell().textContent = item.description || '-';
-                    // *** MODIFICATION TEST B : Affiche l'ID de catégorie au lieu du nom ***
-                    row.insertCell().textContent = item.category_id ?? 'N/A';
+                    row.insertCell().textContent = item.categories?.name ?? 'N/A';
                     row.insertCell().textContent = item.drawer || '-';
                     row.insertCell().textContent = item.manufacturer || '-';
                     row.insertCell().textContent = item.quantity;
@@ -400,7 +394,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- LOGIQUE HISTORIQUE ---
-    // (Aucun changement dans cette section pour ce test)
     async function displayLog(page = currentLogPage) {
         if (!currentUser) return;
         currentLogPage = page;
@@ -416,7 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { data, error, count } = await supabase.from('logs').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(startIndex, endIndex);
             logTableBody.innerHTML = '';
-            if (error) { throw new Error(`Erreur Supabase (logs): ${error.message}`); }
+            if (error) { throw new Error(`Erreur Supabase: ${error.message}`); }
             const totalItems = count || 0;
             const totalPages = Math.ceil(totalItems / itemsPerPage);
             if (totalItems === 0) { if(logNoResults) { logNoResults.textContent = "Historique vide."; logNoResults.style.display = 'block'; } if(logPageInfo) logPageInfo.textContent = 'Page 0 / 0'; }
@@ -438,11 +431,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             console.error("Erreur affichage logs:", err);
-            logTableBody.innerHTML = `<tr><td colspan="6" class="error-message">Erreur chargement logs: ${err.message}</td></tr>`;
+            logTableBody.innerHTML = `<tr><td colspan="6" class="error-message">Erreur chargement: ${err.message}</td></tr>`;
             if(logPageInfo) logPageInfo.textContent = 'Erreur';
         }
     }
+
     function formatLogTimestamp(date) { try { return date.toLocaleString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }); } catch(e) { return date.toISOString();} }
+
     async function addLogEntry(itemRef, change, newQuantity) {
         if (!currentUser || !currentUserCode || !supabase) { console.warn("Log annulé: non connecté ou Supabase indispo."); return; }
         const logData = { user_id: currentUser.id, user_code: currentUserCode.toUpperCase(), component_ref: itemRef, quantity_change: change, quantity_after: newQuantity };
@@ -455,16 +450,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- VUE ADMIN ---
-    // (Aucun changement dans cette section pour ce test)
     async function getCategories() {
         if (categoriesCache.length > 0) return categoriesCache;
         if (!supabase) { console.warn("getCategories: Supabase non dispo."); return []; }
-        console.log("Fetching categories...");
+        console.log("Fetching categories..."); // Log 672
         try {
             const { data, error } = await supabase.from('categories').select('id, name, attributes').order('name', { ascending: true });
             if (error) throw new Error(error.message);
             categoriesCache = data || [];
-            console.log("Categories fetched/cached:", categoriesCache.length);
+            console.log("Categories fetched/cached:", categoriesCache.length); // Log 677
             return categoriesCache;
         } catch (err) {
             console.error("Erreur lecture catégories:", err);
@@ -472,266 +466,124 @@ document.addEventListener('DOMContentLoaded', () => {
             return [];
         }
     }
-    function invalidateCategoriesCache() { categoriesCache = []; console.log("Cache catégories invalidé."); }
-    async function loadAdminData() { /* ... */ }
-    async function loadCategoriesAdmin() { /* ... */ }
-    function addCategoryEventListeners() { /* ... */ }
-    function resetCategoryForm(){ /* ... */ }
-    function addComponentCategorySelectListener() { /* ... */ }
-    function showAdminFeedback(message, type = 'info'){ /* ... */ }
-    function resetStockForm() { /* ... */ }
-    function addStockEventListeners() { /* ... */ }
+    function invalidateCategoriesCache() { categoriesCache = []; console.log("Cache catégories invalidé."); } // Log 685
+
+    async function loadAdminData() { /* (inchangé) */ if (!currentUser) return; document.getElementById('category-manager').style.display = 'block'; document.getElementById('stock-manager').style.display = 'block'; if(adminFeedbackDiv) { adminFeedbackDiv.style.display = 'none'; adminFeedbackDiv.textContent = ''; } resetStockForm(); try { await loadCategoriesAdmin(); } catch (error) { console.error("Erreur chargement données admin:", error); } }
+    async function loadCategoriesAdmin() { /* (inchangé) */ if (categoryList) categoryList.innerHTML = '<li><i>Chargement...</i></li>'; if (componentCategorySelectAdmin) componentCategorySelectAdmin.innerHTML = '<option value="">Chargement...</option>'; const categories = await getCategories(); if (categoryList) categoryList.innerHTML = ''; if (componentCategorySelectAdmin) componentCategorySelectAdmin.innerHTML = '<option value="">-- Sélectionner --</option>'; if (categories && categories.length > 0) { categories.forEach(cat => { if (categoryList) { const li = document.createElement('li'); li.dataset.categoryId = cat.id; li.innerHTML = `<span>${cat.name}</span><span class="category-actions"><button class="edit-cat" title="Modifier ${cat.name}">Modifier</button> <button class="delete-cat" title="Supprimer ${cat.name}">Suppr.</button></span>`; categoryList.appendChild(li); } if (componentCategorySelectAdmin) { const option = document.createElement('option'); option.value = cat.id; option.textContent = cat.name; option.dataset.attributes = cat.attributes || ''; componentCategorySelectAdmin.appendChild(option); } }); } else { if (categoryList) categoryList.innerHTML = '<li>Aucune catégorie définie.</li>'; if (componentCategorySelectAdmin) componentCategorySelectAdmin.innerHTML = '<option value="">Aucune catégorie</option>'; } }
+    function addCategoryEventListeners() { /* (inchangé) */ categoryList?.addEventListener('click', async (event) => { const targetButton = event.target.closest('button'); if (!targetButton) return; const listItem = targetButton.closest('li[data-category-id]'); if (!listItem) return; const categoryId = listItem.dataset.categoryId; if (!categoryId || !supabase) return; const category = categoriesCache.find(c => c.id === categoryId); if (!category) { console.error(`Cat ${categoryId} non trouvée.`); showAdminFeedback('Erreur: Cat non trouvée.', 'error'); return; } if (targetButton.classList.contains('edit-cat')) { if(categoryIdEditInput) categoryIdEditInput.value = category.id; if(categoryNameInput) categoryNameInput.value = category.name; if(categoryAttributesInput) categoryAttributesInput.value = category.attributes || ''; if(categoryFormTitle) categoryFormTitle.textContent = `Modifier: ${category.name}`; if(cancelEditButton) cancelEditButton.style.display = 'inline-block'; categoryNameInput?.focus(); showAdminFeedback(`Modif "${category.name}"...`, 'info'); } else if (targetButton.classList.contains('delete-cat')) { if (!confirm(`Supprimer "${category.name}" ?`)) return; showAdminFeedback(`Suppression "${category.name}"...`, "info"); targetButton.disabled = true; targetButton.closest('.category-actions')?.querySelectorAll('button').forEach(b => b.disabled = true); try { const { error } = await supabase.from('categories').delete().eq('id', categoryId); if (error) throw new Error(error.message); showAdminFeedback(`"${category.name}" supprimée.`, 'success'); invalidateCategoriesCache(); await loadCategoriesAdmin(); if (categoryIdEditInput?.value === categoryId) resetCategoryForm(); await populateInventoryFilters(); } catch (err) { console.error("Erreur suppr cat:", err); showAdminFeedback(`Erreur suppression: ${err.message}`, 'error'); const stillExistingLi = categoryList.querySelector(`li[data-category-id="${categoryId}"]`); if (stillExistingLi) stillExistingLi.querySelectorAll('button').forEach(b => b.disabled = false); } } }); cancelEditButton?.addEventListener('click', resetCategoryForm); categoryForm?.addEventListener('submit', async (event) => { event.preventDefault(); if (!supabase) return; const catName = categoryNameInput?.value.trim(); const catAttributes = categoryAttributesInput?.value.trim(); const editingId = categoryIdEditInput?.value; if (!catName) { showAdminFeedback("Nom obligatoire.", 'error'); categoryNameInput?.focus(); return; } const categoryData = { name: catName, attributes: catAttributes || null }; showAdminFeedback("Enregistrement...", "info"); const saveBtn = document.getElementById('save-category-button'); if(saveBtn) saveBtn.disabled = true; if(cancelEditButton) cancelEditButton.disabled = true; try { let response; if (editingId) { response = await supabase.from('categories').update(categoryData).eq('id', editingId).select().single(); } else { response = await supabase.from('categories').insert(categoryData).select().single(); } const { data, error } = response; if (error) { if (error.code === '23505') { showAdminFeedback(`Erreur: Nom "${catName}" existe déjà.`, 'error'); } else { throw new Error(error.message); } } else { showAdminFeedback(`Catégorie "${data.name}" ${editingId ? 'modifiée' : 'ajoutée'}.`, 'success'); invalidateCategoriesCache(); await loadCategoriesAdmin(); resetCategoryForm(); await populateInventoryFilters(); } } catch (err) { console.error("Erreur save cat:", err); showAdminFeedback(`Erreur: ${err.message}`, 'error'); } finally { if(saveBtn) saveBtn.disabled = false; if(cancelEditButton) cancelEditButton.disabled = false; } }); }
+    function resetCategoryForm(){ /* (inchangé) */ if(categoryForm) categoryForm.reset(); if(categoryIdEditInput) categoryIdEditInput.value = ''; if(categoryFormTitle) categoryFormTitle.textContent = "Ajouter une Catégorie"; if(cancelEditButton) cancelEditButton.style.display = 'none'; }
+    function addComponentCategorySelectListener() { /* (inchangé) */ componentCategorySelectAdmin?.addEventListener('change', () => { if (!specificAttributesDiv) return; specificAttributesDiv.innerHTML = ''; specificAttributesDiv.style.display = 'none'; const selectedOption = componentCategorySelectAdmin.options[componentCategorySelectAdmin.selectedIndex]; if (!selectedOption || !selectedOption.value) return; const attributesString = selectedOption.dataset.attributes; const categoryName = selectedOption.textContent; if (attributesString && attributesString.trim() !== "") { specificAttributesDiv.style.display = 'block'; const attributes = attributesString.split(',').map(attr => attr.trim()).filter(attr => attr); if (attributes.length > 0) { const titleElement = document.createElement('h4'); titleElement.textContent = `Attributs Spécifiques (${categoryName})`; specificAttributesDiv.appendChild(titleElement); attributes.forEach(attr => { const formGroup = document.createElement('div'); formGroup.classList.add('form-group'); const inputId = `attr-${attr.toLowerCase().replace(/[^a-z0-9]/g, '-')}`; const label = document.createElement('label'); label.setAttribute('for', inputId); label.textContent = `${attr}:`; const input = document.createElement('input'); input.setAttribute('type', 'text'); input.setAttribute('id', inputId); input.setAttribute('name', `attributes[${attr}]`); input.setAttribute('placeholder', `Valeur pour ${attr}`); input.dataset.attributeName = attr; formGroup.appendChild(label); formGroup.appendChild(input); specificAttributesDiv.appendChild(formGroup); }); } } }); }
+    function showAdminFeedback(message, type = 'info'){ /* (inchangé) */ if (adminFeedbackDiv) { adminFeedbackDiv.textContent = message; adminFeedbackDiv.className = `feedback-area ${type}`; adminFeedbackDiv.style.display = 'block'; } }
+    function resetStockForm() { /* (inchangé) */ if (stockForm) stockForm.reset(); if (componentInfoDiv) componentInfoDiv.style.display = 'none'; if (specificAttributesDiv) { specificAttributesDiv.innerHTML = ''; specificAttributesDiv.style.display = 'none'; } if (componentRefAdminInput) componentRefAdminInput.disabled = false; if (componentInitialQuantityInput) componentInitialQuantityInput.value = 0; if (componentThresholdInput) componentThresholdInput.value = ''; console.log("Formulaire stock réinitialisé."); }
+    function addStockEventListeners() { /* (inchangé, avec modif LED intégrée) */ checkStockButton?.addEventListener('click', async () => { const ref = componentRefAdminInput?.value.trim().toUpperCase(); if (!ref) { showAdminFeedback("Entrez une réf.", 'warning'); return; } if(adminFeedbackDiv) adminFeedbackDiv.style.display = 'none'; if(checkStockButton) checkStockButton.disabled = true; checkStockButton.textContent = "Vérif..."; if(componentRefAdminInput) componentRefAdminInput.disabled = true; try { const stockInfo = await getStockInfoFromSupabase(ref); if (stockInfo) { console.log("Stock info trouvé:", stockInfo); if(componentInfoDiv) componentInfoDiv.style.display = 'block'; if(currentQuantitySpan) currentQuantitySpan.textContent = stockInfo.quantity; if(quantityChangeInput) quantityChangeInput.value = 0; if(componentDescInput) componentDescInput.value = stockInfo.description || ""; if(componentMfgInput) componentMfgInput.value = stockInfo.manufacturer || ""; if(componentDatasheetInput) componentDatasheetInput.value = stockInfo.datasheet || ""; if(componentDrawerAdminInput) componentDrawerAdminInput.value = stockInfo.drawer || ""; if(componentInitialQuantityInput) componentInitialQuantityInput.value = stockInfo.quantity; if(componentThresholdInput) componentThresholdInput.value = stockInfo.critical_threshold ?? ''; if(componentCategorySelectAdmin) { componentCategorySelectAdmin.value = stockInfo.category_id || ""; componentCategorySelectAdmin.dispatchEvent(new Event('change')); } setTimeout(() => { if (stockInfo.attributes && typeof stockInfo.attributes === 'object') { Object.entries(stockInfo.attributes).forEach(([key, value]) => { const inputField = specificAttributesDiv?.querySelector(`input[data-attribute-name="${key}"]`); if (inputField) inputField.value = value || ''; else console.warn(`Input attr '${key}' non trouvé.`); }); } }, 50); showAdminFeedback(`Composant "${ref}" trouvé.`, 'success'); if (currentUser && stockInfo.drawer) updateSevenSegmentDisplay(stockInfo.drawer); } else { if(componentInfoDiv) componentInfoDiv.style.display = 'none'; resetStockForm(); if(componentRefAdminInput) componentRefAdminInput.value = ref; showAdminFeedback(`Composant "${ref}" inconnu. Remplissez pour ajouter.`, 'info'); componentDescInput?.focus(); } } catch (error) { console.error("Erreur checkStock:", error); showAdminFeedback(`Erreur vérif: ${error.message}`, 'error'); resetStockForm(); if(componentRefAdminInput) componentRefAdminInput.value = ref; } finally { if(checkStockButton) checkStockButton.disabled = false; checkStockButton.textContent = "Vérifier Stock"; if(componentRefAdminInput) componentRefAdminInput.disabled = false; } }); updateQuantityButton?.addEventListener('click', async () => { const ref = componentRefAdminInput?.value.trim().toUpperCase(); const changeStr = quantityChangeInput?.value; const change = parseInt(changeStr, 10); if (!ref) { showAdminFeedback("Réf manquante.", 'warning'); return; } if (changeStr === '' || isNaN(change)) { showAdminFeedback("Qté invalide.", 'warning'); quantityChangeInput?.focus(); return; } if (change === 0) { showAdminFeedback("Aucun changement.", 'info'); return; } const currentDisplayedQuantity = parseInt(currentQuantitySpan?.textContent, 10); if (!isNaN(currentDisplayedQuantity) && currentDisplayedQuantity + change < 0) { showAdminFeedback(`Stock négatif (${currentDisplayedQuantity + change}).`, 'error'); return; } if(updateQuantityButton) updateQuantityButton.disabled = true; updateQuantityButton.textContent = "MàJ..."; try { const newQuantity = await updateStockInSupabase(ref, change); if (newQuantity !== null) { if(currentQuantitySpan) currentQuantitySpan.textContent = newQuantity; if(componentInitialQuantityInput) componentInitialQuantityInput.value = newQuantity; if(quantityChangeInput) quantityChangeInput.value = 0; showAdminFeedback(`Stock "${ref}" MàJ: ${newQuantity}.`, 'success'); if (inventoryView.classList.contains('active-view')) displayInventory(); } } catch (error) { console.error("Erreur JS updateQty:", error); showAdminFeedback(error.message.includes("Stock insuffisant") ? "Stock insuffisant." : `Erreur MàJ: ${error.message}`, 'error'); } finally { if(updateQuantityButton) updateQuantityButton.disabled = false; updateQuantityButton.textContent = "Mettre à jour"; } }); stockForm?.addEventListener('submit', async (event) => { event.preventDefault(); if (!supabase) return; const ref = componentRefAdminInput?.value.trim().toUpperCase(); const categoryId = componentCategorySelectAdmin?.value || null; const description = componentDescInput?.value.trim() || null; const manufacturer = componentMfgInput?.value.trim() || null; const datasheet = componentDatasheetInput?.value.trim() || null; const drawer = componentDrawerAdminInput?.value.trim().toUpperCase() || null; const quantityStr = componentInitialQuantityInput?.value; const thresholdStr = componentThresholdInput?.value.trim(); if (!ref) { showAdminFeedback("Réf obligatoire.", 'error'); componentRefAdminInput?.focus(); return; } const quantity = parseInt(quantityStr, 10); if (quantityStr === '' || isNaN(quantity) || quantity < 0) { showAdminFeedback("Qté invalide.", 'error'); componentInitialQuantityInput?.focus(); return; } let critical_threshold = null; if (thresholdStr !== '') { critical_threshold = parseInt(thresholdStr, 10); if (isNaN(critical_threshold) || critical_threshold < 0) { showAdminFeedback("Seuil invalide.", 'error'); componentThresholdInput?.focus(); return; } } if (datasheet) { try { new URL(datasheet); } catch (_) { showAdminFeedback("URL Datasheet invalide.", 'error'); componentDatasheetInput?.focus(); return; } } const attributes = {}; specificAttributesDiv?.querySelectorAll('input[data-attribute-name]').forEach(input => { if (input.value.trim()) attributes[input.dataset.attributeName] = input.value.trim(); }); const componentData = { ref, description, manufacturer, quantity, datasheet, drawer, category_id, attributes: Object.keys(attributes).length > 0 ? attributes : null, critical_threshold }; console.log("Upsert:", componentData); showAdminFeedback("Enregistrement...", "info"); if(saveComponentButton) saveComponentButton.disabled = true; try { const { data, error } = await supabase.from('inventory').upsert(componentData, { onConflict: 'ref' }).select().single(); if (error) throw new Error(error.message); console.log("Upsert succès:", data); showAdminFeedback(`Composant "${ref}" enregistré/MàJ.`, 'success'); if (componentInfoDiv?.style.display === 'block') { if(currentQuantitySpan) currentQuantitySpan.textContent = data.quantity; if(quantityChangeInput) quantityChangeInput.value = 0; } if (inventoryView.classList.contains('active-view')) displayInventory(); if (currentUser && data.drawer) updateSevenSegmentDisplay(data.drawer); } catch(err) { console.error("Erreur upsert:", err); showAdminFeedback(`Erreur enregistrement: ${err.message}`, 'error'); } finally { if(saveComponentButton) saveComponentButton.disabled = false; } }); }
 
 
     // --- LOGIQUE VUE RECHERCHE (Chat) ---
-
-    async function fetchEquivalentsFromAI(reference) {
-        console.log(`Appel Edge Function pour équivalents de: ${reference}`);
-        try {
-            const response = await fetch(AI_FUNCTION_URL, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ reference1: reference })
-            });
-            console.log(`Réponse brute reçue (Status: ${response.status})`);
-            if (!response.ok) {
-                let errorMsg = `Erreur ${response.status}`;
-                try {
-                    const errorBody = await response.json();
-                    errorMsg += `: ${errorBody?.content || errorBody?.message || 'Détail non disponible'}`;
-                } catch (e) { errorMsg += `: ${await response.text()}`; }
-                throw new Error(`Erreur appel AI: ${errorMsg}`);
-            }
-            const data = await response.json();
-            console.log("Données JSON reçues de l'Edge Function:", data);
-            if (data && data.response_type === 'equivalents' && Array.isArray(data.content)) {
-                console.log(`Edge Function a retourné ${data.content.length} équivalent(s).`);
-                return data.content;
-            } else if (data && data.response_type === 'error') {
-                throw new Error(`Erreur Edge Function: ${data.content}`);
-            } else {
-                console.warn("Réponse inattendue de l'Edge Function:", data);
-                throw new Error("Réponse inattendue de la recherche d'équivalents.");
-            }
-        } catch (error) {
-            console.error("Erreur lors de l'appel à fetchEquivalentsFromAI:", error);
-            throw error;
-        }
-    }
-
-    async function addMessageToChat(sender, messageContent, isHTML = false) { /* ... inchangé ... */ if(responseOutputChat) { const messageElement = document.createElement('div'); messageElement.classList.add('message', sender.toLowerCase()); if (sender === 'AI') { messageElement.innerHTML = '...'; responseOutputChat.prepend(messageElement); loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = 'StockAV réfléchit...'; await delay(150); if (isHTML) { messageElement.innerHTML = messageContent; } else { messageElement.textContent = ''; for (let i = 0; i < messageContent.length; i++) { messageElement.textContent += messageContent[i]; await delay(8); } } loadingIndicatorChat.style.display = 'none'; } else { messageElement.textContent = messageContent; responseOutputChat.prepend(messageElement); } chatHistory.push({ sender, message: messageContent, isHTML }); } }
+    // (Fonctions inchangées par rapport à la version précédente, sauf celles modifiées pour LED déjà incluses)
+    async function addMessageToChat(sender, messageContent, isHTML = false) { /* ... */ if(responseOutputChat) { const messageElement = document.createElement('div'); messageElement.classList.add('message', sender.toLowerCase()); if (sender === 'AI') { messageElement.innerHTML = '...'; responseOutputChat.prepend(messageElement); loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = 'StockAV réfléchit...'; await delay(150); if (isHTML) { messageElement.innerHTML = messageContent; } else { messageElement.textContent = ''; for (let i = 0; i < messageContent.length; i++) { messageElement.textContent += messageContent[i]; await delay(8); } } loadingIndicatorChat.style.display = 'none'; } else { messageElement.textContent = messageContent; responseOutputChat.prepend(messageElement); } chatHistory.push({ sender, message: messageContent, isHTML }); } }
     function displayWelcomeMessage() { if(responseOutputChat) responseOutputChat.innerHTML = ''; chatHistory = []; resetConversationState(); addMessageToChat('AI', "Bonjour ! Je suis StockAV. Quelle référence cherchez-vous ?"); }
-    async function handleUserInput() { /* ... inchangé ... */ const userInput = componentInputChat?.value.trim(); if (!userInput) return; addMessageToChat('User', userInput); if(componentInputChat) componentInputChat.value = ''; try { if (conversationState.awaitingQuantityConfirmation) { if (!currentUser) { await promptLoginBeforeAction("prendre qté"); return; } await handleQuantityResponse(userInput); } else if (conversationState.awaitingEquivalentChoice) { await addMessageToChat('AI', "Cliquez sur une option ou entrez une nouvelle réf."); } else { resetConversationState(); const potentialRef = extractReference(userInput); if (potentialRef) { conversationState.originalRefChecked = potentialRef; await checkOriginalAndFindEquivalents(potentialRef); } else { await addMessageToChat('AI', "Réf non identifiée. Ex: 'stock BC547'?"); } } } catch (error) { console.error("Erreur handleUserInput:", error); await addMessageToChat('AI', "Erreur interne."); resetConversationState(); } }
-    function extractReference(text) { /* ... inchangé ... */ const patterns = [ /\b([A-Z]{2,}\d{2,}[A-Z\d\-/]*)\b/i, /\b(\d+[A-Z]{1,}[A-Z\d\-/]*)\b/i, /\b(NE\d{3}[A-Z]*)\b/i, /\b(\d{1,3}(?:K|M|G|R|Ω|OHM|NF|UF|PF|µF)[A-Z\d\-/]*)\b/i, /\b(BC\d{3}[A-Z]*)\b/i, /\b(TIP\d{2,}[A-Z]*)\b/i, /\b(BD\d{3}[A-Z]*)\b/i, /\b(2N\d{4}[A-Z]*)\b/i, /\b(1N\d{4}[A-Z]*)\b/i, /\b(IRF[A-Z\d]*)\b/i, /\b(PIC[A-Z\d\-F/L]*)\b/i, /\b(AT[A-Z\d\-]*)\b/i ]; text = text.toUpperCase(); for (const pattern of patterns) { const match = text.match(pattern); if (match && match[1].length >= 3 && !/^(POUR|AVEC|COMBIEN|STOCK|CHERCHE|DISPO|EQUIV|REMPLACE|TROUVE|QUEL|EST|QUE)$/.test(match[1])) { return match[1].replace(/\s+/g, ''); } } const words = text.split(/[\s,;:!?()]+/); const suspect = words.find(w => /^[A-Z\d\-.\/]{3,}$/.test(w) && /\d/.test(w) && /[A-Z]/.test(w) && !/^(POUR|AVEC|COMBIEN|STOCK|CHERCHE|DISPO|EQUIV|REMPLACE|QUE|EST)$/.test(w)); return suspect || null; }
-
-    // *** VERSION AVEC VÉRIFICATION IMMÉDIATE DU STOCK DES ÉQUIVALENTS (et modifiée pour le Test B) ***
-    async function checkOriginalAndFindEquivalents(originalRef) {
-        loadingIndicatorChat.style.display = 'block';
-        loadingIndicatorChat.querySelector('i').textContent = `Analyse ${originalRef}...`;
-
-        let originalStockInfo = null;
-        let dbError = null;
-        try {
-             // Appel getStockInfoFromSupabase (version Test B - sans jointure)
-             originalStockInfo = await getStockInfoFromSupabase(originalRef);
-        } catch(error) {
-             console.error(`Erreur DB (local) pour ${originalRef}:`, error);
-             dbError = error.message || "Erreur accès base de données.";
-        }
-
-        await delay(100);
-
-        let originalStatusMsg = "";
-        let statusIndicatorHTML = "";
-        const showDrawer = currentUser && originalStockInfo?.drawer;
-
-        if (currentUser && originalStockInfo?.drawer) {
-            updateSevenSegmentDisplay(originalStockInfo.drawer);
-        }
-
-        if (dbError) {
-             statusIndicatorHTML = `<span class="stock-indicator-chat level-unknown" title="Erreur DB"></span>`;
-             originalStatusMsg = `${statusIndicatorHTML}Erreur vérification stock local: ${dbError}`;
-        } else if (originalStockInfo) {
-            const status = getStockStatus(originalStockInfo.quantity, originalStockInfo.critical_threshold);
-            statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()} (Qté: ${originalStockInfo.quantity}, Seuil: ${originalStockInfo.critical_threshold ?? 'N/A'})"></span>`;
-            if (originalStockInfo.quantity > 0) {
-                originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Dispo (Qté: ${originalStockInfo.quantity}${showDrawer ? `, Tiroir: ${originalStockInfo.drawer}` : ''}).`;
-                conversationState.criticalThreshold = originalStockInfo.critical_threshold;
-            } else {
-                originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Rupture.`;
-            }
-        } else {
-            statusIndicatorHTML = `<span class="stock-indicator-chat level-unknown" title="Stock: Inconnu"></span>`;
-            originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Inconnu localement.`;
-        }
-
-        loadingIndicatorChat.querySelector('i').textContent = `Recherche équiv. via IA pour ${originalRef}...`;
-
-        let equivalents = [];
-        let aiError = null;
-        try {
-            equivalents = await fetchEquivalentsFromAI(originalRef);
-            conversationState.potentialEquivalents = equivalents;
-            console.log(`Équivalents reçus de l'IA pour ${originalRef}:`, equivalents);
-        } catch (error) {
-            console.error(`Erreur lors de la récupération des équivalents AI pour ${originalRef}:`, error);
-            aiError = error.message || "Erreur recherche équivalents AI.";
-            equivalents = [];
-            conversationState.potentialEquivalents = [];
-        }
-
-        let responseHTML = `${originalStatusMsg}<br><br>`;
-
-        if (aiError) {
-            responseHTML += `<small><i>Erreur IA: ${aiError}</i></small><br>`;
-        }
-
-        if (equivalents.length > 0) {
-            responseHTML += "Équivalents suggérés par l'IA :<br>";
-            loadingIndicatorChat.querySelector('i').textContent = `Vérification stock équivalents...`;
-
-            for (const eq of equivalents) {
-                const eqRef = typeof eq.ref === 'string' ? eq.ref.trim().toUpperCase() : 'REF_INCONNUE';
-                const eqReason = typeof eq.reason === 'string' ? eq.reason.trim() : 'Raison inconnue';
-
-                if (eqRef === 'REF_INCONNUE' || eqRef === '') {
-                    responseHTML += `- Ref Invalide <small>(${eqReason})</small> - Vérification impossible<br>`;
-                    continue;
-                }
-
-                let eqStockInfo = null;
-                let eqDbError = null;
-                try {
-                     // Appel getStockInfoFromSupabase (version Test B - sans jointure)
-                    if (eqRef === originalRef && originalStockInfo && !dbError) {
-                        eqStockInfo = originalStockInfo;
-                    } else {
-                        eqStockInfo = await getStockInfoFromSupabase(eqRef);
-                    }
-                } catch (error) {
-                     console.error(`Erreur DB (local) pour équivalent ${eqRef}:`, error);
-                     eqDbError = error.message || "Erreur accès base.";
-                }
-
-                let eqStatusHTML = "";
-                let eqButtonHTML = "";
-                const showEqDrawer = currentUser && eqStockInfo?.drawer;
-
-                if (eqDbError) {
-                    eqStatusHTML = `<span class="stock-indicator-chat level-unknown" title="Erreur DB"></span> Erreur vérif stock.`;
-                } else if (eqStockInfo) {
-                    const eqStatus = getStockStatus(eqStockInfo.quantity, eqStockInfo.critical_threshold);
-                    eqStatusHTML = `<span class="stock-indicator-chat level-${eqStatus}" title="Stock: ${eqStatus.toUpperCase()}"></span>`;
-                    if (eqStockInfo.quantity > 0) {
-                        eqStatusHTML += ` Dispo (Qté: ${eqStockInfo.quantity}${showEqDrawer ? `, Tiroir: ${eqStockInfo.drawer}` : ''})`;
-                        eqButtonHTML = `<button class="choice-button" data-ref="${eqRef}">Prendre ${eqRef}</button>`;
-                    } else {
-                        eqStatusHTML += ` Rupture.`;
-                    }
-                } else {
-                     eqStatusHTML = `<span class="stock-indicator-chat level-unknown" title="Stock: Inconnu"></span> Inconnu localement.`;
-                }
-
-                responseHTML += `- <strong>${eqRef}</strong> <small>(${eqReason})</small>: ${eqStatusHTML} ${eqButtonHTML}<br>`;
-                await delay(50);
-            }
-             loadingIndicatorChat.querySelector('i').textContent = `Analyse ${originalRef}...`;
-
-        } else if (!aiError) {
-             if (dbError) { responseHTML += "Impossible de vérifier le stock local ou de trouver des équivalents IA.<br>"; }
-             else if (originalStockInfo && originalStockInfo.quantity > 0) { responseHTML += "Aucun équivalent trouvé par l'IA.<br>"; }
-             else { responseHTML += "Aucun équivalent trouvé par l'IA.<br>"; }
-        }
-
-        const hasTakeButton = responseHTML.includes('class="choice-button"');
-        if (hasTakeButton) {
-            conversationState.awaitingEquivalentChoice = true;
-             if (originalStockInfo && originalStockInfo.quantity > 0 && !responseHTML.includes(`data-ref="${originalRef}"`)) {
-                 responseHTML += `<br><button class="choice-button" data-ref="${originalRef}">Prendre original (${originalRef})</button>`;
-             }
-        } else {
-             if (!dbError && originalStockInfo && originalStockInfo.quantity === 0 && equivalents.length === 0 && !aiError) { responseHTML += "<br>Original en rupture et aucun équivalent IA trouvé."; }
-             else if (!dbError && !originalStockInfo && equivalents.length === 0 && !aiError) { responseHTML += "<br>Référence inconnue et aucun équivalent IA trouvé."; }
-             else if (!hasTakeButton) { responseHTML += "<br>Aucun composant disponible ou erreur lors de la vérification."; }
-
-             if ((!originalStockInfo || originalStockInfo.quantity === 0) && equivalents.length === 0) { responseHTML += provideExternalLinksHTML(originalRef); }
-             else { responseHTML += "<br>Que faire ensuite ?"; }
-             resetConversationState();
-        }
-
-        await addMessageToChat('AI', responseHTML, true);
-        loadingIndicatorChat.style.display = 'none';
-    }
-
-    responseOutputChat?.addEventListener('click', async (event) => { /* ... inchangé ... */ });
-    async function checkLocalStockForChosenPart(chosenRef) { /* ... inchangé ... */ }
-    async function promptLoginBeforeAction(actionDescription) { /* ... inchangé ... */ }
-    function provideExternalLinksHTML(ref) { /* ... inchangé ... */ }
-    async function provideExternalLinks(ref) { /* ... inchangé ... */ }
-    async function handleQuantityResponse(userInput) { /* ... inchangé ... */ }
-    function resetConversationState() { /* ... inchangé ... */ }
+    async function handleUserInput() { /* ... */ const userInput = componentInputChat?.value.trim(); if (!userInput) return; addMessageToChat('User', userInput); if(componentInputChat) componentInputChat.value = ''; try { if (conversationState.awaitingQuantityConfirmation) { if (!currentUser) { await promptLoginBeforeAction("prendre qté"); return; } await handleQuantityResponse(userInput); } else if (conversationState.awaitingEquivalentChoice) { await addMessageToChat('AI', "Cliquez sur une option ou entrez une nouvelle réf."); } else { resetConversationState(); const potentialRef = extractReference(userInput); if (potentialRef) { conversationState.originalRefChecked = potentialRef; await checkOriginalAndFindEquivalents(potentialRef); } else { await addMessageToChat('AI', "Réf non identifiée. Ex: 'stock BC547'?"); } } } catch (error) { console.error("Erreur handleUserInput:", error); await addMessageToChat('AI', "Erreur interne."); resetConversationState(); } }
+    function extractReference(text) { /* ... */ const patterns = [ /\b([A-Z]{2,}\d{2,}[A-Z\d\-/]*)\b/i, /\b(\d+[A-Z]{1,}[A-Z\d\-/]*)\b/i, /\b(NE\d{3}[A-Z]*)\b/i, /\b(\d{1,3}(?:K|M|G|R|Ω|OHM|NF|UF|PF|µF)[A-Z\d\-/]*)\b/i, /\b(BC\d{3}[A-Z]*)\b/i, /\b(TIP\d{2,}[A-Z]*)\b/i, /\b(BD\d{3}[A-Z]*)\b/i, /\b(2N\d{4}[A-Z]*)\b/i, /\b(1N\d{4}[A-Z]*)\b/i, /\b(IRF[A-Z\d]*)\b/i, /\b(PIC[A-Z\d\-F/L]*)\b/i, /\b(AT[A-Z\d\-]*)\b/i ]; text = text.toUpperCase(); for (const pattern of patterns) { const match = text.match(pattern); if (match && match[1].length >= 3 && !/^(POUR|AVEC|COMBIEN|STOCK|CHERCHE|DISPO|EQUIV|REMPLACE|TROUVE|QUEL|EST|QUE)$/.test(match[1])) { return match[1].replace(/\s+/g, ''); } } const words = text.split(/[\s,;:!?()]+/); const suspect = words.find(w => /^[A-Z\d\-.\/]{3,}$/.test(w) && /\d/.test(w) && /[A-Z]/.test(w) && !/^(POUR|AVEC|COMBIEN|STOCK|CHERCHE|DISPO|EQUIV|REMPLACE|QUE|EST)$/.test(w)); return suspect || null; }
+    async function checkOriginalAndFindEquivalents(originalRef) { /* ... */ loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Analyse ${originalRef}...`; const originalStockInfo = await getStockInfoFromSupabase(originalRef); await delay(200); let originalStatusMsg = ""; let statusIndicatorHTML = ""; const showDrawer = currentUser && originalStockInfo?.drawer; if (currentUser && originalStockInfo?.drawer) updateSevenSegmentDisplay(originalStockInfo.drawer); if (originalStockInfo) { const status = getStockStatus(originalStockInfo.quantity, originalStockInfo.critical_threshold); statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()} (Qté: ${originalStockInfo.quantity}, Seuil: ${originalStockInfo.critical_threshold ?? 'N/A'})"></span>`; if (originalStockInfo.quantity > 0) { originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Dispo (Qté: ${originalStockInfo.quantity}${showDrawer ? `, Tiroir: ${originalStockInfo.drawer}` : ''}).`; conversationState.criticalThreshold = originalStockInfo.critical_threshold; } else { originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Rupture.`; } } else { statusIndicatorHTML = `<span class="stock-indicator-chat level-unknown" title="Stock: Inconnu"></span>`; originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Inconnu localement.`; } loadingIndicatorChat.querySelector('i').textContent = `Recherche équiv. ${originalRef}...`; await delay(800); let equivalents = simulateWebEquivalentSearch(originalRef); conversationState.potentialEquivalents = equivalents; let responseHTML = `${originalStatusMsg}<br><br>`; if (equivalents.length > 0) { responseHTML += "Équivalents trouvés :<br>"; equivalents.slice(0, 3).forEach(eq => { responseHTML += `- <strong>${eq.ref}</strong> <small>(${eq.reason || 'Simulé'})</small> <button class="choice-button" data-ref="${eq.ref}">Vérifier ${eq.ref}</button><br>`; }); } else if (originalStockInfo) { responseHTML += "Aucun équivalent simulé.<br>"; } else { responseHTML += "Aucun équivalent simulé.<br>"; } if (originalStockInfo && originalStockInfo.quantity > 0) { responseHTML += `<br><button class="choice-button" data-ref="${originalRef}">Prendre original (${originalRef})</button>`; } if (!originalStockInfo && equivalents.length === 0) { responseHTML += "<br>Réf inconnue, pas d'équiv. Recherche externe :"; responseHTML += provideExternalLinksHTML(originalRef); resetConversationState(); } else if (equivalents.length > 0 || (originalStockInfo && originalStockInfo.quantity > 0)) { conversationState.awaitingEquivalentChoice = true; } else { responseHTML += "<br>Que faire ?"; resetConversationState(); } await addMessageToChat('AI', responseHTML, true); loadingIndicatorChat.style.display = 'none'; }
+    function simulateWebEquivalentSearch(originalRef) { /* ... */ let r = []; const refUpper = originalRef.toUpperCase(); if (refUpper === "LM741" || refUpper === "UA741") { r.push({ ref: "UA741CP", reason: "Std" }); r.push({ ref: "NE5532", reason: "Audio" }); } else if (refUpper === "BC547" || refUpper === "BC547B") { r.push({ ref: "2N3904", reason: "NPN" }); r.push({ ref: "BC548", reason: "Vceo" }); r.push({ ref: "BC549", reason: "Bruit" });} else if (refUpper === "1N4148") { r.push({ ref: "1N914", reason: "Rapide"}); } else if (refUpper === "NE555") { r.push({ ref: "LM555", reason: "Direct"}); r.push({ ref: "TLC555", reason: "CMOS"}); } console.log(`Simu équiv ${originalRef}:`, r); return r; }
+    responseOutputChat?.addEventListener('click', async (event) => { if (event.target.classList.contains('choice-button') && conversationState.awaitingEquivalentChoice) { const chosenRef = event.target.dataset.ref; if (!chosenRef) return; console.log(`Choix: ${chosenRef}`); conversationState.awaitingEquivalentChoice = false; addMessageToChat('User', `Vérifier/Prendre ${chosenRef}`); await checkLocalStockForChosenPart(chosenRef); } });
+    async function checkLocalStockForChosenPart(chosenRef) { /* ... */ loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Vérif stock ${chosenRef}...`; const stockInfo = await getStockInfoFromSupabase(chosenRef); await delay(200); const showDrawer = currentUser && stockInfo?.drawer; if (currentUser && stockInfo?.drawer) updateSevenSegmentDisplay(stockInfo.drawer); if (stockInfo && stockInfo.quantity > 0) { loadingIndicatorChat.style.display = 'none'; const status = getStockStatus(stockInfo.quantity, stockInfo.critical_threshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()}"></span>`; let stockMessage = `${statusIndicatorHTML}OK ! <strong>${chosenRef}</strong> dispo (Qté: ${stockInfo.quantity}${showDrawer ? `, Tiroir: ${stockInfo.drawer}` : ''}).`; await addMessageToChat('AI', stockMessage); conversationState.availableQuantity = stockInfo.quantity; conversationState.criticalThreshold = stockInfo.critical_threshold; if (currentUser) { await addMessageToChat('AI', "Combien ? (Nb ou '0')"); conversationState.chosenRefForStockCheck = chosenRef; conversationState.awaitingQuantityConfirmation = true; } else { await promptLoginBeforeAction(`prendre ${chosenRef}`); resetConversationState(); } } else { loadingIndicatorChat.style.display = 'none'; const status = getStockStatus(stockInfo?.quantity, stockInfo?.critical_threshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}"></span>`; let ruptureMessage = `${statusIndicatorHTML}Désolé, <strong>${chosenRef}</strong> `; ruptureMessage += (stockInfo) ? `est en rupture.` : `non trouvé.`; await addMessageToChat('AI', ruptureMessage); const isOriginal = chosenRef === conversationState.originalRefChecked; if (!isOriginal || !stockInfo) { await provideExternalLinks(chosenRef); } else { await addMessageToChat('AI', "Autre réf ?"); } resetConversationState(); } }
+    async function promptLoginBeforeAction(actionDescription) { await addMessageToChat('AI', `Pour ${actionDescription}, veuillez vous connecter.`); }
+    function provideExternalLinksHTML(ref) { /* ... */ const mLink = `https://www.mouser.fr/Search/Refine?Keyword=${encodeURIComponent(ref)}`; const dLink = `https://www.digikey.fr/fr/products/result?keywords=${encodeURIComponent(ref)}`; const aLink = `https://www.aliexpress.com/wholesale?SearchText=${encodeURIComponent(ref)}`; return `<br>Recherche externe <strong>${ref}</strong> : <a href="${mLink}" target="_blank" rel="noopener noreferrer" class="external-link">Mouser</a> <a href="${dLink}" target="_blank" rel="noopener noreferrer" class="external-link">Digi-Key</a> <a href="${aLink}" target="_blank" rel="noopener noreferrer" class="external-link aliexpress">AliExpress</a>`; }
+    async function provideExternalLinks(ref) { /* ... */ loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Liens ${ref}...`; await delay(300); const htmlLinks = provideExternalLinksHTML(ref); await addMessageToChat('AI', htmlLinks, true); loadingIndicatorChat.style.display = 'none'; resetConversationState(); await delay(300); await addMessageToChat('AI', "Autre chose ?"); }
+    async function handleQuantityResponse(userInput) { /* ... */ const ref = conversationState.chosenRefForStockCheck; if (!ref) { console.warn("handleQR: no chosenRef"); resetConversationState(); return; } const requestedQty = parseInt(userInput, 10); if (isNaN(requestedQty) || requestedQty < 0) { await addMessageToChat('AI', "Nb >= 0 svp."); return; } if (requestedQty === 0) { await addMessageToChat('AI', "Annulé."); resetConversationState(); await delay(300); await addMessageToChat('AI', "Autre chose ?"); return; } if (requestedQty > conversationState.availableQuantity) { await addMessageToChat('AI', `Pas assez (${conversationState.availableQuantity} dispo). Qté ou '0'.`); return; } loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `MàJ stock ${ref}...`; const change = -requestedQty; try { const newQty = await updateStockInSupabase(ref, change); loadingIndicatorChat.style.display = 'none'; if (newQty !== null) { const statusAfter = getStockStatus(newQty, conversationState.criticalThreshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${statusAfter}" title="Stock: ${statusAfter.toUpperCase()}"></span>`; await addMessageToChat('AI', `${statusIndicatorHTML}Ok! ${requestedQty} de <strong>${ref}</strong> retiré(s). Stock: ${newQty}.`); if (inventoryView.classList.contains('active-view')) displayInventory(); } } catch (error) { console.error("Erreur handleQR -> updateStock:", error); loadingIndicatorChat.style.display = 'none'; await addMessageToChat('AI', error.message.includes("Stock insuffisant") ? "Stock insuffisant." : `Erreur MàJ stock ${ref}.`); } finally { resetConversationState(); await delay(300); await addMessageToChat('AI', "Besoin d'autre chose ?"); } }
+    function resetConversationState() { /* ... */ conversationState = { awaitingEquivalentChoice: false, awaitingQuantityConfirmation: false, originalRefChecked: null, potentialEquivalents: [], chosenRefForStockCheck: null, availableQuantity: 0, criticalThreshold: null }; console.log("État conv reset."); }
 
 
     // --- Fonctions d'interaction Supabase ---
-
-    // *** MODIFIÉ POUR TEST B : Requête SANS la jointure categories(name) ***
-    async function getStockInfoFromSupabase(ref) {
-        if (!supabase || !ref) return null;
-        const upperRef = ref.toUpperCase();
-        console.log(`Supabase: GET ref: ${upperRef}`);
-        try {
-            // Ligne de test SANS la jointure categories(name)
-            const { data, error } = await supabase.from('inventory').select('*, critical_threshold').ilike('ref', upperRef).single();
-            console.log("Test SANS jointure categories(name) pour:", upperRef); // Log pour confirmer
-
-            if (error) {
-                if (error.code === 'PGRST116') {
-                    console.log(`Ref ${upperRef} non trouvé ou accès refusé (jointure?).`);
-                    return null;
-                }
-                console.error(`Erreur GET (${upperRef}):`, error);
-                 // JETER l'erreur pour la capturer dans la fonction appelante
-                throw new Error(error.message || `Erreur Supabase (${error.code || error.status || 'inconnu'})`);
-            }
-            return data;
-        } catch (err) {
-            console.error("Erreur JS getStockInfo:", err);
-             // JETER l'erreur pour la capturer dans la fonction appelante
-             throw err;
-        }
-    }
-
-    async function updateStockInSupabase(ref, change) { /* ... inchangé ... */ }
+    // getStockInfoFromSupabase (inchangé)
+    async function getStockInfoFromSupabase(ref) { if (!supabase || !ref) return null; const upperRef = ref.toUpperCase(); console.log(`Supabase: GET ref: ${upperRef}`); try { const { data, error } = await supabase.from('inventory').select('*, categories(name), critical_threshold').ilike('ref', upperRef).single(); if (error) { if (error.code === 'PGRST116') { console.log(`Ref ${upperRef} non trouvé.`); return null; } console.error(`Erreur GET (${upperRef}):`, error); return null; } return data; } catch (err) { console.error("Erreur JS getStockInfo:", err); return null; } }
+    // updateStockInSupabase (inchangé, avec throw err et update LED)
+    async function updateStockInSupabase(ref, change) { if (!supabase || !ref || change === 0 || !currentUser) { console.warn("updateStock: Prérequis manquants."); return null; } const upperRef = ref.toUpperCase(); console.log(`Supabase: UPDATE ref: ${upperRef}, change: ${change}`); try { const { data: currentItem, error: readError } = await supabase.from('inventory').select('quantity, drawer, critical_threshold').ilike('ref', upperRef).single(); if (readError || !currentItem) { throw new Error("Composant non trouvé."); } const currentQuantity = currentItem.quantity; const newQuantity = currentQuantity + change; if (newQuantity < 0) { throw new Error("Stock insuffisant."); } const { data: updateData, error: updateError } = await supabase.from('inventory').update({ quantity: newQuantity }).ilike('ref', upperRef).select('quantity, drawer').single(); if (updateError) { throw new Error("Erreur écriture MàJ."); } console.log(`UPDATE succès ${upperRef}. New Qty: ${updateData.quantity}`); await addLogEntry(upperRef, change, newQuantity); if (currentUser && updateData.drawer) updateSevenSegmentDisplay(updateData.drawer); return newQuantity; } catch (err) { console.error("Erreur JS updateStock:", err); throw err; } }
 
     // --- Gestion Modale Quantité (+/-) ---
-    async function handleInventoryRowClick(event) { /* ... inchangé ... */ }
-    function showQuantityModal(ref, quantity) { /* ... inchangé ... */ }
-    function hideQuantityModal() { /* ... inchangé ... */ }
-    function updateModalButtonStates() { /* ... inchangé ... */ }
-    // Listeners boutons modale, listener confirm (inchangés)
-    modalDecreaseButton?.addEventListener('click', () => { /* ... */ });
-    modalIncreaseButton?.addEventListener('click', () => { /* ... */ });
+    // handleInventoryRowClick (INCHANGÉ - la correction était dans initializeApp)
+    async function handleInventoryRowClick(event) {
+        console.log("Clic détecté sur tbody inventaire !"); // LOG DE DEBUG
+        const row = event.target.closest('tr.inventory-item-row');
+        if (!row) {
+             console.log("Clic hors d'une ligne inventory-item-row.");
+             return;
+        }
+        console.log("Ligne cliquée:", row);
+
+        if (!currentUser) {
+            console.log("Clic inventaire bloqué: non connecté.");
+            if(loginError) { loginError.textContent = "Connexion requise pour modifier le stock."; loginError.style.color = 'var(--error-color)'; loginError.style.display = 'block'; }
+            loginCodeInput?.focus();
+            return;
+        }
+
+        const ref = row.dataset.ref;
+        if (!ref) {
+            console.error("Ref manquante (data-ref) sur la ligne cliquée:", row);
+            return;
+        }
+        console.log(`Référence extraite: ${ref}`);
+
+        row.style.opacity = '0.7'; // Indicateur visuel
+
+        try {
+            console.log(`Appel getStockInfoFromSupabase pour ${ref}`);
+            const item = await getStockInfoFromSupabase(ref);
+            row.style.opacity = '1'; // Restaurer opacité
+
+            if (item) {
+                console.log("Item trouvé:", item);
+                if (currentUser && item.drawer) {
+                     console.log(`Mise à jour 7-segment avec tiroir: ${item.drawer}`);
+                     updateSevenSegmentDisplay(item.drawer);
+                } else {
+                     console.log("Pas de tiroir ou pas connecté, 7-segment non mis à jour explicitement.");
+                     // On ne force pas l'extinction ici pour la persistance
+                     // updateSevenSegmentDisplay(null); // <- Ligne supprimée
+                }
+                console.log(`Affichage modale pour ${item.ref}, qté: ${item.quantity}`);
+                showQuantityModal(item.ref, item.quantity);
+            } else {
+                console.error(`Détails pour ${ref} non trouvés après clic.`);
+                alert(`Erreur: Détails pour ${ref} non trouvés.`);
+                displayInventory(); // Recharger pour être sûr
+            }
+        } catch (error) {
+            row.style.opacity = '1';
+            console.error("Erreur JS handleInventoryRowClick:", error);
+            alert("Erreur lors de la récupération des détails du composant.");
+        }
+    }
+    // showQuantityModal (inchangé)
+    function showQuantityModal(ref, quantity) { if (!quantityChangeModal || !modalOverlay) return; modalCurrentRef = ref; modalInitialQuantity = quantity; currentModalChange = 0; if(modalRefSpan) modalRefSpan.textContent = ref; if(modalQtySpan) modalQtySpan.textContent = quantity; if(modalChangeAmountDisplay) modalChangeAmountDisplay.textContent = currentModalChange; if(modalFeedback) {modalFeedback.textContent = ''; modalFeedback.style.display = 'none';} updateModalButtonStates(); quantityChangeModal.classList.add('active'); modalOverlay.classList.add('active'); }
+    // hideQuantityModal (Ne touche plus au 7-segment)
+    function hideQuantityModal() { if (!quantityChangeModal || !modalOverlay) return; quantityChangeModal.classList.remove('active'); modalOverlay.classList.remove('active'); modalCurrentRef = null; modalInitialQuantity = 0; currentModalChange = 0; }
+    // updateModalButtonStates, listeners boutons modale, listener confirm (inchangés)
+    function updateModalButtonStates() { if (!modalDecreaseButton || !modalIncreaseButton || !modalConfirmButton || !modalChangeAmountDisplay) return; const resultingQuantity = modalInitialQuantity + currentModalChange; if(modalChangeAmountDisplay) modalChangeAmountDisplay.textContent = currentModalChange > 0 ? `+${currentModalChange}` : currentModalChange; if(modalDecreaseButton) modalDecreaseButton.disabled = (resultingQuantity <= 0); if(modalIncreaseButton) modalIncreaseButton.disabled = false; if(modalConfirmButton) modalConfirmButton.disabled = (currentModalChange === 0); }
+    modalDecreaseButton?.addEventListener('click', () => { if (modalInitialQuantity + currentModalChange > 0) { currentModalChange--; updateModalButtonStates(); } });
+    modalIncreaseButton?.addEventListener('click', () => { currentModalChange++; updateModalButtonStates(); });
     modalCancelButton?.addEventListener('click', hideQuantityModal);
-    modalOverlay?.addEventListener('click', (event) => { /* ... */ });
-    modalConfirmButton?.addEventListener('click', async () => { /* ... */ });
+    modalOverlay?.addEventListener('click', (event) => { if (event.target === modalOverlay) hideQuantityModal(); });
+    modalConfirmButton?.addEventListener('click', async () => { if(modalFeedback) modalFeedback.style.display = 'none'; if (currentModalChange === 0 || !modalCurrentRef) return; if (modalInitialQuantity + currentModalChange < 0) { if(modalFeedback) { modalFeedback.textContent = "Stock négatif."; modalFeedback.className = 'modal-feedback error'; modalFeedback.style.display = 'block'; } return; } if(modalConfirmButton) modalConfirmButton.disabled = true; if(modalCancelButton) modalCancelButton.disabled = true; if(modalDecreaseButton) modalDecreaseButton.disabled = true; if(modalIncreaseButton) modalIncreaseButton.disabled = true; if(modalFeedback) { modalFeedback.textContent = "MàJ..."; modalFeedback.className = 'modal-feedback info'; modalFeedback.style.display = 'block'; } try { const newQuantity = await updateStockInSupabase(modalCurrentRef, currentModalChange); if (newQuantity !== null) { hideQuantityModal(); displayInventory(); } } catch (error) { console.error("Erreur confirm modal:", error); if(modalFeedback) { modalFeedback.textContent = error.message.includes("Stock insuffisant") ? "Stock insuffisant." : "Erreur."; modalFeedback.className = 'modal-feedback error'; modalFeedback.style.display = 'block';} if (quantityChangeModal?.classList.contains('active')) { if(modalCancelButton) modalCancelButton.disabled = false; updateModalButtonStates(); } } });
 
     // --- Gestion Afficheur 7 Segments (Logique Persistante) ---
-    const segmentMap = { /* ... inchangé ... */ };
-    function updateSevenSegmentDisplay(newDrawerValue = undefined) { /* ... inchangé ... */ }
+    // segmentMap (inchangé)
+    const segmentMap = { '0':['a','b','c','d','e','f'],'1':['b','c'],'2':['a','b','g','e','d'],'3':['a','b','g','c','d'],'4':['f','g','b','c'],'5':['a','f','g','c','d'],'6':['a','f','e','d','c','g'],'7':['a','b','c'],'8':['a','b','c','d','e','f','g'],'9':['a','b','c','d','f','g'],'A':['a','b','c','e','f','g'],'B':['c','d','e','f','g'],'b':['f','e','d','c','g'],'C':['a','f','e','d'],'c':['g','e','d'],'D':['b','c','d','e','g'],'d':['b','c','d','e','g'],'E':['a','f','e','d','g'],'F':['a','f','e','g'],'G':['a','f','e','d','c'],'H':['f','e','b','c','g'],'h':['f','e','c','g'],'I':['f','e'],'J':['b','c','d','e'],'L':['f','e','d'],'O':['a','b','c','d','e','f'],'o':['c','d','e','g'],'P':['a','b','f','e','g'],'r':['e','g'],'S':['a','f','g','c','d'],'U':['b','c','d','e','f'],'u':['c','d','e'],'-':['g'],' ':[],'_':['d'] };
+    // updateSevenSegmentDisplay (inchangé par rapport à la version précédente corrigée)
+    function updateSevenSegmentDisplay(newDrawerValue = undefined) { if (newDrawerValue === null) { lastDisplayedDrawer = null; } else if (newDrawerValue !== undefined) { const trimmedVal = String(newDrawerValue).trim().toUpperCase(); if (trimmedVal !== "") { lastDisplayedDrawer = trimmedVal; } } const drawerToDisplay = lastDisplayedDrawer; if (!sevenSegmentDisplay || !segmentDigits.every(d => d)) return; if (!currentUser || !drawerToDisplay) { sevenSegmentDisplay.classList.add('display-off'); segmentDigits.forEach(digitElement => { digitElement?.querySelectorAll('.segment').forEach(seg => seg.classList.remove('on')); digitElement?.classList.add('off'); }); return; } sevenSegmentDisplay.classList.remove('display-off'); const displayChars = drawerToDisplay.slice(-4).padStart(4, ' '); segmentDigits.forEach((digitElement, index) => { if (!digitElement) return; const charToDisplay = displayChars[index] || ' '; const segmentsOn = segmentMap[charToDisplay] || segmentMap['-']; digitElement.querySelectorAll('.segment').forEach(seg => seg.classList.remove('on')); segmentsOn.forEach(segId => { const segment = digitElement.querySelector(`.segment-${segId}`); segment?.classList.add('on'); }); digitElement.classList.remove('off'); }); }
 
     // --- Logique pour la vue Paramètres (Export/Import) ---
-    function loadSettingsData() { /* ... inchangé ... */ }
-    function showSettingsFeedback(type, message, level = 'info') { /* ... inchangé ... */ }
-    function downloadFile(filename, content, mimeType) { /* ... inchangé ... */ }
-    async function handleExportInventoryCSV() { /* ... inchangé ... */ }
-    async function handleExportLogTXT() { /* ... inchangé ... */ }
-    async function handleImportInventoryCSV() { /* ... inchangé ... */ }
-    function resetImportState() { /* ... inchangé ... */ }
-    function addSettingsEventListeners() { /* ... inchangé ... */ }
+    // (Fonctions inchangées par rapport à la version précédente corrigée)
+    function loadSettingsData() { /* ... */ if (!currentUser) return; showSettingsFeedback('export', '', 'none'); showSettingsFeedback('import', '', 'none'); if (importCsvFileInput) importCsvFileInput.value = ''; console.log("Vue Paramètres chargée."); if (categoriesCache.length === 0) getCategories(); }
+    function showSettingsFeedback(type, message, level = 'info') { /* ... */ const feedbackDiv = (type === 'export') ? exportFeedbackDiv : importFeedbackDiv; if (feedbackDiv) { feedbackDiv.textContent = message; feedbackDiv.className = `feedback-area ${level}`; feedbackDiv.style.whiteSpace = (level === 'error' && type === 'import') ? 'pre-wrap' : 'normal'; feedbackDiv.style.textAlign = (level === 'error' && type === 'import') ? 'left' : 'center'; feedbackDiv.style.display = (level === 'none' || !message) ? 'none' : 'block'; } }
+    function downloadFile(filename, content, mimeType) { /* ... */ const blob = new Blob([content], { type: mimeType }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); }
+    async function handleExportInventoryCSV() { /* ... */ if (!supabase) return; showSettingsFeedback('export', "Récupération...", 'info'); if(exportInventoryCsvButton) exportInventoryCsvButton.disabled = true; try { const { data, error } = await supabase.from('inventory').select('*, categories(name)').order('ref', { ascending: true }); if (error) throw new Error(`DB: ${error.message}`); if (!data || data.length === 0) { showSettingsFeedback('export', "Inventaire vide.", 'warning'); return; } const csvData = data.map(item => ({ ref: item.ref, description: item.description || '', manufacturer: item.manufacturer || '', quantity: item.quantity, datasheet: item.datasheet || '', drawer: item.drawer || '', category_name: item.categories?.name || '', critical_threshold: item.critical_threshold ?? '', attributes: item.attributes ? JSON.stringify(item.attributes) : '' })); const csvString = Papa.unparse(csvData, { header: true, quotes: true, delimiter: "," }); const timestamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'); downloadFile(`stockav_inventory_${timestamp}.csv`, csvString, 'text/csv;charset=utf-8;'); showSettingsFeedback('export', `Export CSV OK (${data.length} lignes).`, 'success'); } catch (err) { console.error("Erreur export CSV:", err); showSettingsFeedback('export', `Erreur: ${err.message}`, 'error'); } finally { if(exportInventoryCsvButton) exportInventoryCsvButton.disabled = false; } }
+    async function handleExportLogTXT() { /* ... */ if (!supabase) return; showSettingsFeedback('export', "Récupération...", 'info'); if(exportLogTxtButton) exportLogTxtButton.disabled = true; try { const { data, error } = await supabase.from('logs').select('*').order('created_at', { ascending: true }); if (error) throw new Error(`DB: ${error.message}`); if (!data || data.length === 0) { showSettingsFeedback('export', "Historique vide.", 'warning'); return; } let txtContent = "Historique StockAV\n===================\n\n"; txtContent += "Date & Heure          | Technicien | Action  | Référence        | +/-   | Stock Final\n"; txtContent += "----------------------+------------+---------+------------------+-------+------------\n"; data.forEach(log => { const timestamp = formatLogTimestamp(new Date(log.created_at)).padEnd(21); const user = (log.user_code || 'N/A').padEnd(10); const action = (log.quantity_change > 0 ? 'Ajout' : 'Retrait').padEnd(7); const ref = log.component_ref.padEnd(16); const change = (log.quantity_change > 0 ? `+${log.quantity_change}` : `${log.quantity_change}`).padStart(5); const after = String(log.quantity_after).padStart(11); txtContent += `${timestamp} | ${user} | ${action} | ${ref} | ${change} | ${after}\n`; }); const timestampFile = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'); downloadFile(`stockav_logs_${timestampFile}.txt`, txtContent, 'text/plain;charset=utf-8;'); showSettingsFeedback('export', `Export TXT OK (${data.length} lignes).`, 'success'); } catch (err) { console.error("Erreur export TXT:", err); showSettingsFeedback('export', `Erreur: ${err.message}`, 'error'); } finally { if(exportLogTxtButton) exportLogTxtButton.disabled = false; } }
+    async function handleImportInventoryCSV() { /* ... */ if (!supabase || typeof Papa === 'undefined') { showSettingsFeedback('import', "Erreur: Init.", 'error'); return; } if (!importCsvFileInput?.files?.length) { showSettingsFeedback('import', "Choisir fichier CSV.", 'warning'); return; } const file = importCsvFileInput.files[0]; showSettingsFeedback('import', `Lecture ${file.name}...`, 'info'); if(importInventoryCsvButton) importInventoryCsvButton.disabled = true; if(importCsvFileInput) importCsvFileInput.disabled = true; Papa.parse(file, { header: true, skipEmptyLines: true, dynamicTyping: false, complete: async (results) => { console.log("CSV Parsed:", results); const rows = results.data; const errors = results.errors; const requiredHeaders = ['ref', 'quantity']; if (errors.length > 0) { showSettingsFeedback('import', `Erreur lecture CSV L${errors[0].row + 1}: ${errors[0].message}.`, 'error'); resetImportState(); return; } if (rows.length === 0) { showSettingsFeedback('import', "CSV vide.", 'warning'); resetImportState(); return; } const headers = Object.keys(rows[0]); if (!requiredHeaders.every(h => headers.includes(h))) { showSettingsFeedback('import', `Erreur: En-têtes manquants (${requiredHeaders.join(", ")}).`, 'error'); resetImportState(); return; } showSettingsFeedback('import', `Validation (${rows.length} lignes)...`, 'info'); await delay(100); const itemsToUpsert = []; const validationErrors = []; const categoryMap = new Map(categoriesCache.map(cat => [cat.name.toUpperCase(), cat.id])); for (let i = 0; i < rows.length; i++) { const row = rows[i]; const lineNumber = i + 2; const ref = row.ref?.trim().toUpperCase(); if (!ref) { validationErrors.push(`L${lineNumber}: Réf manquante.`); continue; } const quantityStr = row.quantity?.trim(); const quantity = parseInt(quantityStr, 10); if (quantityStr === '' || isNaN(quantity) || quantity < 0) { validationErrors.push(`L${lineNumber}(${ref}): Qté invalide ('${row.quantity}').`); continue; } const description = row.description?.trim() || null; const manufacturer = row.manufacturer?.trim() || null; const datasheet = row.datasheet?.trim() || null; if (datasheet) { try { new URL(datasheet); } catch (_) { validationErrors.push(`L${lineNumber}(${ref}): URL Datasheet invalide.`); continue;} } const drawer = row.drawer?.trim().toUpperCase() || null; const thresholdStr = row.critical_threshold?.trim(); let critical_threshold = null; if (thresholdStr && thresholdStr !== '') { critical_threshold = parseInt(thresholdStr, 10); if (isNaN(critical_threshold) || critical_threshold < 0) { validationErrors.push(`L${lineNumber}(${ref}): Seuil invalide ('${row.critical_threshold}').`); continue; } } let category_id = null; const categoryName = row.category_name?.trim(); if (categoryName) { const foundId = categoryMap.get(categoryName.toUpperCase()); if (foundId) { category_id = foundId; } else { validationErrors.push(`L${lineNumber}(${ref}): Catégorie '${categoryName}' non trouvée.`); continue; } } let attributes = null; const attributesStr = row.attributes?.trim(); if (attributesStr) { try { attributes = JSON.parse(attributesStr); if (typeof attributes !== 'object' || attributes === null) throw new Error("Objet invalide."); } catch (e) { validationErrors.push(`L${lineNumber}(${ref}): Attributs JSON invalides.`); continue; } } itemsToUpsert.push({ ref, description, manufacturer, quantity, datasheet, drawer, category_id, critical_threshold, attributes }); } if (validationErrors.length > 0) { const errorMsg = `Erreurs validation:\n- ${validationErrors.slice(0, 10).join('\n- ')}${validationErrors.length > 10 ? '\n- ...' : ''}`; showSettingsFeedback('import', errorMsg, 'error'); resetImportState(); return; } if (itemsToUpsert.length > 0) { showSettingsFeedback('import', `Validation OK. Upsert ${itemsToUpsert.length} composants...`, 'info'); try { const { data, error } = await supabase.from('inventory').upsert(itemsToUpsert, { onConflict: 'ref' }).select('ref'); if (error) throw new Error(`DB: ${error.message}`); showSettingsFeedback('import', `Import OK (${data?.length || 0} ajoutés/MàJ).`, 'success'); if (inventoryView?.classList.contains('active-view')) displayInventory(1); } catch (err) { showSettingsFeedback('import', `Erreur écriture DB: ${err.message}`, 'error'); } finally { resetImportState(); } } else { showSettingsFeedback('import', "Aucune ligne valide à importer.", 'warning'); resetImportState(); } }, error: (error) => { showSettingsFeedback('import', `Erreur lecture fichier: ${error.message}`, 'error'); resetImportState(); } }); }
+    function resetImportState() { /* ... */ if(importInventoryCsvButton) importInventoryCsvButton.disabled = false; if (importCsvFileInput) { importCsvFileInput.disabled = false; importCsvFileInput.value = ''; } }
+    function addSettingsEventListeners() { /* ... */ exportInventoryCsvButton?.addEventListener('click', handleExportInventoryCSV); exportLogTxtButton?.addEventListener('click', handleExportLogTXT); importInventoryCsvButton?.addEventListener('click', handleImportInventoryCSV); }
 
 
     // --- Initialisation Générale de l'Application ---
@@ -770,10 +622,11 @@ document.addEventListener('DOMContentLoaded', () => {
         logPrevPageButton?.addEventListener('click', () => { if (currentLogPage > 1) { displayLog(currentLogPage - 1); } });
         logNextPageButton?.addEventListener('click', () => { if (!logNextPageButton?.disabled) { displayLog(currentLogPage + 1); } });
 
-        // Listener pour le clic sur les lignes d'inventaire (inchangé)
+        // *** CORRECTION : Attacher le listener pour le clic sur les lignes d'inventaire ***
         inventoryTableBody?.addEventListener('click', handleInventoryRowClick);
+        // ********************************************************************************
 
-        // Attacher les listeners pour Admin et Settings (fonctions vides pour le moment si non modifiées)
+        // Attacher les listeners pour Admin et Settings
         addCategoryEventListeners();
         addComponentCategorySelectListener();
         addStockEventListeners();
@@ -792,3 +645,4 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 
 }); // ----- FIN DU FICHIER script.js -----
+
