@@ -158,7 +158,66 @@ document.addEventListener('DOMContentLoaded', () => {
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
     function getStockStatus(quantity, threshold) { /* ... (identique) ... */ }
     function createStockIndicatorHTML(quantity, threshold) { /* ... (identique) ... */ }
-    async function handleLogin() { /* ... (identique) ... */ }
+
+    // --- Authentification ---
+    // Gère la tentative de connexion
+    async function handleLogin() {
+        console.log(">>> Tentative de connexion détectée !"); // LIGNE DE DÉBOGAGE
+        if (!supabase) {
+            if(loginError) { loginError.textContent = "Erreur: Client Supabase non initialisé."; loginError.style.display = 'block'; }
+            return;
+        }
+        const code = loginCodeInput?.value.trim().toLowerCase();
+        const password = loginPasswordInput?.value.trim();
+        if(loginError) loginError.style.display = 'none'; // Cache l'erreur précédente
+
+        if (!code || !password) {
+            if(loginError) { loginError.textContent = "Code et mot de passe requis."; loginError.style.display = 'block'; }
+            return;
+        }
+
+        const email = code + FAKE_EMAIL_DOMAIN; // Construit l'email factice
+        if(loginButton) loginButton.disabled = true;
+        if(loginError) { loginError.textContent = "Connexion en cours..."; loginError.style.color = 'var(--text-muted)'; loginError.style.display = 'block'; }
+
+        try {
+            // Tente de se connecter avec Supabase Auth
+            const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: password });
+
+            if (error) {
+                console.error("Erreur connexion Supabase:", error.message);
+                // Affiche un message plus clair pour l'utilisateur
+                if(loginError) {
+                    loginError.textContent = (error.message.includes("Invalid login credentials"))
+                        ? "Code ou mot de passe incorrect."
+                        : "Erreur de connexion. Vérifiez la console.";
+                    loginError.style.color = 'var(--error-color)';
+                    loginError.style.display = 'block';
+                }
+                loginCodeInput?.focus(); // Remet le focus sur le code
+            } else {
+                // Connexion réussie (l'événement onAuthStateChange gérera la suite)
+                console.log("Demande de connexion Supabase réussie pour:", data.user?.email);
+                if(loginError) loginError.style.display = 'none'; // Cache le message "Connexion..."
+                if(loginCodeInput) loginCodeInput.value = ''; // Vide les champs
+                if(loginPasswordInput) loginPasswordInput.value = '';
+            }
+        } catch (err) {
+             // Erreur JavaScript inattendue
+             console.error("Erreur JavaScript pendant la connexion:", err);
+             if(loginError) {
+                 loginError.textContent = "Erreur inattendue lors de la connexion.";
+                 loginError.style.color = 'var(--error-color)';
+                 loginError.style.display = 'block';
+             }
+        } finally {
+             // Réactive le bouton dans tous les cas
+             if(loginButton) loginButton.disabled = false;
+        }
+    }
+
+    // --- LE RESTE DU CODE EST IDENTIQUE À LA VERSION PRÉCÉDENTE ---
+    // ... (fonctions handleLogout, setupAuthListener, handleUserConnected, etc.)
     async function handleLogout() { /* ... (identique) ... */ }
     async function setupAuthListener() { /* ... (identique) ... */ }
     function handleUserConnected(user, isInitialLoad) { /* ... (identique) ... */ }
@@ -201,34 +260,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function showQuantityModal(item) { /* ... (identique, avec logs) ... */ }
     function hideQuantityModal() { /* ... (identique) ... */ }
     function updateModalButtonStates() { /* ... (identique) ... */ }
-
-    // --- Gestion Afficheur 7 Segments ---
-    const segmentMap = {
-        '0': ['a', 'b', 'c', 'd', 'e', 'f'], '1': ['b', 'c'], '2': ['a', 'b', 'g', 'e', 'd'],
-        '3': ['a', 'b', 'g', 'c', 'd'], '4': ['f', 'g', 'b', 'c'], '5': ['a', 'f', 'g', 'c', 'd'],
-        '6': ['a', 'f', 'e', 'd', 'c', 'g'], '7': ['a', 'b', 'c'], '8': ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
-        '9': ['a', 'b', 'c', 'd', 'f', 'g'], 'A': ['a', 'b', 'c', 'e', 'f', 'g'], 'B': ['c', 'd', 'e', 'f', 'g'],
-        'C': ['a', 'd', 'e', 'f'], 'D': ['b', 'c', 'd', 'e', 'g'], 'E': ['a', 'd', 'e', 'f', 'g'],
-        'F': ['a', 'e', 'f', 'g'], 'G': ['a', 'c', 'd', 'e', 'f'], 'H': ['b', 'c', 'e', 'f', 'g'],
-        'I': ['b', 'c'], 'J': ['b', 'c', 'd', 'e'], 'L': ['d', 'e', 'f'], 'N': ['a', 'b', 'c', 'e', 'f'],
-        'O': ['a', 'b', 'c', 'd', 'e', 'f'], 'P': ['a', 'b', 'e', 'f', 'g'], 'Q': ['a', 'b', 'c', 'f', 'g'],
-        'R': ['a', 'e', 'f'], 'S': ['a', 'f', 'g', 'c', 'd'], 'T': ['d', 'e', 'f', 'g'],
-        'U': ['b', 'c', 'd', 'e', 'f'], 'Y': ['b', 'c', 'd', 'f', 'g'], 'Z': ['a', 'b', 'd', 'e', 'g'],
-        '-': ['g'], '_': ['d'], ' ': [], '.': [], // Point retiré car pas de segment 'dp'
-    };
-
-    // Met à jour l'affichage des 4 digits 7 segments
+    const segmentMap = { /* ... (identique) ... */ };
     function updateSevenSegmentDisplay(newDrawerValue = undefined) {
         if (!sevenSegmentDisplay || !segmentDigits.every(d => d)) {
-            return; // Ne rien faire si l'afficheur n'est pas prêt
+            return;
         }
-        // DIAG: Log au début de la fonction
         console.log(`>> updateSevenSegmentDisplay: Appelée avec newDrawerValue='${newDrawerValue}' (type: ${typeof newDrawerValue}), lastDrawerStored='${lastDisplayedDrawer}'`);
 
-        let displayString = "----"; // Valeur par défaut (tirets)
-        let displayOn = false; // Indique si l'afficheur doit être "allumé"
-
-        // Si une nouvelle valeur est fournie, l'utilise. Sinon, utilise la dernière valeur mémorisée.
+        let displayString = "----";
+        let displayOn = false;
         const valueToDisplay = (newDrawerValue !== undefined) ? newDrawerValue : lastDisplayedDrawer;
 
         if (valueToDisplay !== null && valueToDisplay !== undefined && String(valueToDisplay).trim() !== '') {
@@ -238,60 +278,46 @@ document.addEventListener('DOMContentLoaded', () => {
              displayString = "    ";
              displayOn = false;
         }
-
-        // DIAG: Log avant la boucle
         console.log(`>> updateSevenSegmentDisplay: Va afficher la chaîne "${displayString}", displayOn=${displayOn}`);
 
-        // Met à jour chaque digit
-        const segmentCodes = ['a', 'b', 'c', 'd', 'e', 'f', 'g']; // Liste des segments possibles
+        const segmentCodes = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
         for (let i = 0; i < 4; i++) {
             const digitElement = segmentDigits[i];
             if (!digitElement) continue;
 
             const charToDisplay = displayString[i] || ' ';
-            // Récupère les segments à activer, utilise '-' comme fallback, et si même ça échoue, utilise un tableau vide
             const segmentsToActivate = segmentMap[charToDisplay] ?? segmentMap['-'] ?? [];
 
-            // Parcourt tous les segments possibles (a-g)
             segmentCodes.forEach(code => {
                  const segmentElement = digitElement.querySelector(`.segment-${code}`);
                  if (segmentElement) {
-                     // CORRECTION : Vérifie si segmentsToActivate est bien un tableau avant d'appeler .includes
                      if (Array.isArray(segmentsToActivate) && segmentsToActivate.includes(code)) {
                          segmentElement.classList.add('on');
                      } else {
-                         // S'il n'est pas défini ou ne contient pas le code, on retire 'on'
                          segmentElement.classList.remove('on');
                      }
                  }
             });
         }
 
-        // Allume ou éteint l'afficheur globalement
         if (displayOn) {
              sevenSegmentDisplay.classList.remove('display-off');
         } else {
              sevenSegmentDisplay.classList.add('display-off');
         }
     }
-
-
-    // --- LOGIQUE VUE PARAMÈTRES ---
     function loadSettingsData() { /* ... (identique) ... */ }
     function showSettingsFeedback(type, message, level = 'info') { /* ... (identique) ... */ }
     function downloadFile(filename, content, mimeType) { /* ... (identique) ... */ }
     async function handleExportInventoryCSV() { /* ... (identique) ... */ }
     async function handleExportLogTXT() { /* ... (identique) ... */ }
     async function handleImportInventoryCSV() { /* ... (identique) ... */ }
-     function resetImportState() { /* ... (identique) ... */ }
+    function resetImportState() { /* ... (identique) ... */ }
     function addSettingsEventListeners() { /* ... (identique) ... */ }
 
-
-    // --- Initialisation Générale de l'Application ---
     function initializeApp() {
         console.log("Initialisation de StockAV...");
 
-        // Vérification rapide de la présence d'éléments DOM essentiels
         const requiredIds = [
             'login-area', 'user-info-area', 'main-navigation', 'search-view',
             'inventory-view', 'log-view', 'admin-view', 'settings-view',
@@ -300,25 +326,24 @@ document.addEventListener('DOMContentLoaded', () => {
             'component-input', 'search-button', 'quantity-change-modal', 'modal-overlay',
             'category-list', 'stock-form', 'settings-view', 'export-inventory-csv-button',
             'import-inventory-csv-button', 'import-csv-file', 'log-table',
-            'inventory-table', 'seven-segment-display' // Ajout vérif afficheur
+            'inventory-table', 'seven-segment-display'
         ];
         const missingElement = requiredIds.find(id => !document.getElementById(id));
         if (missingElement) {
              const errorMsg = `FATAL: Élément DOM essentiel manquant! ID: "${missingElement}". Vérifiez votre fichier index.html. L'application ne peut pas démarrer.`;
              console.error(errorMsg);
              document.body.innerHTML = `<p style='color:red; font-weight: bold; padding: 20px; font-family: sans-serif;'>${errorMsg}</p>`;
-             return; // Arrête l'initialisation
+             return;
         }
         console.log("Vérification initiale des éléments DOM essentiels: OK.");
 
         // --- Ajout des Écouteurs d'Événements Globaux ---
-        // (Identique...)
         searchTabButton?.addEventListener('click', () => setActiveView(searchView, searchTabButton));
         inventoryTabButton?.addEventListener('click', () => setActiveView(inventoryView, inventoryTabButton));
         logTabButton?.addEventListener('click', () => setActiveView(logView, logTabButton));
         adminTabButton?.addEventListener('click', () => setActiveView(adminView, adminTabButton));
         settingsTabButton?.addEventListener('click', () => setActiveView(settingsView, settingsTabButton));
-        loginButton?.addEventListener('click', handleLogin);
+        loginButton?.addEventListener('click', handleLogin); // <-- Le listener pour le bouton Connexion
         logoutButton?.addEventListener('click', handleLogout);
         loginCodeInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') loginPasswordInput?.focus(); });
         loginPasswordInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
@@ -368,8 +393,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // --- Initialisation finale ---
-        setupAuthListener(); // Lance l'écouteur d'authentification Supabase
-        updateSevenSegmentDisplay(null); // Initialise l'afficheur
+        setupAuthListener();
+        updateSevenSegmentDisplay(null);
         console.log("StockAV initialisé et prêt.");
     }
 
