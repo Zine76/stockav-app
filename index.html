@@ -51,12 +51,12 @@
                     <input type="text" id="login-code" placeholder="Votre code unique">
                     <label for="login-password">Mot de passe:</label>
                     <input type="password" id="login-password" placeholder="Votre mot de passe">
-                    <button type="button" id="login-button">Connexion</button> {/* type="button" car géré par JS */}
+                    <button type="button" id="login-button">Connexion</button>
                     <p id="login-error" class="error-message" style="display: none;"></p>
                 </div>
                 <div id="user-info-area" class="user-info" style="display: none;">
                     Connecté: <strong id="user-display"></strong>
-                    <button type="button" id="logout-button" title="Se déconnecter">Déconnexion</button> {/* type="button" */}
+                    <button type="button" id="logout-button" title="Se déconnecter">Déconnexion</button>
                 </div>
             </div>
         </header>
@@ -89,7 +89,7 @@
              <div class="search-section">
                  <div class="search-box">
                      <input type="text" id="component-input" placeholder="Demandez à StockAV (ex: 'LM358N dispo ?')">
-                     <button type="button" id="search-button" title="Envoyer la requête">Envoyer</button> {/* type="button" */}
+                     <button type="button" id="search-button" title="Envoyer la requête">Envoyer</button>
                  </div>
              </div>
 
@@ -102,7 +102,7 @@
                 <div class="form-group">
                     <label for="inventory-category-filter">Catégorie:</label>
                     <select id="inventory-category-filter">
-                        <option value="all">Toutes les catégories</option> {/* Texte amélioré */}
+                        <option value="all">Toutes les catégories</option>
                         <!-- Options ajoutées par JS -->
                     </select>
                 </div>
@@ -110,7 +110,7 @@
                     <label for="inventory-search-filter">Recherche:</label>
                     <input type="text" id="inventory-search-filter" placeholder="Réf, Desc, Fab...">
                 </div>
-                 <button type="button" id="apply-inventory-filter-button" title="Appliquer les filtres">Filtrer</button> {/* type="button" */}
+                 <button type="button" id="apply-inventory-filter-button" title="Appliquer les filtres">Filtrer</button>
             </div>
 
             <div class="inventory-display data-display-box">
@@ -122,7 +122,7 @@
                             <th>Catégorie</th>
                             <th>Fabricant</th>
                             <th>Quantité</th>
-                            <th>Tiroir</th> {/* Ordre changé pour être avant Datasheet */}
+                            <th>Tiroir</th>
                             <th>Datasheet</th>
                         </tr>
                     </thead>
@@ -151,7 +151,7 @@
                          <tr>
                              <th>Date & Heure</th>
                              <th>Technicien</th>
-                             <th>Référence</th> {/* Colonne Action retirée, implicite par +/- */}
+                             <th>Référence</th>
                              <th>+/-</th>
                              <th>Stock final</th>
                              <!-- Colonne Actions (suppr.) ajoutée par JS si zine -->
@@ -175,7 +175,7 @@
         <!-- ===================== VUE ADMINISTRATION ===================== -->
         <main id="admin-view" class="view-section" style="display: none;">
              <h2 class="view-title">Administration</h2>
-             <div id="admin-feedback" class="feedback-area" style="display:none;"></div> {/* Feedback général déplacé en haut */}
+             <div id="admin-feedback" class="feedback-area" style="display:none;"></div>
 
              <!-- Section Gestion des Catégories -->
             <section id="category-manager" class="admin-section">
@@ -192,12 +192,12 @@
                             <div class="form-group"><label for="category-name">Nom (*):</label><input type="text" id="category-name" required></div>
                             <div class="form-group">
                                 <label for="category-attributes">Attributs spécifiques (Format JSON):</label>
-                                <textarea id="category-attributes" rows="4" placeholder='Ex: {"Tension":"V", "Package":"Type"} ou ["Couleur", "Taille"]'></textarea> {/* Placeholder mis à jour */}
+                                <textarea id="category-attributes" rows="4" placeholder='Ex: {"Tension":"V", "Package":"Type"} ou ["Couleur", "Taille"]'></textarea>
                                 <small>Définit les champs spécifiques. Utilisez un objet JSON clé/placeholder ou un tableau de labels.</small>
                             </div>
                             <div class="form-actions">
                                 <button type="button" id="cancel-edit-button" style="display: none;">Annuler</button>
-                                <button type="submit" id="save-category-button">Enregistrer</button> {/* type="submit" */}
+                                <button type="submit" id="save-category-button">Enregistrer</button> {/* CORRIGÉ: type="submit" */}
                             </div>
                         </form>
                     </div>
@@ -206,14 +206,14 @@
             <!-- Section Gestion du Stock -->
             <section id="stock-manager" class="admin-section">
                 <h3>Gestion du stock (Ajout / Modification)</h3>
-                {/* Formulaire principal - pas de `onsubmit` ici */}
+                {/* Formulaire principal */}
                 <form id="stock-form">
                     <div class="form-group"><label for="component-ref-admin">Référence composant (*):</label><input type="text" id="component-ref-admin" required placeholder="Ex: LM358N"><button type="button" id="check-stock-button">Vérifier / Pré-remplir</button></div>
                     {/* Section qui apparaît si composant existe */}
                     <div id="component-info" style="display: none;">
                         <div class="form-group inline-group">
                             <label>Stock actuel:</label><span id="current-quantity">N/A</span>
-                            <label for="quantity-change" style="margin-left: 20px;">Modifier (+/-):</label><input type="number" id="quantity-change" placeholder="+/- Qte"> {/* Placeholder */}
+                            <label for="quantity-change" style="margin-left: 20px;">Modifier (+/-):</label><input type="number" id="quantity-change" placeholder="+/- Qte">
                             <button type="button" id="update-quantity-button">Mettre à jour Qté seule</button>
                         </div>
                         <hr>
@@ -221,16 +221,16 @@
                     </div>
                     {/* Détails communs ajout/modification */}
                     <div id="component-details">
-                        <div class="form-group"><label for="component-category-select">Catégorie:</label><select id="component-category-select"><option value="">-- Sélectionner une catégorie --</option></select></div> {/* Retiré 'required' car peut être optionnel */}
+                        <div class="form-group"><label for="component-category-select">Catégorie:</label><select id="component-category-select"><option value="">-- Sélectionner une catégorie --</option></select></div>
                         <div class="form-group"><label for="component-desc">Description:</label><input type="text" id="component-desc" placeholder="Ex: Amplificateur Opérationnel Double"></div>
                         <div class="form-group"><label for="component-mfg">Fabricant:</label><input type="text" id="component-mfg" placeholder="Ex: Texas Instruments"></div>
                         <div class="form-group"><label for="component-drawer-admin">Tiroir:</label><input type="text" id="component-drawer-admin" placeholder="Ex: 01A5 (Format libre)"></div>
                         <div class="form-group"><label for="component-datasheet">Lien Datasheet:</label><input type="url" id="component-datasheet" placeholder="https://... lien complet"></div>
-                        <div id="category-specific-attributes" class="form-group" style="display: none;"></div> <!-- Rempli par JS -->
+                        <div id="category-specific-attributes" class="form-group" style="display: none;"></div>
                          {/* Champ pour la quantité initiale, seulement visible lors de l'ajout */}
-                        <div class="form-group initial-quantity-group" style="display: none;"> {/* Caché par défaut, affiché par JS pour ajout */}
-                            <label for="component-initial-quantity">Quantité Initiale (*):</label> {/* Label corrigé */}
-                            <input type="number" id="component-initial-quantity" value="0" min="0"> {/* Retiré 'required', géré par JS */}
+                        <div class="form-group initial-quantity-group" style="display: none;">
+                            <label for="component-initial-quantity">Quantité Initiale (*):</label>
+                            <input type="number" id="component-initial-quantity" value="0" min="0">
                         </div>
                         <div class="form-group">
                             <label for="component-threshold">Seuil critique:</label>
@@ -238,12 +238,11 @@
                             <small>Seuil à partir duquel la quantité est considérée comme basse (optionnel).</small>
                         </div>
                         <div class="form-actions">
-                            <button type="submit" id="save-component-button">Ajouter/Modifier Composant</button> {/* type="submit" */}
+                            <button type="submit" id="save-component-button">Ajouter/Modifier Composant</button> {/* CORRIGÉ: type="submit" */}
                         </div>
                     </div>
                 </form>
             </section>
-             {/* Feedback déplacé en haut de #admin-view */}
         </main> <!-- Fin de #admin-view -->
 
         <!-- ===================== VUE PARAMÈTRES ===================== -->
@@ -274,7 +273,6 @@
                 <h3>Importer du stock (via CSV)</h3>
                 <div class="import-options">
                     <div class="form-group">
-                        {/* Label ajouté pour JS */}
                         <label for="import-csv-file" id="import-file-label">Sélectionner un fichier CSV :</label>
                         <input type="file" id="import-csv-file" accept=".csv">
                         <small>Colonnes requises: <strong>Ref</strong>, <strong>Quantity</strong>, <strong>Category</strong> (nom exact). Optionnelles: Description, Manufacturer, Datasheet, Drawer, Threshold, Attributes (JSON). Les catégories doivent exister.</small>
@@ -302,7 +300,7 @@
         </main> <!-- Fin de #settings-view -->
 
         <footer class="app-footer">
-            <p>© 2024 StockAV - SAV.</p> {/* Année mise à jour */}
+            <p>© 2024 StockAV - SAV.</p>
         </footer>
     </div> <!-- Fin du div.container principal -->
 
@@ -320,7 +318,6 @@
         <!-- Section Attributs -->
         <div class="modal-attributes-section" style="display: none;">
             <h4 class="modal-attributes-title">Attributs spécifiques :</h4>
-            {/* Changé en ul pour correspondre au JS */}
             <ul id="modal-component-attributes" class="modal-attributes-list">
                 <!-- Attributs chargés par JS -->
             </ul>
