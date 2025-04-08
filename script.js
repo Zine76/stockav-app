@@ -1,5 +1,3 @@
-
-
 // ----- DÉBUT DU FICHIER script.js -----
 // Assure que le code s'exécute après le chargement du DOM
 document.addEventListener('DOMContentLoaded', () => {
@@ -18,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const SUPABASE_URL = 'https://tjdergojgghzmopuuley.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqZGVyZ29qZ2doem1vcHV1bGV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4MTU0OTUsImV4cCI6MjA1OTM5MTQ5NX0.XejQYEPYoCrgYOwW4T9g2VcmohCdLLndDdwpSYXAwPA';
     const FAKE_EMAIL_DOMAIN = '@stockav.local';
+    // --- NOUVEAU : URL de la fonction Edge ---
+    const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/ai-component-info`;
 
     let supabase = null;
 
@@ -479,20 +479,166 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- LOGIQUE VUE RECHERCHE (Chat) ---
-    // (Fonctions inchangées par rapport à la version précédente, sauf celles modifiées pour LED déjà incluses)
-    async function addMessageToChat(sender, messageContent, isHTML = false) { /* ... */ if(responseOutputChat) { const messageElement = document.createElement('div'); messageElement.classList.add('message', sender.toLowerCase()); if (sender === 'AI') { messageElement.innerHTML = '...'; responseOutputChat.prepend(messageElement); loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = 'StockAV réfléchit...'; await delay(150); if (isHTML) { messageElement.innerHTML = messageContent; } else { messageElement.textContent = ''; for (let i = 0; i < messageContent.length; i++) { messageElement.textContent += messageContent[i]; await delay(8); } } loadingIndicatorChat.style.display = 'none'; } else { messageElement.textContent = messageContent; responseOutputChat.prepend(messageElement); } chatHistory.push({ sender, message: messageContent, isHTML }); } }
+
+    // NOUVELLE FONCTION pour appeler l'Edge Function
+    async function fetchEquivalentsFromAI(reference) {
+        console.log(`Appel Edge Function pour équivalents de: ${reference}`);
+        try {
+            const response = await fetch(AI_FUNCTION_URL, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, // Clé Anon suffit généralement pour les fonctions appelées depuis le client
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ reference1: reference }) // "reference1" comme attendu par l'Edge Function
+            });
+
+            console.log(`Réponse brute reçue (Status: ${response.status})`);
+
+            if (!response.ok) {
+                let errorMsg = `Erreur ${response.status}`;
+                try {
+                    const errorBody = await response.json();
+                    errorMsg += `: ${errorBody?.content || errorBody?.message || 'Détail non disponible'}`;
+                } catch (e) {
+                    errorMsg += `: ${await response.text()}`; // Si la réponse n'est pas du JSON
+                }
+                throw new Error(`Erreur appel AI: ${errorMsg}`);
+            }
+
+            const data = await response.json();
+            console.log("Données JSON reçues de l'Edge Function:", data);
+
+            // Vérifier la structure de la réponse attendue par l'Edge Function
+            if (data && data.response_type === 'equivalents' && Array.isArray(data.content)) {
+                console.log(`Edge Function a retourné ${data.content.length} équivalent(s).`);
+                return data.content; // Retourne le tableau d'équivalents [{ref: ..., reason: ...}, ...]
+            } else if (data && data.response_type === 'error') {
+                throw new Error(`Erreur Edge Function: ${data.content}`);
+            } else {
+                // Cas où la structure est inattendue mais la requête était OK (2xx)
+                console.warn("Réponse inattendue de l'Edge Function:", data);
+                throw new Error("Réponse inattendue de la recherche d'équivalents.");
+            }
+        } catch (error) {
+            console.error("Erreur lors de l'appel à fetchEquivalentsFromAI:", error);
+            // Remonter l'erreur pour qu'elle soit gérée dans checkOriginalAndFindEquivalents
+            throw error;
+        }
+    }
+
+    async function addMessageToChat(sender, messageContent, isHTML = false) { /* ... inchangé ... */ if(responseOutputChat) { const messageElement = document.createElement('div'); messageElement.classList.add('message', sender.toLowerCase()); if (sender === 'AI') { messageElement.innerHTML = '...'; responseOutputChat.prepend(messageElement); loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = 'StockAV réfléchit...'; await delay(150); if (isHTML) { messageElement.innerHTML = messageContent; } else { messageElement.textContent = ''; for (let i = 0; i < messageContent.length; i++) { messageElement.textContent += messageContent[i]; await delay(8); } } loadingIndicatorChat.style.display = 'none'; } else { messageElement.textContent = messageContent; responseOutputChat.prepend(messageElement); } chatHistory.push({ sender, message: messageContent, isHTML }); } }
     function displayWelcomeMessage() { if(responseOutputChat) responseOutputChat.innerHTML = ''; chatHistory = []; resetConversationState(); addMessageToChat('AI', "Bonjour ! Je suis StockAV. Quelle référence cherchez-vous ?"); }
-    async function handleUserInput() { /* ... */ const userInput = componentInputChat?.value.trim(); if (!userInput) return; addMessageToChat('User', userInput); if(componentInputChat) componentInputChat.value = ''; try { if (conversationState.awaitingQuantityConfirmation) { if (!currentUser) { await promptLoginBeforeAction("prendre qté"); return; } await handleQuantityResponse(userInput); } else if (conversationState.awaitingEquivalentChoice) { await addMessageToChat('AI', "Cliquez sur une option ou entrez une nouvelle réf."); } else { resetConversationState(); const potentialRef = extractReference(userInput); if (potentialRef) { conversationState.originalRefChecked = potentialRef; await checkOriginalAndFindEquivalents(potentialRef); } else { await addMessageToChat('AI', "Réf non identifiée. Ex: 'stock BC547'?"); } } } catch (error) { console.error("Erreur handleUserInput:", error); await addMessageToChat('AI', "Erreur interne."); resetConversationState(); } }
-    function extractReference(text) { /* ... */ const patterns = [ /\b([A-Z]{2,}\d{2,}[A-Z\d\-/]*)\b/i, /\b(\d+[A-Z]{1,}[A-Z\d\-/]*)\b/i, /\b(NE\d{3}[A-Z]*)\b/i, /\b(\d{1,3}(?:K|M|G|R|Ω|OHM|NF|UF|PF|µF)[A-Z\d\-/]*)\b/i, /\b(BC\d{3}[A-Z]*)\b/i, /\b(TIP\d{2,}[A-Z]*)\b/i, /\b(BD\d{3}[A-Z]*)\b/i, /\b(2N\d{4}[A-Z]*)\b/i, /\b(1N\d{4}[A-Z]*)\b/i, /\b(IRF[A-Z\d]*)\b/i, /\b(PIC[A-Z\d\-F/L]*)\b/i, /\b(AT[A-Z\d\-]*)\b/i ]; text = text.toUpperCase(); for (const pattern of patterns) { const match = text.match(pattern); if (match && match[1].length >= 3 && !/^(POUR|AVEC|COMBIEN|STOCK|CHERCHE|DISPO|EQUIV|REMPLACE|TROUVE|QUEL|EST|QUE)$/.test(match[1])) { return match[1].replace(/\s+/g, ''); } } const words = text.split(/[\s,;:!?()]+/); const suspect = words.find(w => /^[A-Z\d\-.\/]{3,}$/.test(w) && /\d/.test(w) && /[A-Z]/.test(w) && !/^(POUR|AVEC|COMBIEN|STOCK|CHERCHE|DISPO|EQUIV|REMPLACE|QUE|EST)$/.test(w)); return suspect || null; }
-    async function checkOriginalAndFindEquivalents(originalRef) { /* ... */ loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Analyse ${originalRef}...`; const originalStockInfo = await getStockInfoFromSupabase(originalRef); await delay(200); let originalStatusMsg = ""; let statusIndicatorHTML = ""; const showDrawer = currentUser && originalStockInfo?.drawer; if (currentUser && originalStockInfo?.drawer) updateSevenSegmentDisplay(originalStockInfo.drawer); if (originalStockInfo) { const status = getStockStatus(originalStockInfo.quantity, originalStockInfo.critical_threshold); statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()} (Qté: ${originalStockInfo.quantity}, Seuil: ${originalStockInfo.critical_threshold ?? 'N/A'})"></span>`; if (originalStockInfo.quantity > 0) { originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Dispo (Qté: ${originalStockInfo.quantity}${showDrawer ? `, Tiroir: ${originalStockInfo.drawer}` : ''}).`; conversationState.criticalThreshold = originalStockInfo.critical_threshold; } else { originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Rupture.`; } } else { statusIndicatorHTML = `<span class="stock-indicator-chat level-unknown" title="Stock: Inconnu"></span>`; originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Inconnu localement.`; } loadingIndicatorChat.querySelector('i').textContent = `Recherche équiv. ${originalRef}...`; await delay(800); let equivalents = simulateWebEquivalentSearch(originalRef); conversationState.potentialEquivalents = equivalents; let responseHTML = `${originalStatusMsg}<br><br>`; if (equivalents.length > 0) { responseHTML += "Équivalents trouvés :<br>"; equivalents.slice(0, 3).forEach(eq => { responseHTML += `- <strong>${eq.ref}</strong> <small>(${eq.reason || 'Simulé'})</small> <button class="choice-button" data-ref="${eq.ref}">Vérifier ${eq.ref}</button><br>`; }); } else if (originalStockInfo) { responseHTML += "Aucun équivalent simulé.<br>"; } else { responseHTML += "Aucun équivalent simulé.<br>"; } if (originalStockInfo && originalStockInfo.quantity > 0) { responseHTML += `<br><button class="choice-button" data-ref="${originalRef}">Prendre original (${originalRef})</button>`; } if (!originalStockInfo && equivalents.length === 0) { responseHTML += "<br>Réf inconnue, pas d'équiv. Recherche externe :"; responseHTML += provideExternalLinksHTML(originalRef); resetConversationState(); } else if (equivalents.length > 0 || (originalStockInfo && originalStockInfo.quantity > 0)) { conversationState.awaitingEquivalentChoice = true; } else { responseHTML += "<br>Que faire ?"; resetConversationState(); } await addMessageToChat('AI', responseHTML, true); loadingIndicatorChat.style.display = 'none'; }
-    function simulateWebEquivalentSearch(originalRef) { /* ... */ let r = []; const refUpper = originalRef.toUpperCase(); if (refUpper === "LM741" || refUpper === "UA741") { r.push({ ref: "UA741CP", reason: "Std" }); r.push({ ref: "NE5532", reason: "Audio" }); } else if (refUpper === "BC547" || refUpper === "BC547B") { r.push({ ref: "2N3904", reason: "NPN" }); r.push({ ref: "BC548", reason: "Vceo" }); r.push({ ref: "BC549", reason: "Bruit" });} else if (refUpper === "1N4148") { r.push({ ref: "1N914", reason: "Rapide"}); } else if (refUpper === "NE555") { r.push({ ref: "LM555", reason: "Direct"}); r.push({ ref: "TLC555", reason: "CMOS"}); } console.log(`Simu équiv ${originalRef}:`, r); return r; }
+    async function handleUserInput() { /* ... inchangé ... */ const userInput = componentInputChat?.value.trim(); if (!userInput) return; addMessageToChat('User', userInput); if(componentInputChat) componentInputChat.value = ''; try { if (conversationState.awaitingQuantityConfirmation) { if (!currentUser) { await promptLoginBeforeAction("prendre qté"); return; } await handleQuantityResponse(userInput); } else if (conversationState.awaitingEquivalentChoice) { await addMessageToChat('AI', "Cliquez sur une option ou entrez une nouvelle réf."); } else { resetConversationState(); const potentialRef = extractReference(userInput); if (potentialRef) { conversationState.originalRefChecked = potentialRef; await checkOriginalAndFindEquivalents(potentialRef); } else { await addMessageToChat('AI', "Réf non identifiée. Ex: 'stock BC547'?"); } } } catch (error) { console.error("Erreur handleUserInput:", error); await addMessageToChat('AI', "Erreur interne."); resetConversationState(); } }
+    function extractReference(text) { /* ... inchangé ... */ const patterns = [ /\b([A-Z]{2,}\d{2,}[A-Z\d\-/]*)\b/i, /\b(\d+[A-Z]{1,}[A-Z\d\-/]*)\b/i, /\b(NE\d{3}[A-Z]*)\b/i, /\b(\d{1,3}(?:K|M|G|R|Ω|OHM|NF|UF|PF|µF)[A-Z\d\-/]*)\b/i, /\b(BC\d{3}[A-Z]*)\b/i, /\b(TIP\d{2,}[A-Z]*)\b/i, /\b(BD\d{3}[A-Z]*)\b/i, /\b(2N\d{4}[A-Z]*)\b/i, /\b(1N\d{4}[A-Z]*)\b/i, /\b(IRF[A-Z\d]*)\b/i, /\b(PIC[A-Z\d\-F/L]*)\b/i, /\b(AT[A-Z\d\-]*)\b/i ]; text = text.toUpperCase(); for (const pattern of patterns) { const match = text.match(pattern); if (match && match[1].length >= 3 && !/^(POUR|AVEC|COMBIEN|STOCK|CHERCHE|DISPO|EQUIV|REMPLACE|TROUVE|QUEL|EST|QUE)$/.test(match[1])) { return match[1].replace(/\s+/g, ''); } } const words = text.split(/[\s,;:!?()]+/); const suspect = words.find(w => /^[A-Z\d\-.\/]{3,}$/.test(w) && /\d/.test(w) && /[A-Z]/.test(w) && !/^(POUR|AVEC|COMBIEN|STOCK|CHERCHE|DISPO|EQUIV|REMPLACE|QUE|EST)$/.test(w)); return suspect || null; }
+
+    // MODIFIÉ : pour utiliser fetchEquivalentsFromAI
+    async function checkOriginalAndFindEquivalents(originalRef) {
+        loadingIndicatorChat.style.display = 'block';
+        loadingIndicatorChat.querySelector('i').textContent = `Analyse ${originalRef}...`;
+        const originalStockInfo = await getStockInfoFromSupabase(originalRef);
+        await delay(200); // Petite pause visuelle
+
+        let originalStatusMsg = "";
+        let statusIndicatorHTML = "";
+        const showDrawer = currentUser && originalStockInfo?.drawer;
+
+        // Mise à jour 7 segments si connecté et tiroir connu
+        if (currentUser && originalStockInfo?.drawer) {
+            updateSevenSegmentDisplay(originalStockInfo.drawer);
+        }
+
+        // Message sur le statut du composant original
+        if (originalStockInfo) {
+            const status = getStockStatus(originalStockInfo.quantity, originalStockInfo.critical_threshold);
+            statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()} (Qté: ${originalStockInfo.quantity}, Seuil: ${originalStockInfo.critical_threshold ?? 'N/A'})"></span>`;
+            if (originalStockInfo.quantity > 0) {
+                originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Dispo (Qté: ${originalStockInfo.quantity}${showDrawer ? `, Tiroir: ${originalStockInfo.drawer}` : ''}).`;
+                conversationState.criticalThreshold = originalStockInfo.critical_threshold;
+            } else {
+                originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Rupture.`;
+            }
+        } else {
+            statusIndicatorHTML = `<span class="stock-indicator-chat level-unknown" title="Stock: Inconnu"></span>`;
+            originalStatusMsg = `${statusIndicatorHTML}Original <strong>${originalRef}</strong>: Inconnu localement.`;
+        }
+
+        loadingIndicatorChat.querySelector('i').textContent = `Recherche équiv. via IA pour ${originalRef}...`;
+
+        let equivalents = [];
+        let aiError = null;
+        try {
+            // *** APPEL À L'EDGE FUNCTION ***
+            equivalents = await fetchEquivalentsFromAI(originalRef);
+            conversationState.potentialEquivalents = equivalents; // Stocker le résultat
+            console.log(`Équivalents reçus de l'IA pour ${originalRef}:`, equivalents);
+        } catch (error) {
+            console.error(`Erreur lors de la récupération des équivalents AI pour ${originalRef}:`, error);
+            aiError = error.message || "Erreur recherche équivalents AI.";
+            // On continue sans équivalents AI, on ne bloque pas
+            equivalents = []; // Assurer que la liste est vide en cas d'erreur
+            conversationState.potentialEquivalents = [];
+        }
+
+        // Construction de la réponse du Chatbot
+        let responseHTML = `${originalStatusMsg}<br><br>`;
+
+        // Afficher l'erreur AI si elle existe
+        if (aiError) {
+            responseHTML += `<small><i>Erreur IA: ${aiError}</i></small><br>`;
+        }
+
+        // Afficher les équivalents trouvés par l'IA
+        if (equivalents.length > 0) {
+            responseHTML += "Équivalents suggérés par l'IA :<br>";
+            // Limiter l'affichage si nécessaire (ici on affiche tout ce que l'IA a renvoyé)
+            equivalents.forEach(eq => {
+                // Assurer que ref et reason existent et sont des strings
+                const refText = typeof eq.ref === 'string' ? eq.ref : 'REF_INCONNUE';
+                const reasonText = typeof eq.reason === 'string' ? eq.reason : 'Raison inconnue';
+                responseHTML += `- <strong>${refText}</strong> <small>(${reasonText})</small> <button class="choice-button" data-ref="${refText}">Vérifier ${refText}</button><br>`;
+            });
+        } else if (!aiError && originalStockInfo) {
+            // Cas où l'IA n'a rien trouvé (et pas d'erreur), mais l'original existe
+            responseHTML += "Aucun équivalent trouvé par l'IA.<br>";
+        } else if (!aiError && !originalStockInfo) {
+             // Cas où l'IA n'a rien trouvé (et pas d'erreur), et l'original n'existe pas localement
+            responseHTML += "Aucun équivalent trouvé par l'IA.<br>";
+        }
+        // Si ni l'IA ni la simulation n'ont trouvé, et l'original non plus -> liens externes
+        // (Cette condition est ajustée car on n'utilise plus la simulation locale)
+        if (!originalStockInfo && equivalents.length === 0) {
+            responseHTML += "<br>Référence inconnue localement et aucun équivalent IA trouvé. Recherche externe :";
+            responseHTML += provideExternalLinksHTML(originalRef);
+            resetConversationState();
+        } else if (equivalents.length > 0 || (originalStockInfo && originalStockInfo.quantity > 0)) {
+            // On a des équivalents OU l'original est dispo -> on attend un choix
+            conversationState.awaitingEquivalentChoice = true;
+             // Ajouter le bouton "Prendre original" si dispo
+            if (originalStockInfo && originalStockInfo.quantity > 0) {
+                 responseHTML += `<br><button class="choice-button" data-ref="${originalRef}">Prendre original (${originalRef})</button>`;
+            }
+        } else {
+            // Cas où l'original est en rupture et aucun équivalent trouvé
+            responseHTML += "<br>Que faire ensuite ?";
+            resetConversationState();
+        }
+
+
+        await addMessageToChat('AI', responseHTML, true);
+        loadingIndicatorChat.style.display = 'none';
+    }
+
+    // Cette fonction n'est plus appelée mais on peut la garder commentée ou la supprimer
+    // function simulateWebEquivalentSearch(originalRef) { /* ... */ let r = []; const refUpper = originalRef.toUpperCase(); if (refUpper === "LM741" || refUpper === "UA741") { r.push({ ref: "UA741CP", reason: "Std" }); r.push({ ref: "NE5532", reason: "Audio" }); } else if (refUpper === "BC547" || refUpper === "BC547B") { r.push({ ref: "2N3904", reason: "NPN" }); r.push({ ref: "BC548", reason: "Vceo" }); r.push({ ref: "BC549", reason: "Bruit" });} else if (refUpper === "1N4148") { r.push({ ref: "1N914", reason: "Rapide"}); } else if (refUpper === "NE555") { r.push({ ref: "LM555", reason: "Direct"}); r.push({ ref: "TLC555", reason: "CMOS"}); } console.log(`Simu équiv ${originalRef}:`, r); return r; }
+
     responseOutputChat?.addEventListener('click', async (event) => { if (event.target.classList.contains('choice-button') && conversationState.awaitingEquivalentChoice) { const chosenRef = event.target.dataset.ref; if (!chosenRef) return; console.log(`Choix: ${chosenRef}`); conversationState.awaitingEquivalentChoice = false; addMessageToChat('User', `Vérifier/Prendre ${chosenRef}`); await checkLocalStockForChosenPart(chosenRef); } });
-    async function checkLocalStockForChosenPart(chosenRef) { /* ... */ loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Vérif stock ${chosenRef}...`; const stockInfo = await getStockInfoFromSupabase(chosenRef); await delay(200); const showDrawer = currentUser && stockInfo?.drawer; if (currentUser && stockInfo?.drawer) updateSevenSegmentDisplay(stockInfo.drawer); if (stockInfo && stockInfo.quantity > 0) { loadingIndicatorChat.style.display = 'none'; const status = getStockStatus(stockInfo.quantity, stockInfo.critical_threshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()}"></span>`; let stockMessage = `${statusIndicatorHTML}OK ! <strong>${chosenRef}</strong> dispo (Qté: ${stockInfo.quantity}${showDrawer ? `, Tiroir: ${stockInfo.drawer}` : ''}).`; await addMessageToChat('AI', stockMessage); conversationState.availableQuantity = stockInfo.quantity; conversationState.criticalThreshold = stockInfo.critical_threshold; if (currentUser) { await addMessageToChat('AI', "Combien ? (Nb ou '0')"); conversationState.chosenRefForStockCheck = chosenRef; conversationState.awaitingQuantityConfirmation = true; } else { await promptLoginBeforeAction(`prendre ${chosenRef}`); resetConversationState(); } } else { loadingIndicatorChat.style.display = 'none'; const status = getStockStatus(stockInfo?.quantity, stockInfo?.critical_threshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}"></span>`; let ruptureMessage = `${statusIndicatorHTML}Désolé, <strong>${chosenRef}</strong> `; ruptureMessage += (stockInfo) ? `est en rupture.` : `non trouvé.`; await addMessageToChat('AI', ruptureMessage); const isOriginal = chosenRef === conversationState.originalRefChecked; if (!isOriginal || !stockInfo) { await provideExternalLinks(chosenRef); } else { await addMessageToChat('AI', "Autre réf ?"); } resetConversationState(); } }
+    async function checkLocalStockForChosenPart(chosenRef) { /* ... inchangé ... */ loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Vérif stock ${chosenRef}...`; const stockInfo = await getStockInfoFromSupabase(chosenRef); await delay(200); const showDrawer = currentUser && stockInfo?.drawer; if (currentUser && stockInfo?.drawer) updateSevenSegmentDisplay(stockInfo.drawer); if (stockInfo && stockInfo.quantity > 0) { loadingIndicatorChat.style.display = 'none'; const status = getStockStatus(stockInfo.quantity, stockInfo.critical_threshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()}"></span>`; let stockMessage = `${statusIndicatorHTML}OK ! <strong>${chosenRef}</strong> dispo (Qté: ${stockInfo.quantity}${showDrawer ? `, Tiroir: ${stockInfo.drawer}` : ''}).`; await addMessageToChat('AI', stockMessage); conversationState.availableQuantity = stockInfo.quantity; conversationState.criticalThreshold = stockInfo.critical_threshold; if (currentUser) { await addMessageToChat('AI', "Combien ? (Nb ou '0')"); conversationState.chosenRefForStockCheck = chosenRef; conversationState.awaitingQuantityConfirmation = true; } else { await promptLoginBeforeAction(`prendre ${chosenRef}`); resetConversationState(); } } else { loadingIndicatorChat.style.display = 'none'; const status = getStockStatus(stockInfo?.quantity, stockInfo?.critical_threshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}"></span>`; let ruptureMessage = `${statusIndicatorHTML}Désolé, <strong>${chosenRef}</strong> `; ruptureMessage += (stockInfo) ? `est en rupture.` : `non trouvé.`; await addMessageToChat('AI', ruptureMessage); const isOriginal = chosenRef === conversationState.originalRefChecked; if (!isOriginal || !stockInfo) { await provideExternalLinks(chosenRef); } else { await addMessageToChat('AI', "Autre réf ?"); } resetConversationState(); } }
     async function promptLoginBeforeAction(actionDescription) { await addMessageToChat('AI', `Pour ${actionDescription}, veuillez vous connecter.`); }
-    function provideExternalLinksHTML(ref) { /* ... */ const mLink = `https://www.mouser.fr/Search/Refine?Keyword=${encodeURIComponent(ref)}`; const dLink = `https://www.digikey.fr/fr/products/result?keywords=${encodeURIComponent(ref)}`; const aLink = `https://www.aliexpress.com/wholesale?SearchText=${encodeURIComponent(ref)}`; return `<br>Recherche externe <strong>${ref}</strong> : <a href="${mLink}" target="_blank" rel="noopener noreferrer" class="external-link">Mouser</a> <a href="${dLink}" target="_blank" rel="noopener noreferrer" class="external-link">Digi-Key</a> <a href="${aLink}" target="_blank" rel="noopener noreferrer" class="external-link aliexpress">AliExpress</a>`; }
-    async function provideExternalLinks(ref) { /* ... */ loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Liens ${ref}...`; await delay(300); const htmlLinks = provideExternalLinksHTML(ref); await addMessageToChat('AI', htmlLinks, true); loadingIndicatorChat.style.display = 'none'; resetConversationState(); await delay(300); await addMessageToChat('AI', "Autre chose ?"); }
-    async function handleQuantityResponse(userInput) { /* ... */ const ref = conversationState.chosenRefForStockCheck; if (!ref) { console.warn("handleQR: no chosenRef"); resetConversationState(); return; } const requestedQty = parseInt(userInput, 10); if (isNaN(requestedQty) || requestedQty < 0) { await addMessageToChat('AI', "Nb >= 0 svp."); return; } if (requestedQty === 0) { await addMessageToChat('AI', "Annulé."); resetConversationState(); await delay(300); await addMessageToChat('AI', "Autre chose ?"); return; } if (requestedQty > conversationState.availableQuantity) { await addMessageToChat('AI', `Pas assez (${conversationState.availableQuantity} dispo). Qté ou '0'.`); return; } loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `MàJ stock ${ref}...`; const change = -requestedQty; try { const newQty = await updateStockInSupabase(ref, change); loadingIndicatorChat.style.display = 'none'; if (newQty !== null) { const statusAfter = getStockStatus(newQty, conversationState.criticalThreshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${statusAfter}" title="Stock: ${statusAfter.toUpperCase()}"></span>`; await addMessageToChat('AI', `${statusIndicatorHTML}Ok! ${requestedQty} de <strong>${ref}</strong> retiré(s). Stock: ${newQty}.`); if (inventoryView.classList.contains('active-view')) displayInventory(); } } catch (error) { console.error("Erreur handleQR -> updateStock:", error); loadingIndicatorChat.style.display = 'none'; await addMessageToChat('AI', error.message.includes("Stock insuffisant") ? "Stock insuffisant." : `Erreur MàJ stock ${ref}.`); } finally { resetConversationState(); await delay(300); await addMessageToChat('AI', "Besoin d'autre chose ?"); } }
-    function resetConversationState() { /* ... */ conversationState = { awaitingEquivalentChoice: false, awaitingQuantityConfirmation: false, originalRefChecked: null, potentialEquivalents: [], chosenRefForStockCheck: null, availableQuantity: 0, criticalThreshold: null }; console.log("État conv reset."); }
+    function provideExternalLinksHTML(ref) { /* ... inchangé ... */ const mLink = `https://www.mouser.fr/Search/Refine?Keyword=${encodeURIComponent(ref)}`; const dLink = `https://www.digikey.fr/fr/products/result?keywords=${encodeURIComponent(ref)}`; const aLink = `https://www.aliexpress.com/wholesale?SearchText=${encodeURIComponent(ref)}`; return `<br>Recherche externe <strong>${ref}</strong> : <a href="${mLink}" target="_blank" rel="noopener noreferrer" class="external-link">Mouser</a> <a href="${dLink}" target="_blank" rel="noopener noreferrer" class="external-link">Digi-Key</a> <a href="${aLink}" target="_blank" rel="noopener noreferrer" class="external-link aliexpress">AliExpress</a>`; }
+    async function provideExternalLinks(ref) { /* ... inchangé ... */ loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Liens ${ref}...`; await delay(300); const htmlLinks = provideExternalLinksHTML(ref); await addMessageToChat('AI', htmlLinks, true); loadingIndicatorChat.style.display = 'none'; resetConversationState(); await delay(300); await addMessageToChat('AI', "Autre chose ?"); }
+    async function handleQuantityResponse(userInput) { /* ... inchangé ... */ const ref = conversationState.chosenRefForStockCheck; if (!ref) { console.warn("handleQR: no chosenRef"); resetConversationState(); return; } const requestedQty = parseInt(userInput, 10); if (isNaN(requestedQty) || requestedQty < 0) { await addMessageToChat('AI', "Nb >= 0 svp."); return; } if (requestedQty === 0) { await addMessageToChat('AI', "Annulé."); resetConversationState(); await delay(300); await addMessageToChat('AI', "Autre chose ?"); return; } if (requestedQty > conversationState.availableQuantity) { await addMessageToChat('AI', `Pas assez (${conversationState.availableQuantity} dispo). Qté ou '0'.`); return; } loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `MàJ stock ${ref}...`; const change = -requestedQty; try { const newQty = await updateStockInSupabase(ref, change); loadingIndicatorChat.style.display = 'none'; if (newQty !== null) { const statusAfter = getStockStatus(newQty, conversationState.criticalThreshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${statusAfter}" title="Stock: ${statusAfter.toUpperCase()}"></span>`; await addMessageToChat('AI', `${statusIndicatorHTML}Ok! ${requestedQty} de <strong>${ref}</strong> retiré(s). Stock: ${newQty}.`); if (inventoryView.classList.contains('active-view')) displayInventory(); } } catch (error) { console.error("Erreur handleQR -> updateStock:", error); loadingIndicatorChat.style.display = 'none'; await addMessageToChat('AI', error.message.includes("Stock insuffisant") ? "Stock insuffisant." : `Erreur MàJ stock ${ref}.`); } finally { resetConversationState(); await delay(300); await addMessageToChat('AI', "Besoin d'autre chose ?"); } }
+    function resetConversationState() { /* ... inchangé ... */ conversationState = { awaitingEquivalentChoice: false, awaitingQuantityConfirmation: false, originalRefChecked: null, potentialEquivalents: [], chosenRefForStockCheck: null, availableQuantity: 0, criticalThreshold: null }; console.log("État conv reset."); }
 
 
     // --- Fonctions d'interaction Supabase ---
@@ -502,7 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function updateStockInSupabase(ref, change) { if (!supabase || !ref || change === 0 || !currentUser) { console.warn("updateStock: Prérequis manquants."); return null; } const upperRef = ref.toUpperCase(); console.log(`Supabase: UPDATE ref: ${upperRef}, change: ${change}`); try { const { data: currentItem, error: readError } = await supabase.from('inventory').select('quantity, drawer, critical_threshold').ilike('ref', upperRef).single(); if (readError || !currentItem) { throw new Error("Composant non trouvé."); } const currentQuantity = currentItem.quantity; const newQuantity = currentQuantity + change; if (newQuantity < 0) { throw new Error("Stock insuffisant."); } const { data: updateData, error: updateError } = await supabase.from('inventory').update({ quantity: newQuantity }).ilike('ref', upperRef).select('quantity, drawer').single(); if (updateError) { throw new Error("Erreur écriture MàJ."); } console.log(`UPDATE succès ${upperRef}. New Qty: ${updateData.quantity}`); await addLogEntry(upperRef, change, newQuantity); if (currentUser && updateData.drawer) updateSevenSegmentDisplay(updateData.drawer); return newQuantity; } catch (err) { console.error("Erreur JS updateStock:", err); throw err; } }
 
     // --- Gestion Modale Quantité (+/-) ---
-    // handleInventoryRowClick (INCHANGÉ - la correction était dans initializeApp)
+    // handleInventoryRowClick (INCHANGÉ)
     async function handleInventoryRowClick(event) {
         console.log("Clic détecté sur tbody inventaire !"); // LOG DE DEBUG
         const row = event.target.closest('tr.inventory-item-row');
@@ -541,7 +687,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                      console.log("Pas de tiroir ou pas connecté, 7-segment non mis à jour explicitement.");
                      // On ne force pas l'extinction ici pour la persistance
-                     // updateSevenSegmentDisplay(null); // <- Ligne supprimée
                 }
                 console.log(`Affichage modale pour ${item.ref}, qté: ${item.quantity}`);
                 showQuantityModal(item.ref, item.quantity);
@@ -571,11 +716,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Gestion Afficheur 7 Segments (Logique Persistante) ---
     // segmentMap (inchangé)
     const segmentMap = { '0':['a','b','c','d','e','f'],'1':['b','c'],'2':['a','b','g','e','d'],'3':['a','b','g','c','d'],'4':['f','g','b','c'],'5':['a','f','g','c','d'],'6':['a','f','e','d','c','g'],'7':['a','b','c'],'8':['a','b','c','d','e','f','g'],'9':['a','b','c','d','f','g'],'A':['a','b','c','e','f','g'],'B':['c','d','e','f','g'],'b':['f','e','d','c','g'],'C':['a','f','e','d'],'c':['g','e','d'],'D':['b','c','d','e','g'],'d':['b','c','d','e','g'],'E':['a','f','e','d','g'],'F':['a','f','e','g'],'G':['a','f','e','d','c'],'H':['f','e','b','c','g'],'h':['f','e','c','g'],'I':['f','e'],'J':['b','c','d','e'],'L':['f','e','d'],'O':['a','b','c','d','e','f'],'o':['c','d','e','g'],'P':['a','b','f','e','g'],'r':['e','g'],'S':['a','f','g','c','d'],'U':['b','c','d','e','f'],'u':['c','d','e'],'-':['g'],' ':[],'_':['d'] };
-    // updateSevenSegmentDisplay (inchangé par rapport à la version précédente corrigée)
+    // updateSevenSegmentDisplay (inchangé)
     function updateSevenSegmentDisplay(newDrawerValue = undefined) { if (newDrawerValue === null) { lastDisplayedDrawer = null; } else if (newDrawerValue !== undefined) { const trimmedVal = String(newDrawerValue).trim().toUpperCase(); if (trimmedVal !== "") { lastDisplayedDrawer = trimmedVal; } } const drawerToDisplay = lastDisplayedDrawer; if (!sevenSegmentDisplay || !segmentDigits.every(d => d)) return; if (!currentUser || !drawerToDisplay) { sevenSegmentDisplay.classList.add('display-off'); segmentDigits.forEach(digitElement => { digitElement?.querySelectorAll('.segment').forEach(seg => seg.classList.remove('on')); digitElement?.classList.add('off'); }); return; } sevenSegmentDisplay.classList.remove('display-off'); const displayChars = drawerToDisplay.slice(-4).padStart(4, ' '); segmentDigits.forEach((digitElement, index) => { if (!digitElement) return; const charToDisplay = displayChars[index] || ' '; const segmentsOn = segmentMap[charToDisplay] || segmentMap['-']; digitElement.querySelectorAll('.segment').forEach(seg => seg.classList.remove('on')); segmentsOn.forEach(segId => { const segment = digitElement.querySelector(`.segment-${segId}`); segment?.classList.add('on'); }); digitElement.classList.remove('off'); }); }
 
     // --- Logique pour la vue Paramètres (Export/Import) ---
-    // (Fonctions inchangées par rapport à la version précédente corrigée)
+    // (Fonctions inchangées)
     function loadSettingsData() { /* ... */ if (!currentUser) return; showSettingsFeedback('export', '', 'none'); showSettingsFeedback('import', '', 'none'); if (importCsvFileInput) importCsvFileInput.value = ''; console.log("Vue Paramètres chargée."); if (categoriesCache.length === 0) getCategories(); }
     function showSettingsFeedback(type, message, level = 'info') { /* ... */ const feedbackDiv = (type === 'export') ? exportFeedbackDiv : importFeedbackDiv; if (feedbackDiv) { feedbackDiv.textContent = message; feedbackDiv.className = `feedback-area ${level}`; feedbackDiv.style.whiteSpace = (level === 'error' && type === 'import') ? 'pre-wrap' : 'normal'; feedbackDiv.style.textAlign = (level === 'error' && type === 'import') ? 'left' : 'center'; feedbackDiv.style.display = (level === 'none' || !message) ? 'none' : 'block'; } }
     function downloadFile(filename, content, mimeType) { /* ... */ const blob = new Blob([content], { type: mimeType }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); }
@@ -622,9 +767,8 @@ document.addEventListener('DOMContentLoaded', () => {
         logPrevPageButton?.addEventListener('click', () => { if (currentLogPage > 1) { displayLog(currentLogPage - 1); } });
         logNextPageButton?.addEventListener('click', () => { if (!logNextPageButton?.disabled) { displayLog(currentLogPage + 1); } });
 
-        // *** CORRECTION : Attacher le listener pour le clic sur les lignes d'inventaire ***
+        // *** Listener pour le clic sur les lignes d'inventaire (inchangé) ***
         inventoryTableBody?.addEventListener('click', handleInventoryRowClick);
-        // ********************************************************************************
 
         // Attacher les listeners pour Admin et Settings
         addCategoryEventListeners();
@@ -645,4 +789,3 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 
 }); // ----- FIN DU FICHIER script.js -----
-
