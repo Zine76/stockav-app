@@ -1291,113 +1291,119 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Soumission du formulaire principal (Ajout/Modification complète)
-        stockForm?.addEventListener('submit', async (event) => {
-            event.preventDefault(); // Empêche rechargement page
-            if (!supabase) return;
+            // --- Correction du Listener pour le formulaire d'ajout/modif de stock ---
+    stockForm?.addEventListener('submit', async (event) => {
+        event.preventDefault(); // Empêche le rechargement de la page
+        if (!supabase) return;
 
-            // Récupération des valeurs
-            const ref = componentRefAdminInput?.value.trim().toUpperCase();
-            const categoryId = componentCategorySelectAdmin?.value || null;
-            const description = componentDescInput?.value.trim() || null;
-            const manufacturer = componentMfgInput?.value.trim() || null;
-            const datasheet = componentDatasheetInput?.value.trim() || null;
-            const drawer = componentDrawerAdminInput?.value.trim().toUpperCase() || null;
-            const quantityStr = componentInitialQuantityInput?.value;
-            const thresholdStr = componentThresholdInput?.value.trim();
+        // Récupération des valeurs des champs
+        const ref = componentRefAdminInput?.value.trim().toUpperCase();
+        // *** La variable est bien définie ici en camelCase ***
+        const categoryId = componentCategorySelectAdmin?.value || null;
+        const description = componentDescInput?.value.trim() || null;
+        const manufacturer = componentMfgInput?.value.trim() || null;
+        const datasheet = componentDatasheetInput?.value.trim() || null;
+        const drawer = componentDrawerAdminInput?.value.trim().toUpperCase() || null;
+        const quantityStr = componentInitialQuantityInput?.value;
+        const thresholdStr = componentThresholdInput?.value.trim();
 
-            // --- Début des Validations ---
-            if (!ref) { showAdminFeedback("La référence du composant est obligatoire.", 'error'); componentRefAdminInput?.focus(); return; }
+        // --- Début des Validations ---
+        if (!ref) {
+            showAdminFeedback("La référence du composant est obligatoire.", 'error');
+            componentRefAdminInput?.focus();
+            return;
+        }
 
-            // *** VALIDATION CATEGORIE (Ajoutée ici aussi par sécurité) ***
-            if (!categoryId) {
-                showAdminFeedback("Veuillez sélectionner une catégorie pour le composant.", 'error');
-                componentCategorySelectAdmin?.focus();
+        // *** CORRECTION : Utiliser 'categoryId' (camelCase) ici aussi ***
+        if (!categoryId) { // On vérifie la variable définie plus haut
+            showAdminFeedback("Veuillez sélectionner une catégorie pour le composant.", 'error');
+            componentCategorySelectAdmin?.focus();
+            return; // Arrête si la catégorie n'est pas sélectionnée
+        }
+        // *** FIN CORRECTION ***
+
+        const quantity = parseInt(quantityStr, 10);
+        if (quantityStr === '' || isNaN(quantity) || quantity < 0) {
+            showAdminFeedback("La quantité totale est invalide (doit être un nombre >= 0).", 'error');
+            componentInitialQuantityInput?.focus();
+            return;
+        }
+
+        let critical_threshold = null;
+        if (thresholdStr !== '') {
+            critical_threshold = parseInt(thresholdStr, 10);
+            if (isNaN(critical_threshold) || critical_threshold < 0) {
+                showAdminFeedback("Le seuil critique est invalide (doit être un nombre >= 0).", 'error');
+                componentThresholdInput?.focus();
                 return;
             }
+        }
 
-            const quantity = parseInt(quantityStr, 10);
-            if (quantityStr === '' || isNaN(quantity) || quantity < 0) { showAdminFeedback("La quantité totale est invalide (doit être un nombre >= 0).", 'error'); componentInitialQuantityInput?.focus(); return; }
-
-            let critical_threshold = null;
-            if (thresholdStr !== '') {
-                critical_threshold = parseInt(thresholdStr, 10);
-                if (isNaN(critical_threshold) || critical_threshold < 0) { showAdminFeedback("Le seuil critique est invalide (doit être un nombre >= 0).", 'error'); componentThresholdInput?.focus(); return; }
+        if (datasheet) {
+            try { new URL(datasheet); } catch (_) {
+                showAdminFeedback("L'URL de la datasheet est invalide.", 'error');
+                componentDatasheetInput?.focus();
+                return;
             }
+        }
+        // --- Fin des Validations ---
 
-            if (datasheet) { // Valide URL si fournie
-                try { new URL(datasheet); } catch (_) { showAdminFeedback("L'URL de la datasheet est invalide.", 'error'); componentDatasheetInput?.focus(); return; }
-            }
-            // --- Fin des Validations ---
-
-            // Récupération des attributs spécifiques
-            const attributes = {};
-            specificAttributesDiv?.querySelectorAll('input[data-attribute-name]').forEach(input => {
-                const attrName = input.dataset.attributeName;
-                const attrValue = input.value.trim();
-                if (attrName && attrValue) { // Ne stocke que les attributs non vides
-                    attributes[attrName] = attrValue;
-                }
-            });
-
-            // Préparation de l'objet à envoyer à Supabase
-            const componentData = {
-                ref,
-                description,
-                manufacturer,
-                quantity,
-                datasheet,
-                drawer,
-                category_id,
-                attributes: Object.keys(attributes).length > 0 ? attributes : null, // null si aucun attribut
-                critical_threshold
-            };
-
-            console.log("Préparation Upsert composant:", componentData);
-            showAdminFeedback("Enregistrement du composant...", "info");
-            if(saveComponentButton) saveComponentButton.disabled = true; // Désactive bouton
-
-            try {
-                // Utilisation de upsert: met à jour si 'ref' existe, insère sinon
-                const { data, error } = await supabase
-                    .from('inventory')
-                    .upsert(componentData, { onConflict: 'ref' }) // La colonne 'ref' doit avoir une contrainte UNIQUE
-                    .select() // Retourne la ligne affectée
-                    .single(); // S'attend à une seule ligne
-
-                if (error) {
-                     // Gérer erreurs spécifiques si besoin (ex: violation de contrainte non couverte par upsert)
-                    throw new Error(`Erreur Base de Données: ${error.message}`);
-                }
-
-                console.log("Upsert composant réussi:", data);
-                showAdminFeedback(`Composant "${ref}" enregistré/mis à jour avec succès.`, 'success');
-
-                // Mettre à jour l'UI si la section "info" était visible (cas d'une modif après check)
-                if (componentInfoDiv?.style.display === 'block') {
-                    if(currentQuantitySpan) currentQuantitySpan.textContent = data.quantity;
-                    if(quantityChangeInput) quantityChangeInput.value = 0; // Reset modif rapide
-                }
-                // Rafraîchir la vue inventaire si elle est active
-                if (inventoryView.classList.contains('active-view')) {
-                    displayInventory();
-                }
-                 // Mettre à jour 7-segments si tiroir défini/modifié
-                if (currentUser && data.drawer) {
-                    updateSevenSegmentDisplay(data.drawer);
-                }
-                // Optionnel : resetForm après succès ? Dépend du workflow souhaité.
-                // resetStockForm(); // Décommenter pour vider le formulaire après chaque succès
-
-            } catch(err) {
-                console.error("Erreur lors de l'upsert du composant:", err);
-                showAdminFeedback(`Erreur lors de l'enregistrement: ${err.message}`, 'error');
-            } finally {
-                if(saveComponentButton) saveComponentButton.disabled = false; // Réactive bouton
-            }
+        // Récupération des attributs spécifiques
+        const attributes = {};
+        specificAttributesDiv?.querySelectorAll('input[data-attribute-name]').forEach(input => {
+            const attrName = input.dataset.attributeName;
+            const attrValue = input.value.trim();
+            if (attrName && attrValue) { attributes[attrName] = attrValue; }
         });
-    }
 
+        // Préparation de l'objet pour Supabase (ici, on utilise bien 'category_id' pour le nom de colonne DB)
+        const componentData = {
+            ref,
+            description,
+            manufacturer,
+            quantity,
+            datasheet,
+            drawer,
+            category_id: categoryId, // Assignation de la variable camelCase à la clé snake_case
+            attributes: Object.keys(attributes).length > 0 ? attributes : null,
+            critical_threshold
+        };
+
+        console.log("Préparation Upsert composant:", componentData);
+        showAdminFeedback("Enregistrement du composant...", "info");
+        if(saveComponentButton) saveComponentButton.disabled = true;
+
+        try {
+            const { data, error } = await supabase
+                .from('inventory')
+                .upsert(componentData, { onConflict: 'ref' })
+                .select()
+                .single();
+
+            if (error) {
+                throw new Error(`Erreur Base de Données: ${error.message}`);
+            }
+
+            console.log("Upsert composant réussi:", data);
+            showAdminFeedback(`Composant "${ref}" enregistré/mis à jour avec succès.`, 'success');
+
+            // Mises à jour UI post-succès
+            if (componentInfoDiv?.style.display === 'block') {
+                if(currentQuantitySpan) currentQuantitySpan.textContent = data.quantity;
+                if(quantityChangeInput) quantityChangeInput.value = 0;
+            }
+            if (inventoryView.classList.contains('active-view')) { displayInventory(); }
+            if (currentUser && data.drawer) { updateSevenSegmentDisplay(data.drawer); }
+            // Optionnel: resetStockForm(); // Pour vider après succès
+
+        } catch(err) {
+            console.error("Erreur lors de l'upsert du composant:", err);
+            showAdminFeedback(`Erreur lors de l'enregistrement: ${err.message}`, 'error');
+        } finally {
+            if(saveComponentButton) saveComponentButton.disabled = false;
+        }
+    });
+    // --- Fin du Listener ---
 
     // --- LOGIQUE VUE RECHERCHE (Chat) ---
 
