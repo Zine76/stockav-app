@@ -5,18 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StockAV</title>
     <link rel="stylesheet" href="style.css">
+    <!-- AJOUT: Charger admin-styles.css ICI -->
+    <link rel="stylesheet" href="admin-styles.css">
+    <!-- ********************************* -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- *** AJOUT SUPABASE JS *** -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- *** MODIF PAPAPARSE AVEC BONNE INTÉGRITÉ *** -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha512-dfX5uYVXzyU8+KHqj8bjo7UkOdg18PaOtpa48djpNbZHwExddghZ+ZmzWT06R5v6NSk3ZUfsH6FNEDepLx9hPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <!-- ***************************************** -->
 </head>
 <body> <!-- La classe user-logged-in sera ajoutée/retirée ici par JS -->
     <!-- Afficheur 7 Segments -->
     <div id="seven-segment-display" class="display-off">
+        <!-- ... segments ... -->
         <div class="digit digit-1">
             <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
             <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
@@ -62,6 +63,7 @@
 
         <!-- Navigation Principale -->
         <nav id="main-navigation" class="view-navigation">
+            <!-- ... boutons nav ... -->
             <button id="show-search-view" class="nav-button active">Recherche Composant</button>
             <button id="show-inventory-view" class="nav-button">Stock Actuel</button>
             <button id="show-log-view" class="nav-button protected" style="display: none;" disabled title="Connexion requise">Historique (LOG)</button>
@@ -71,6 +73,7 @@
 
         <!-- ================== VUE RECHERCHE UTILISATEUR (CHAT) ================== -->
         <main id="search-view" class="view-section active-view">
+             <!-- ... contenu recherche ... -->
              <h2 class="view-title">Recherche de Composants</h2>
              <div class="search-section">
                  <div class="search-box">
@@ -91,6 +94,7 @@
 
         <!-- ===================== VUE INVENTAIRE ===================== -->
         <main id="inventory-view" class="view-section" style="display: none;">
+            <!-- ... contenu inventaire ... -->
             <h2 class="view-title">Stock Actuel</h2>
             <div class="inventory-filters filter-box">
                 <div class="form-group">
@@ -136,6 +140,7 @@
 
          <!-- ===================== VUE HISTORIQUE (LOG) ===================== -->
          <main id="log-view" class="view-section" style="display: none;">
+            <!-- ... contenu historique ... -->
             <h2 class="view-title">Historique des Mouvements</h2>
             <div class="log-display data-display-box">
                  <table id="log-table" class="data-table">
@@ -165,6 +170,7 @@
              <h2 class="view-title">Administration</h2>
              <!-- Section Gestion des Catégories -->
             <section id="category-manager" class="admin-section">
+                <!-- ... contenu catégories ... -->
                 <h3>Gestion des Catégories</h3>
                  <div class="admin-columns">
                     <div class="category-list-section">
@@ -187,22 +193,34 @@
                 <h3>Gestion du Stock</h3>
                 <form id="stock-form" onsubmit="return false;">
                     <div class="form-group"><label for="component-ref-admin">Référence Composant:</label><input type="text" id="component-ref-admin" required placeholder="Ex: LM358N"><button type="button" id="check-stock-button">Vérifier Stock</button></div>
-                    <div id="component-info" style="display: none;">
-                        <div class="form-group inline-group">
-                            <label>Stock Actuel:</label><span id="current-quantity">N/A</span>
-                            <label for="quantity-change" style="margin-left: 20px;">Modifier (+/-):</label><input type="number" id="quantity-change" value="0">
-                            <button type="button" id="update-quantity-button">Mettre à jour</button>
+                    <div id="component-actions" style="display: none;">
+                        <div id="component-info" class="admin-subsection">
+                            <h4>Informations et Actions Rapides</h4>
+                            <div class="form-group inline-group">
+                                <label>Stock Actuel:</label><span id="current-quantity">N/A</span>
+                                <label for="quantity-change" style="margin-left: 20px;">Modifier (+/-):</label><input type="number" id="quantity-change" value="0">
+                                <button type="button" id="update-quantity-button">Mettre à jour Quantité</button>
+                            </div>
+                            <div class="form-group">
+                                <button type="button" id="delete-component-button" class="danger" style="display: none;">Supprimer ce Composant</button>
+                                <small style="color: var(--error-color); margin-left: 10px;">Attention, action irréversible !</small>
+                            </div>
                         </div>
-                        <hr>
-                        <p><em>Ou modifiez les détails complets ci-dessous :</em></p>
+                         <hr>
+                         <p><em>Ou modifiez les détails complets ci-dessous et enregistrez :</em></p>
                     </div>
+
                     <div id="component-details">
+                         <h4>Détails du Composant</h4>
                         <div class="form-group"><label for="component-category-select">Catégorie:</label><select id="component-category-select" required><option value="">-- Sélectionner --</option></select></div>
+                        <!-- MODIF HTML: Assurer que la div est ici et a le bon ID -->
+                        <div id="category-specific-attributes" class="form-group admin-subsection" style="display: none;">
+                            <!-- Le titre et les champs seront ajoutés par JS -->
+                        </div>
                         <div class="form-group"><label for="component-desc">Description:</label><input type="text" id="component-desc" placeholder="Ex: Ampli Op Double"></div>
                         <div class="form-group"><label for="component-mfg">Fabricant:</label><input type="text" id="component-mfg" placeholder="Ex: TI"></div>
                         <div class="form-group"><label for="component-drawer-admin">Tiroir (optionnel):</label><input type="text" id="component-drawer-admin" placeholder="Ex: 01A5"></div>
                         <div class="form-group"><label for="component-datasheet">Lien Datasheet (optionnel):</label><input type="url" id="component-datasheet" placeholder="https://..."></div>
-                        <div id="category-specific-attributes" class="form-group" style="display: none;"></div>
                         <div class="form-group"><label for="component-initial-quantity">Quantité Totale:</label><input type="number" id="component-initial-quantity" value="0" min="0"></div>
                         <div class="form-group">
                             <label for="component-threshold">Seuil Critique (optionnel):</label>
@@ -218,7 +236,8 @@
 
         <!-- ===================== VUE PARAMÈTRES ===================== -->
         <main id="settings-view" class="view-section" style="display: none;">
-            <h2 class="view-title">Paramètres & Gestion Données</h2>
+            <!-- ... contenu paramètres ... -->
+             <h2 class="view-title">Paramètres & Gestion Données</h2>
 
             <!-- Section Export -->
             <section id="export-section" class="admin-section">
@@ -248,8 +267,6 @@
                         <input type="file" id="import-csv-file" accept=".csv">
                         <small>Le fichier doit avoir les colonnes : <strong>ref</strong> (obligatoire), <strong>description</strong>, <strong>manufacturer</strong>, <strong>quantity</strong> (obligatoire, nombre >= 0), <strong>datasheet</strong>, <strong>drawer</strong>, <strong>category_name</strong> (nom exact de la catégorie existante, optionnel), <strong>critical_threshold</strong> (nombre >= 0, optionnel), <strong>attributes</strong> (JSON valide ou vide, optionnel, ex: {"Type":"Axial"}). La première ligne doit être l'en-tête.</small>
                     </div>
-
-                    <!-- ***** AJOUT POUR LE CHOIX DU MODE D'IMPORT ***** -->
                     <div class="form-group import-mode-choice">
                         <label>Mode d'importation :</label>
                         <div class="radio-group">
@@ -264,13 +281,10 @@
                         </div>
                         <small style="color: var(--error-color); font-weight: bold;">Attention : Écraser supprime tout l'inventaire actuel avant l'import !</small>
                     </div>
-                    <!-- ***** FIN AJOUT ***** -->
-
                     <button id="import-inventory-csv-button" class="action-button success">Lancer l'Importation</button>
                 </div>
                 <div id="import-feedback" class="feedback-area" style="margin-top: 15px;"></div>
             </section>
-
         </main> <!-- Fin de #settings-view -->
 
 
@@ -281,19 +295,17 @@
 
     <!-- Fenêtre Modale pour Modifier Quantité (+/-) -->
     <div id="modal-overlay"></div>
-    <div id="quantity-change-modal"> <!-- S'assurer que cet ID est utilisé par le JS -->
-        <h3>Modifier le Stock</h3>
+    <div id="quantity-change-modal">
+        <!-- ... contenu modale ... -->
+         <h3>Modifier le Stock</h3>
         <p>Composant: <strong id="modal-component-ref">N/A</strong></p>
         <p>Quantité actuelle: <strong id="modal-current-quantity">N/A</strong></p>
-
-        <!-- Bloc pour afficher les attributs (requis par le JS pour les badges) -->
         <div id="modal-current-attributes" style="display: none; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
             <h4 style="text-align: center; margin-bottom: 10px; color: var(--text-muted); font-size: 0.9em;">Attributs :</h4>
             <div id="modal-attributes-list" style="font-size: 0.9em; text-align: center; max-height: 100px; overflow-y: auto;">
-                <!-- Les badges d'attributs seront insérés ici par le JavaScript -->
+                <!-- Badges ajoutés par JS -->
             </div>
         </div>
-
         <div class="quantity-adjuster">
             <button id="modal-decrease-button" class="adjust-button" title="Diminuer la quantité">-</button>
             <span id="modal-change-amount" class="change-amount-display">0</span>
@@ -308,5 +320,6 @@
 
     <!-- Charger le script JS APRES tout le HTML -->
     <script src="script.js"></script>
+
 </body>
 </html>
