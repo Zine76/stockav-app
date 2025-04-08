@@ -8,11 +8,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- *** AJOUT SUPABASE JS *** -->
+    <!-- Librairie Supabase JS v2 -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- *** MODIF PAPAPARSE AVEC BONNE INTÉGRITÉ *** -->
+    <!-- Librairie PapaParse pour CSV -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha512-dfX5uYVXzyU8+KHqj8bjo7UkOdg18PaOtpa48djpNbZHwExddghZ+ZmzWT06R5v6NSk3ZUfsH6FNEDepLx9hPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <!-- ***************************************** -->
 </head>
 <body> <!-- La classe user-logged-in sera ajoutée/retirée ici par JS -->
     <!-- Afficheur 7 Segments -->
@@ -72,21 +71,29 @@
         <!-- ================== VUE RECHERCHE UTILISATEUR (CHAT) ================== -->
         <main id="search-view" class="view-section active-view">
              <h2 class="view-title">Recherche de Composants</h2>
+
+             <!-- *** MODIFICATION : Ordre inversé ici *** -->
+
+             <!-- 1. Zone d'affichage des messages (maintenant en premier) -->
+             <div class="response-section">
+                 <h3 class="section-subtitle">Conversation avec StockAV</h3>
+                 <div id="response-output" class="output-box chat-box">
+                     <!-- Messages ajoutés dynamiquement par JS -->
+                 </div>
+                 <div id="loading-indicator" class="loading typing-indicator" style="display: none;">
+                     <i>StockAV réfléchit...</i>
+                 </div>
+             </div>
+
+             <!-- 2. Zone de saisie (maintenant en dernier) -->
              <div class="search-section">
                  <div class="search-box">
                      <input type="text" id="component-input" placeholder="Demandez à StockAV (ex: 'LM358N dispo ?')">
                      <button id="search-button" title="Envoyer la requête">Envoyer</button>
                  </div>
              </div>
-             <div class="response-section">
-                 <h3 class="section-subtitle">Conversation avec StockAV</h3>
-                 <div id="response-output" class="output-box chat-box">
-                     <!-- Messages ajoutés par JS -->
-                 </div>
-                 <div id="loading-indicator" class="loading typing-indicator" style="display: none;">
-                     <i>StockAV réfléchit...</i>
-                 </div>
-             </div>
+             <!-- *** FIN MODIFICATION *** -->
+
         </main>
 
         <!-- ===================== VUE INVENTAIRE ===================== -->
@@ -147,11 +154,13 @@
                              <th>Référence</th>
                              <th>+/-</th>
                              <th>Stock Final</th>
+                             <!-- Colonne Actions ajoutée par JS si zine -->
                          </tr>
                      </thead>
                      <tbody id="log-table-body"></tbody>
                  </table>
                  <p id="log-no-results" class="no-results-message" style="display: none;">Historique vide.</p>
+                 <!-- Bouton Purge ajouté par JS après le tableau si zine -->
             </div>
             <div id="log-pagination" class="pagination-controls">
                 <button id="log-prev-page" disabled>« Préc.</button>
@@ -176,7 +185,7 @@
                         <form id="category-form">
                             <input type="hidden" id="category-id-edit" value="">
                             <div class="form-group"><label for="category-name">Nom:</label><input type="text" id="category-name" required></div>
-                            <div class="form-group"><label for="category-attributes">Attributs (séparés par virgule):</label><textarea id="category-attributes" rows="3" placeholder="Ex: Type, Capacité, Tension"></textarea><small>Définit les champs spécifiques pour les composants.</small></div>
+                            <div class="form-group"><label for="category-attributes">Attributs (séparés par virgule):</label><textarea id="category-attributes" rows="3" placeholder="Ex: Type, Capacité, Tension"></textarea><small>Définit les champs spécifiques.</small></div>
                             <div class="form-actions"><button type="submit" id="save-category-button">Enregistrer</button><button type="button" id="cancel-edit-button" style="display: none;">Annuler</button></div>
                         </form>
                     </div>
@@ -207,7 +216,7 @@
                         <div class="form-group">
                             <label for="component-threshold">Seuil Critique (optionnel):</label>
                             <input type="number" id="component-threshold" min="0" placeholder="Ex: 10">
-                            <small>Stock en dessous duquel l'indicateur devient orange/rouge.</small>
+                            <small>Seuil pour indicateur orange/rouge.</small>
                         </div>
                         <div class="form-actions"><button type="submit" id="save-component-button">Enregistrer Composant</button></div>
                     </div>
@@ -246,8 +255,9 @@
                     <div class="form-group">
                         <label for="import-csv-file">Sélectionner un fichier CSV :</label>
                         <input type="file" id="import-csv-file" accept=".csv">
-                        <small>Le fichier doit avoir les colonnes : <strong>ref</strong> (obligatoire), <strong>description</strong>, <strong>manufacturer</strong>, <strong>quantity</strong> (obligatoire, nombre >= 0), <strong>datasheet</strong>, <strong>drawer</strong>, <strong>category_name</strong> (nom exact de la catégorie existante, optionnel), <strong>critical_threshold</strong> (nombre >= 0, optionnel), <strong>attributes</strong> (JSON valide ou vide, optionnel, ex: {"Type":"Axial"}). La première ligne doit être l'en-tête.</small>
+                        <small>Colonnes requises: <strong>ref</strong>, <strong>quantity</strong>. Optionnelles: description, manufacturer, datasheet, drawer, category_name, critical_threshold, attributes (JSON). Voir doc.</small>
                     </div>
+                    <!-- Options d'import ajoutées ici plus tard -->
                     <button id="import-inventory-csv-button" class="action-button success">Lancer l'Importation</button>
                 </div>
                 <div id="import-feedback" class="feedback-area" style="margin-top: 15px;"></div>
@@ -257,7 +267,7 @@
 
 
         <footer class="app-footer">
-            <p>© 2025 StockAV- UQÀM</p>
+            <p>© 2025 StockAV - UQÀM</p> <!-- Nom mis à jour -->
         </footer>
     </div>
 
