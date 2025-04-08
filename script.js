@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const SUPABASE_URL = 'https://tjdergojgghzmopuuley.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqZGVyZ29qZ2doem1vcHV1bGV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4MTU0OTUsImV4cCI6MjA1OTM5MTQ5NX0.XejQYEPYoCrgYOwW4T9g2VcmohCdLLndDdwpSYXAwPA';
     const FAKE_EMAIL_DOMAIN = '@stockav.local';
-    // --- NOUVEAU : URL de la fonction Edge ---
+    // --- URL de la fonction Edge ---
     const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/ai-component-info`;
 
     let supabase = null;
@@ -45,7 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Récupération des Éléments DOM ---
-    // (Liste complète des éléments DOM comme dans la version précédente)
     const loginArea = document.getElementById('login-area');
     const loginCodeInput = document.getElementById('login-code');
     const loginPasswordInput = document.getElementById('login-password');
@@ -360,7 +359,13 @@ document.addEventListener('DOMContentLoaded', () => {
             query = query.order('ref', { ascending: true }).range(startIndex, endIndex);
             const { data, error, count } = await query;
             inventoryTableBody.innerHTML = '';
-            if (error) { throw new Error(`Erreur Supabase: ${error.message}`); }
+            if (error) {
+                 // Gérer l'erreur 406 spécifiquement si elle persiste
+                 if (error.code === 'PGRST116' || error.message.includes('406')) { // PGRST116 est pour "relation does not exist" mais peut être lié à RLS dans certains cas
+                     throw new Error(`Erreur accès base (RLS?): ${error.message}`);
+                 }
+                 throw new Error(`Erreur Supabase: ${error.message}`);
+             }
             const totalItems = count || 0;
             const totalPages = Math.ceil(totalItems / itemsPerPage);
             if (totalItems === 0) { if(inventoryNoResults) { inventoryNoResults.textContent = `Aucun composant trouvé${searchValue || categoryValue !== 'all' ? ' pour ces filtres' : ''}.`; inventoryNoResults.style.display = 'block'; } if(inventoryPageInfo) inventoryPageInfo.textContent = 'Page 0 / 0'; }
@@ -407,9 +412,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const startIndex = (currentLogPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage - 1;
         try {
+            // Assurez-vous que RLS permet la lecture de 'logs' pour l'utilisateur connecté
             const { data, error, count } = await supabase.from('logs').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(startIndex, endIndex);
             logTableBody.innerHTML = '';
-            if (error) { throw new Error(`Erreur Supabase: ${error.message}`); }
+            if (error) { throw new Error(`Erreur Supabase (logs): ${error.message}`); } // Peut aussi être 406 si RLS bloque
             const totalItems = count || 0;
             const totalPages = Math.ceil(totalItems / itemsPerPage);
             if (totalItems === 0) { if(logNoResults) { logNoResults.textContent = "Historique vide."; logNoResults.style.display = 'block'; } if(logPageInfo) logPageInfo.textContent = 'Page 0 / 0'; }
@@ -431,7 +437,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             console.error("Erreur affichage logs:", err);
-            logTableBody.innerHTML = `<tr><td colspan="6" class="error-message">Erreur chargement: ${err.message}</td></tr>`;
+            logTableBody.innerHTML = `<tr><td colspan="6" class="error-message">Erreur chargement logs: ${err.message}</td></tr>`;
             if(logPageInfo) logPageInfo.textContent = 'Erreur';
         }
     }
@@ -443,8 +449,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const logData = { user_id: currentUser.id, user_code: currentUserCode.toUpperCase(), component_ref: itemRef, quantity_change: change, quantity_after: newQuantity };
         console.log("Écriture log Supabase:", logData);
         try {
+             // Assurez-vous que RLS permet l'INSERTION dans 'logs' pour l'utilisateur connecté
             const { error: logError } = await supabase.from('logs').insert(logData);
-            if (logError) { console.error("Erreur écriture log Supabase:", logError); }
+            if (logError) { console.error("Erreur écriture log Supabase:", logError); } // Peut aussi être 40x si RLS bloque
             else { console.log("Log écrit."); if (logView?.classList.contains('active-view')) { displayLog(1); } }
         } catch (err) { console.error("Erreur JS écriture log:", err); }
     }
@@ -455,8 +462,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!supabase) { console.warn("getCategories: Supabase non dispo."); return []; }
         console.log("Fetching categories..."); // Log 672
         try {
+             // Rappel : RLS doit autoriser SELECT sur 'categories'
             const { data, error } = await supabase.from('categories').select('id, name, attributes').order('name', { ascending: true });
-            if (error) throw new Error(error.message);
+            if (error) throw new Error(error.message); // Peut être 406
             categoriesCache = data || [];
             console.log("Categories fetched/cached:", categoriesCache.length); // Log 677
             return categoriesCache;
@@ -480,17 +488,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- LOGIQUE VUE RECHERCHE (Chat) ---
 
-    // NOUVELLE FONCTION pour appeler l'Edge Function
     async function fetchEquivalentsFromAI(reference) {
         console.log(`Appel Edge Function pour équivalents de: ${reference}`);
         try {
             const response = await fetch(AI_FUNCTION_URL, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, // Clé Anon suffit généralement pour les fonctions appelées depuis le client
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ reference1: reference }) // "reference1" comme attendu par l'Edge Function
+                body: JSON.stringify({ reference1: reference })
             });
 
             console.log(`Réponse brute reçue (Status: ${response.status})`);
@@ -501,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const errorBody = await response.json();
                     errorMsg += `: ${errorBody?.content || errorBody?.message || 'Détail non disponible'}`;
                 } catch (e) {
-                    errorMsg += `: ${await response.text()}`; // Si la réponse n'est pas du JSON
+                    errorMsg += `: ${await response.text()}`;
                 }
                 throw new Error(`Erreur appel AI: ${errorMsg}`);
             }
@@ -509,20 +516,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             console.log("Données JSON reçues de l'Edge Function:", data);
 
-            // Vérifier la structure de la réponse attendue par l'Edge Function
             if (data && data.response_type === 'equivalents' && Array.isArray(data.content)) {
                 console.log(`Edge Function a retourné ${data.content.length} équivalent(s).`);
-                return data.content; // Retourne le tableau d'équivalents [{ref: ..., reason: ...}, ...]
+                return data.content;
             } else if (data && data.response_type === 'error') {
                 throw new Error(`Erreur Edge Function: ${data.content}`);
             } else {
-                // Cas où la structure est inattendue mais la requête était OK (2xx)
                 console.warn("Réponse inattendue de l'Edge Function:", data);
                 throw new Error("Réponse inattendue de la recherche d'équivalents.");
             }
         } catch (error) {
             console.error("Erreur lors de l'appel à fetchEquivalentsFromAI:", error);
-            // Remonter l'erreur pour qu'elle soit gérée dans checkOriginalAndFindEquivalents
             throw error;
         }
     }
@@ -532,12 +536,22 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleUserInput() { /* ... inchangé ... */ const userInput = componentInputChat?.value.trim(); if (!userInput) return; addMessageToChat('User', userInput); if(componentInputChat) componentInputChat.value = ''; try { if (conversationState.awaitingQuantityConfirmation) { if (!currentUser) { await promptLoginBeforeAction("prendre qté"); return; } await handleQuantityResponse(userInput); } else if (conversationState.awaitingEquivalentChoice) { await addMessageToChat('AI', "Cliquez sur une option ou entrez une nouvelle réf."); } else { resetConversationState(); const potentialRef = extractReference(userInput); if (potentialRef) { conversationState.originalRefChecked = potentialRef; await checkOriginalAndFindEquivalents(potentialRef); } else { await addMessageToChat('AI', "Réf non identifiée. Ex: 'stock BC547'?"); } } } catch (error) { console.error("Erreur handleUserInput:", error); await addMessageToChat('AI', "Erreur interne."); resetConversationState(); } }
     function extractReference(text) { /* ... inchangé ... */ const patterns = [ /\b([A-Z]{2,}\d{2,}[A-Z\d\-/]*)\b/i, /\b(\d+[A-Z]{1,}[A-Z\d\-/]*)\b/i, /\b(NE\d{3}[A-Z]*)\b/i, /\b(\d{1,3}(?:K|M|G|R|Ω|OHM|NF|UF|PF|µF)[A-Z\d\-/]*)\b/i, /\b(BC\d{3}[A-Z]*)\b/i, /\b(TIP\d{2,}[A-Z]*)\b/i, /\b(BD\d{3}[A-Z]*)\b/i, /\b(2N\d{4}[A-Z]*)\b/i, /\b(1N\d{4}[A-Z]*)\b/i, /\b(IRF[A-Z\d]*)\b/i, /\b(PIC[A-Z\d\-F/L]*)\b/i, /\b(AT[A-Z\d\-]*)\b/i ]; text = text.toUpperCase(); for (const pattern of patterns) { const match = text.match(pattern); if (match && match[1].length >= 3 && !/^(POUR|AVEC|COMBIEN|STOCK|CHERCHE|DISPO|EQUIV|REMPLACE|TROUVE|QUEL|EST|QUE)$/.test(match[1])) { return match[1].replace(/\s+/g, ''); } } const words = text.split(/[\s,;:!?()]+/); const suspect = words.find(w => /^[A-Z\d\-.\/]{3,}$/.test(w) && /\d/.test(w) && /[A-Z]/.test(w) && !/^(POUR|AVEC|COMBIEN|STOCK|CHERCHE|DISPO|EQUIV|REMPLACE|QUE|EST)$/.test(w)); return suspect || null; }
 
-    // MODIFIÉ : pour utiliser fetchEquivalentsFromAI
+    // *** VERSION AVEC VÉRIFICATION IMMÉDIATE DU STOCK DES ÉQUIVALENTS ***
     async function checkOriginalAndFindEquivalents(originalRef) {
         loadingIndicatorChat.style.display = 'block';
         loadingIndicatorChat.querySelector('i').textContent = `Analyse ${originalRef}...`;
-        const originalStockInfo = await getStockInfoFromSupabase(originalRef);
-        await delay(200); // Petite pause visuelle
+
+        let originalStockInfo = null;
+        let dbError = null;
+        try {
+             originalStockInfo = await getStockInfoFromSupabase(originalRef);
+        } catch(error) {
+             console.error(`Erreur DB (local) pour ${originalRef}:`, error);
+             dbError = error.message || "Erreur accès base de données.";
+             // On continue même si la recherche locale échoue
+        }
+
+        await delay(100); // Petite pause visuelle
 
         let originalStatusMsg = "";
         let statusIndicatorHTML = "";
@@ -548,8 +562,11 @@ document.addEventListener('DOMContentLoaded', () => {
             updateSevenSegmentDisplay(originalStockInfo.drawer);
         }
 
-        // Message sur le statut du composant original
-        if (originalStockInfo) {
+        // Message sur le statut du composant original (ou erreur DB)
+        if (dbError) {
+             statusIndicatorHTML = `<span class="stock-indicator-chat level-unknown" title="Erreur DB"></span>`;
+             originalStatusMsg = `${statusIndicatorHTML}Erreur vérification stock local: ${dbError}`;
+        } else if (originalStockInfo) {
             const status = getStockStatus(originalStockInfo.quantity, originalStockInfo.critical_threshold);
             statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()} (Qté: ${originalStockInfo.quantity}, Seuil: ${originalStockInfo.critical_threshold ?? 'N/A'})"></span>`;
             if (originalStockInfo.quantity > 0) {
@@ -568,15 +585,13 @@ document.addEventListener('DOMContentLoaded', () => {
         let equivalents = [];
         let aiError = null;
         try {
-            // *** APPEL À L'EDGE FUNCTION ***
             equivalents = await fetchEquivalentsFromAI(originalRef);
-            conversationState.potentialEquivalents = equivalents; // Stocker le résultat
+            conversationState.potentialEquivalents = equivalents;
             console.log(`Équivalents reçus de l'IA pour ${originalRef}:`, equivalents);
         } catch (error) {
             console.error(`Erreur lors de la récupération des équivalents AI pour ${originalRef}:`, error);
             aiError = error.message || "Erreur recherche équivalents AI.";
-            // On continue sans équivalents AI, on ne bloque pas
-            equivalents = []; // Assurer que la liste est vide en cas d'erreur
+            equivalents = [];
             conversationState.potentialEquivalents = [];
         }
 
@@ -588,40 +603,94 @@ document.addEventListener('DOMContentLoaded', () => {
             responseHTML += `<small><i>Erreur IA: ${aiError}</i></small><br>`;
         }
 
-        // Afficher les équivalents trouvés par l'IA
+        // --- MODIFIÉ : Vérifier le stock des équivalents immédiatement ---
         if (equivalents.length > 0) {
             responseHTML += "Équivalents suggérés par l'IA :<br>";
-            // Limiter l'affichage si nécessaire (ici on affiche tout ce que l'IA a renvoyé)
-            equivalents.forEach(eq => {
-                // Assurer que ref et reason existent et sont des strings
-                const refText = typeof eq.ref === 'string' ? eq.ref : 'REF_INCONNUE';
-                const reasonText = typeof eq.reason === 'string' ? eq.reason : 'Raison inconnue';
-                responseHTML += `- <strong>${refText}</strong> <small>(${reasonText})</small> <button class="choice-button" data-ref="${refText}">Vérifier ${refText}</button><br>`;
-            });
-        } else if (!aiError && originalStockInfo) {
-            // Cas où l'IA n'a rien trouvé (et pas d'erreur), mais l'original existe
-            responseHTML += "Aucun équivalent trouvé par l'IA.<br>";
-        } else if (!aiError && !originalStockInfo) {
-             // Cas où l'IA n'a rien trouvé (et pas d'erreur), et l'original n'existe pas localement
-            responseHTML += "Aucun équivalent trouvé par l'IA.<br>";
-        }
-        // Si ni l'IA ni la simulation n'ont trouvé, et l'original non plus -> liens externes
-        // (Cette condition est ajustée car on n'utilise plus la simulation locale)
-        if (!originalStockInfo && equivalents.length === 0) {
-            responseHTML += "<br>Référence inconnue localement et aucun équivalent IA trouvé. Recherche externe :";
-            responseHTML += provideExternalLinksHTML(originalRef);
-            resetConversationState();
-        } else if (equivalents.length > 0 || (originalStockInfo && originalStockInfo.quantity > 0)) {
-            // On a des équivalents OU l'original est dispo -> on attend un choix
-            conversationState.awaitingEquivalentChoice = true;
-             // Ajouter le bouton "Prendre original" si dispo
-            if (originalStockInfo && originalStockInfo.quantity > 0) {
-                 responseHTML += `<br><button class="choice-button" data-ref="${originalRef}">Prendre original (${originalRef})</button>`;
+            loadingIndicatorChat.querySelector('i').textContent = `Vérification stock équivalents...`;
+
+            for (const eq of equivalents) {
+                const eqRef = typeof eq.ref === 'string' ? eq.ref.trim().toUpperCase() : 'REF_INCONNUE';
+                const eqReason = typeof eq.reason === 'string' ? eq.reason.trim() : 'Raison inconnue';
+
+                if (eqRef === 'REF_INCONNUE' || eqRef === '') {
+                    responseHTML += `- Ref Invalide <small>(${eqReason})</small> - Vérification impossible<br>`;
+                    continue;
+                }
+
+                let eqStockInfo = null;
+                let eqDbError = null;
+                try {
+                    // Ne pas revérifier si l'équivalent est l'original et qu'on a déjà l'info (et pas d'erreur)
+                    if (eqRef === originalRef && originalStockInfo && !dbError) {
+                        eqStockInfo = originalStockInfo;
+                    } else {
+                        eqStockInfo = await getStockInfoFromSupabase(eqRef);
+                    }
+                } catch (error) {
+                     console.error(`Erreur DB (local) pour équivalent ${eqRef}:`, error);
+                     eqDbError = error.message || "Erreur accès base.";
+                }
+
+                let eqStatusHTML = "";
+                let eqButtonHTML = "";
+                const showEqDrawer = currentUser && eqStockInfo?.drawer;
+
+                if (eqDbError) {
+                    eqStatusHTML = `<span class="stock-indicator-chat level-unknown" title="Erreur DB"></span> Erreur vérif stock.`;
+                } else if (eqStockInfo) {
+                    const eqStatus = getStockStatus(eqStockInfo.quantity, eqStockInfo.critical_threshold);
+                    eqStatusHTML = `<span class="stock-indicator-chat level-${eqStatus}" title="Stock: ${eqStatus.toUpperCase()}"></span>`;
+                    if (eqStockInfo.quantity > 0) {
+                        eqStatusHTML += ` Dispo (Qté: ${eqStockInfo.quantity}${showEqDrawer ? `, Tiroir: ${eqStockInfo.drawer}` : ''})`;
+                        eqButtonHTML = `<button class="choice-button" data-ref="${eqRef}">Prendre ${eqRef}</button>`;
+                    } else {
+                        eqStatusHTML += ` Rupture.`;
+                    }
+                } else {
+                     eqStatusHTML = `<span class="stock-indicator-chat level-unknown" title="Stock: Inconnu"></span> Inconnu localement.`;
+                }
+
+                responseHTML += `- <strong>${eqRef}</strong> <small>(${eqReason})</small>: ${eqStatusHTML} ${eqButtonHTML}<br>`;
+                await delay(50); // Petite pause entre chaque vérif d'équivalent pour ne pas spammer
             }
+             loadingIndicatorChat.querySelector('i').textContent = `Analyse ${originalRef}...`; // Rétablir indicateur
+
+        } else if (!aiError) { // Si pas d'équivalents IA ET pas d'erreur AI
+             if (dbError) { // Si on n'a pas pu vérifier localement non plus
+                  responseHTML += "Impossible de vérifier le stock local ou de trouver des équivalents IA.<br>";
+             } else if (originalStockInfo && originalStockInfo.quantity > 0) { // Si original dispo mais pas d'équiv AI
+                  responseHTML += "Aucun équivalent trouvé par l'IA.<br>";
+             } else { // Si original inconnu/rupture ET pas d'équiv AI
+                  responseHTML += "Aucun équivalent trouvé par l'IA.<br>";
+             }
+        }
+        // --- FIN DE LA LOGIQUE MODIFIÉE ---
+
+
+        // Condition finale pour les boutons/liens
+        const hasTakeButton = responseHTML.includes('class="choice-button"');
+        if (hasTakeButton) {
+            conversationState.awaitingEquivalentChoice = true; // On attend un clic sur "Prendre"
+             // Ajouter le bouton "Prendre original" s'il est dispo ET si pas déjà affiché comme équivalent
+             if (originalStockInfo && originalStockInfo.quantity > 0 && !responseHTML.includes(`data-ref="${originalRef}"`)) {
+                 responseHTML += `<br><button class="choice-button" data-ref="${originalRef}">Prendre original (${originalRef})</button>`;
+             }
         } else {
-            // Cas où l'original est en rupture et aucun équivalent trouvé
-            responseHTML += "<br>Que faire ensuite ?";
-            resetConversationState();
+             // Si aucun composant (original ou équivalent) n'est disponible OU si erreur DB/IA
+             if (!dbError && originalStockInfo && originalStockInfo.quantity === 0 && equivalents.length === 0 && !aiError) {
+                  responseHTML += "<br>Original en rupture et aucun équivalent IA trouvé.";
+             } else if (!dbError && !originalStockInfo && equivalents.length === 0 && !aiError) {
+                  responseHTML += "<br>Référence inconnue et aucun équivalent IA trouvé.";
+             } else if (!hasTakeButton) { // Cas générique si aucun bouton prendre n'a été ajouté
+                 responseHTML += "<br>Aucun composant disponible ou erreur lors de la vérification.";
+             }
+             // Proposer recherche externe si original inconnu/rupture ET pas d'équivalents IA
+             if ((!originalStockInfo || originalStockInfo.quantity === 0) && equivalents.length === 0) {
+                  responseHTML += provideExternalLinksHTML(originalRef);
+             } else {
+                  responseHTML += "<br>Que faire ensuite ?";
+             }
+             resetConversationState();
         }
 
 
@@ -629,11 +698,33 @@ document.addEventListener('DOMContentLoaded', () => {
         loadingIndicatorChat.style.display = 'none';
     }
 
-    // Cette fonction n'est plus appelée mais on peut la garder commentée ou la supprimer
-    // function simulateWebEquivalentSearch(originalRef) { /* ... */ let r = []; const refUpper = originalRef.toUpperCase(); if (refUpper === "LM741" || refUpper === "UA741") { r.push({ ref: "UA741CP", reason: "Std" }); r.push({ ref: "NE5532", reason: "Audio" }); } else if (refUpper === "BC547" || refUpper === "BC547B") { r.push({ ref: "2N3904", reason: "NPN" }); r.push({ ref: "BC548", reason: "Vceo" }); r.push({ ref: "BC549", reason: "Bruit" });} else if (refUpper === "1N4148") { r.push({ ref: "1N914", reason: "Rapide"}); } else if (refUpper === "NE555") { r.push({ ref: "LM555", reason: "Direct"}); r.push({ ref: "TLC555", reason: "CMOS"}); } console.log(`Simu équiv ${originalRef}:`, r); return r; }
+    responseOutputChat?.addEventListener('click', async (event) => { if (event.target.classList.contains('choice-button') && conversationState.awaitingEquivalentChoice) { const chosenRef = event.target.dataset.ref; if (!chosenRef) return; console.log(`Choix: ${chosenRef}`); conversationState.awaitingEquivalentChoice = false; addMessageToChat('User', `Prendre ${chosenRef}`); // Modifié message user car maintenant on clique sur "Prendre"
+    // Appel direct pour màj quantité car on sait qu'il est dispo (on ne revérifie pas avec checkLocalStockForChosenPart)
+     if (currentUser) {
+         const stockInfo = await getStockInfoFromSupabase(chosenRef); // Récupérer qté actuelle pour demander
+         if (stockInfo && stockInfo.quantity > 0) {
+             conversationState.availableQuantity = stockInfo.quantity;
+             conversationState.criticalThreshold = stockInfo.critical_threshold;
+             conversationState.chosenRefForStockCheck = chosenRef; // Nom un peu trompeur maintenant, c'est la ref à décrémenter
+             await addMessageToChat('AI', `Combien de <strong>${chosenRef}</strong> ? (Stock: ${stockInfo.quantity}, Nb ou '0')`);
+             conversationState.awaitingQuantityConfirmation = true;
+         } else {
+             await addMessageToChat('AI', `Erreur: ${chosenRef} n'est plus disponible ? Rechargez la recherche.`);
+             resetConversationState();
+         }
+     } else {
+         await promptLoginBeforeAction(`prendre ${chosenRef}`);
+         resetConversationState();
+     }
+    } });
 
-    responseOutputChat?.addEventListener('click', async (event) => { if (event.target.classList.contains('choice-button') && conversationState.awaitingEquivalentChoice) { const chosenRef = event.target.dataset.ref; if (!chosenRef) return; console.log(`Choix: ${chosenRef}`); conversationState.awaitingEquivalentChoice = false; addMessageToChat('User', `Vérifier/Prendre ${chosenRef}`); await checkLocalStockForChosenPart(chosenRef); } });
-    async function checkLocalStockForChosenPart(chosenRef) { /* ... inchangé ... */ loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Vérif stock ${chosenRef}...`; const stockInfo = await getStockInfoFromSupabase(chosenRef); await delay(200); const showDrawer = currentUser && stockInfo?.drawer; if (currentUser && stockInfo?.drawer) updateSevenSegmentDisplay(stockInfo.drawer); if (stockInfo && stockInfo.quantity > 0) { loadingIndicatorChat.style.display = 'none'; const status = getStockStatus(stockInfo.quantity, stockInfo.critical_threshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()}"></span>`; let stockMessage = `${statusIndicatorHTML}OK ! <strong>${chosenRef}</strong> dispo (Qté: ${stockInfo.quantity}${showDrawer ? `, Tiroir: ${stockInfo.drawer}` : ''}).`; await addMessageToChat('AI', stockMessage); conversationState.availableQuantity = stockInfo.quantity; conversationState.criticalThreshold = stockInfo.critical_threshold; if (currentUser) { await addMessageToChat('AI', "Combien ? (Nb ou '0')"); conversationState.chosenRefForStockCheck = chosenRef; conversationState.awaitingQuantityConfirmation = true; } else { await promptLoginBeforeAction(`prendre ${chosenRef}`); resetConversationState(); } } else { loadingIndicatorChat.style.display = 'none'; const status = getStockStatus(stockInfo?.quantity, stockInfo?.critical_threshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}"></span>`; let ruptureMessage = `${statusIndicatorHTML}Désolé, <strong>${chosenRef}</strong> `; ruptureMessage += (stockInfo) ? `est en rupture.` : `non trouvé.`; await addMessageToChat('AI', ruptureMessage); const isOriginal = chosenRef === conversationState.originalRefChecked; if (!isOriginal || !stockInfo) { await provideExternalLinks(chosenRef); } else { await addMessageToChat('AI', "Autre réf ?"); } resetConversationState(); } }
+    // Cette fonction n'est plus appelée directement par le clic mais par handleQuantityResponse
+    async function checkLocalStockForChosenPart(chosenRef) {
+        console.warn("checkLocalStockForChosenPart appelée directement - est-ce normal ?");
+        // (Le code existant reste ici au cas où, mais ne devrait plus être le chemin principal)
+        loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Vérif stock ${chosenRef}...`; const stockInfo = await getStockInfoFromSupabase(chosenRef); await delay(200); const showDrawer = currentUser && stockInfo?.drawer; if (currentUser && stockInfo?.drawer) updateSevenSegmentDisplay(stockInfo.drawer); if (stockInfo && stockInfo.quantity > 0) { loadingIndicatorChat.style.display = 'none'; const status = getStockStatus(stockInfo.quantity, stockInfo.critical_threshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()}"></span>`; let stockMessage = `${statusIndicatorHTML}OK ! <strong>${chosenRef}</strong> dispo (Qté: ${stockInfo.quantity}${showDrawer ? `, Tiroir: ${stockInfo.drawer}` : ''}).`; await addMessageToChat('AI', stockMessage); conversationState.availableQuantity = stockInfo.quantity; conversationState.criticalThreshold = stockInfo.critical_threshold; if (currentUser) { await addMessageToChat('AI', "Combien ? (Nb ou '0')"); conversationState.chosenRefForStockCheck = chosenRef; conversationState.awaitingQuantityConfirmation = true; } else { await promptLoginBeforeAction(`prendre ${chosenRef}`); resetConversationState(); } } else { loadingIndicatorChat.style.display = 'none'; const status = getStockStatus(stockInfo?.quantity, stockInfo?.critical_threshold); const statusIndicatorHTML = `<span class="stock-indicator-chat level-${status}"></span>`; let ruptureMessage = `${statusIndicatorHTML}Désolé, <strong>${chosenRef}</strong> `; ruptureMessage += (stockInfo) ? `est en rupture.` : `non trouvé.`; await addMessageToChat('AI', ruptureMessage); const isOriginal = chosenRef === conversationState.originalRefChecked; if (!isOriginal || !stockInfo) { await provideExternalLinks(chosenRef); } else { await addMessageToChat('AI', "Autre réf ?"); } resetConversationState(); }
+    }
+
     async function promptLoginBeforeAction(actionDescription) { await addMessageToChat('AI', `Pour ${actionDescription}, veuillez vous connecter.`); }
     function provideExternalLinksHTML(ref) { /* ... inchangé ... */ const mLink = `https://www.mouser.fr/Search/Refine?Keyword=${encodeURIComponent(ref)}`; const dLink = `https://www.digikey.fr/fr/products/result?keywords=${encodeURIComponent(ref)}`; const aLink = `https://www.aliexpress.com/wholesale?SearchText=${encodeURIComponent(ref)}`; return `<br>Recherche externe <strong>${ref}</strong> : <a href="${mLink}" target="_blank" rel="noopener noreferrer" class="external-link">Mouser</a> <a href="${dLink}" target="_blank" rel="noopener noreferrer" class="external-link">Digi-Key</a> <a href="${aLink}" target="_blank" rel="noopener noreferrer" class="external-link aliexpress">AliExpress</a>`; }
     async function provideExternalLinks(ref) { /* ... inchangé ... */ loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Liens ${ref}...`; await delay(300); const htmlLinks = provideExternalLinksHTML(ref); await addMessageToChat('AI', htmlLinks, true); loadingIndicatorChat.style.display = 'none'; resetConversationState(); await delay(300); await addMessageToChat('AI', "Autre chose ?"); }
@@ -642,63 +733,67 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- Fonctions d'interaction Supabase ---
-    // getStockInfoFromSupabase (inchangé)
-    async function getStockInfoFromSupabase(ref) { if (!supabase || !ref) return null; const upperRef = ref.toUpperCase(); console.log(`Supabase: GET ref: ${upperRef}`); try { const { data, error } = await supabase.from('inventory').select('*, categories(name), critical_threshold').ilike('ref', upperRef).single(); if (error) { if (error.code === 'PGRST116') { console.log(`Ref ${upperRef} non trouvé.`); return null; } console.error(`Erreur GET (${upperRef}):`, error); return null; } return data; } catch (err) { console.error("Erreur JS getStockInfo:", err); return null; } }
-    // updateStockInSupabase (inchangé, avec throw err et update LED)
-    async function updateStockInSupabase(ref, change) { if (!supabase || !ref || change === 0 || !currentUser) { console.warn("updateStock: Prérequis manquants."); return null; } const upperRef = ref.toUpperCase(); console.log(`Supabase: UPDATE ref: ${upperRef}, change: ${change}`); try { const { data: currentItem, error: readError } = await supabase.from('inventory').select('quantity, drawer, critical_threshold').ilike('ref', upperRef).single(); if (readError || !currentItem) { throw new Error("Composant non trouvé."); } const currentQuantity = currentItem.quantity; const newQuantity = currentQuantity + change; if (newQuantity < 0) { throw new Error("Stock insuffisant."); } const { data: updateData, error: updateError } = await supabase.from('inventory').update({ quantity: newQuantity }).ilike('ref', upperRef).select('quantity, drawer').single(); if (updateError) { throw new Error("Erreur écriture MàJ."); } console.log(`UPDATE succès ${upperRef}. New Qty: ${updateData.quantity}`); await addLogEntry(upperRef, change, newQuantity); if (currentUser && updateData.drawer) updateSevenSegmentDisplay(updateData.drawer); return newQuantity; } catch (err) { console.error("Erreur JS updateStock:", err); throw err; } }
+    // getStockInfoFromSupabase (inchangé mais la cause de l'erreur 406 doit être résolue)
+    async function getStockInfoFromSupabase(ref) {
+        if (!supabase || !ref) return null;
+        const upperRef = ref.toUpperCase();
+        console.log(`Supabase: GET ref: ${upperRef}`);
+        try {
+            // La requête qui pose problème (406)
+            const { data, error } = await supabase.from('inventory').select('*, categories(name), critical_threshold').ilike('ref', upperRef).single();
+
+            if (error) {
+                if (error.code === 'PGRST116') { // Not found (ou parfois accès refusé si jointure échoue à cause RLS sur table jointe)
+                    console.log(`Ref ${upperRef} non trouvé ou accès refusé (jointure?).`);
+                    return null;
+                }
+                 // JETER l'erreur pour la capturer dans la fonction appelante (ex: checkOriginalAndFindEquivalents)
+                console.error(`Erreur GET (${upperRef}):`, error);
+                throw new Error(error.message || `Erreur Supabase (${error.code || error.status || 'inconnu'})`);
+            }
+            return data;
+        } catch (err) {
+            console.error("Erreur JS getStockInfo:", err);
+             // JETER l'erreur pour la capturer dans la fonction appelante
+             throw err;
+        }
+    }
+
+    // updateStockInSupabase (inchangé)
+    async function updateStockInSupabase(ref, change) { if (!supabase || !ref || change === 0 || !currentUser) { console.warn("updateStock: Prérequis manquants."); return null; } const upperRef = ref.toUpperCase(); console.log(`Supabase: UPDATE ref: ${upperRef}, change: ${change}`); try { const { data: currentItem, error: readError } = await supabase.from('inventory').select('quantity, drawer, critical_threshold').ilike('ref', upperRef).single(); if (readError || !currentItem) { throw new Error("Composant non trouvé pour MàJ."); } const currentQuantity = currentItem.quantity; const newQuantity = currentQuantity + change; if (newQuantity < 0) { throw new Error("Stock insuffisant."); } const { data: updateData, error: updateError } = await supabase.from('inventory').update({ quantity: newQuantity }).ilike('ref', upperRef).select('quantity, drawer').single(); if (updateError) { throw new Error("Erreur écriture MàJ stock."); } console.log(`UPDATE succès ${upperRef}. New Qty: ${updateData.quantity}`); await addLogEntry(upperRef, change, newQuantity); if (currentUser && updateData.drawer) updateSevenSegmentDisplay(updateData.drawer); return newQuantity; } catch (err) { console.error("Erreur JS updateStock:", err); throw err; } }
 
     // --- Gestion Modale Quantité (+/-) ---
     // handleInventoryRowClick (INCHANGÉ)
     async function handleInventoryRowClick(event) {
-        console.log("Clic détecté sur tbody inventaire !"); // LOG DE DEBUG
+        console.log("Clic détecté sur tbody inventaire !");
         const row = event.target.closest('tr.inventory-item-row');
-        if (!row) {
-             console.log("Clic hors d'une ligne inventory-item-row.");
-             return;
-        }
+        if (!row) { console.log("Clic hors d'une ligne inventory-item-row."); return; }
         console.log("Ligne cliquée:", row);
-
-        if (!currentUser) {
-            console.log("Clic inventaire bloqué: non connecté.");
-            if(loginError) { loginError.textContent = "Connexion requise pour modifier le stock."; loginError.style.color = 'var(--error-color)'; loginError.style.display = 'block'; }
-            loginCodeInput?.focus();
-            return;
-        }
-
+        if (!currentUser) { console.log("Clic inventaire bloqué: non connecté."); if(loginError) { loginError.textContent = "Connexion requise pour modifier le stock."; loginError.style.color = 'var(--error-color)'; loginError.style.display = 'block'; } loginCodeInput?.focus(); return; }
         const ref = row.dataset.ref;
-        if (!ref) {
-            console.error("Ref manquante (data-ref) sur la ligne cliquée:", row);
-            return;
-        }
+        if (!ref) { console.error("Ref manquante (data-ref) sur la ligne cliquée:", row); return; }
         console.log(`Référence extraite: ${ref}`);
-
-        row.style.opacity = '0.7'; // Indicateur visuel
-
+        row.style.opacity = '0.7';
         try {
-            console.log(`Appel getStockInfoFromSupabase pour ${ref}`);
+            console.log(`Appel getStockInfoFromSupabase pour ${ref} (depuis clic inventaire)`);
             const item = await getStockInfoFromSupabase(ref);
-            row.style.opacity = '1'; // Restaurer opacité
-
+            row.style.opacity = '1';
             if (item) {
                 console.log("Item trouvé:", item);
-                if (currentUser && item.drawer) {
-                     console.log(`Mise à jour 7-segment avec tiroir: ${item.drawer}`);
-                     updateSevenSegmentDisplay(item.drawer);
-                } else {
-                     console.log("Pas de tiroir ou pas connecté, 7-segment non mis à jour explicitement.");
-                     // On ne force pas l'extinction ici pour la persistance
-                }
+                if (currentUser && item.drawer) { console.log(`Mise à jour 7-segment avec tiroir: ${item.drawer}`); updateSevenSegmentDisplay(item.drawer); }
+                else { console.log("Pas de tiroir ou pas connecté, 7-segment non mis à jour explicitement."); }
                 console.log(`Affichage modale pour ${item.ref}, qté: ${item.quantity}`);
                 showQuantityModal(item.ref, item.quantity);
             } else {
                 console.error(`Détails pour ${ref} non trouvés après clic.`);
                 alert(`Erreur: Détails pour ${ref} non trouvés.`);
-                displayInventory(); // Recharger pour être sûr
+                displayInventory();
             }
         } catch (error) {
             row.style.opacity = '1';
+             // Afficher l'erreur à l'utilisateur si getStockInfoFromSupabase échoue (par ex. 406)
             console.error("Erreur JS handleInventoryRowClick:", error);
-            alert("Erreur lors de la récupération des détails du composant.");
+            alert(`Erreur lors de la récupération des détails du composant ${ref}: ${error.message}`);
         }
     }
     // showQuantityModal (inchangé)
