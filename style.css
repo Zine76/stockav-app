@@ -99,8 +99,8 @@ body {
 #search-view {
     display: flex; /* Utilise Flexbox pour la vue chat */
     flex-direction: column; /* Organise les éléments verticalement */
-    height: 60vh; /* Hauteur exemple, ajustez si besoin */
-    min-height: 400px; /* Hauteur minimale */
+    height: 75vh; /* Hauteur exemple, ajustez si besoin */
+    min-height: 450px; /* Hauteur minimale */
 }
 
 /* Zone d'affichage des messages */
