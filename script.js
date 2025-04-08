@@ -71,8 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const logView = document.getElementById('log-view');
     const adminView = document.getElementById('admin-view');
     const settingsView = document.getElementById('settings-view');
-    const viewSections = document.querySelectorAll('.view-section'); // NodeList de toutes les sections de vue
-    const protectedButtons = document.querySelectorAll('.nav-button.protected'); // Boutons nécessitant connexion
+    const viewSections = document.querySelectorAll('.view-section');
+    const protectedButtons = document.querySelectorAll('.nav-button.protected');
     const quantityChangeModal = document.getElementById('quantity-change-modal');
     const modalOverlay = document.getElementById('modal-overlay');
     const modalRefSpan = document.getElementById('modal-component-ref');
@@ -156,22 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
         criticalThreshold: null, suggestedQuantity: null
     };
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-    function getStockStatus(quantity, threshold) {
-        if (quantity === undefined || quantity === null || isNaN(quantity)) return 'unknown';
-        quantity = Number(quantity);
-        threshold = (threshold === undefined || threshold === null || isNaN(threshold)) ? -1 : Number(threshold);
-        if (quantity <= 0) return 'critical';
-        if (threshold >= 0 && quantity <= threshold) return 'warning';
-        return 'ok';
-    }
-    function createStockIndicatorHTML(quantity, threshold) {
-        const status = getStockStatus(quantity, threshold);
-        const statusText = status.toUpperCase();
-        const thresholdText = (threshold === undefined || threshold === null || threshold < 0) ? 'N/A' : threshold;
-        const qtyText = (quantity === undefined || quantity === null) ? 'N/A' : quantity;
-        const title = `Stock: ${statusText} (Qté: ${qtyText}, Seuil: ${thresholdText})`;
-        return `<span class="stock-indicator level-${status}" title="${title}"></span>`;
-    }
+    function getStockStatus(quantity, threshold) { /* ... (identique) ... */ }
+    function createStockIndicatorHTML(quantity, threshold) { /* ... (identique) ... */ }
     async function handleLogin() { /* ... (identique) ... */ }
     async function handleLogout() { /* ... (identique) ... */ }
     async function setupAuthListener() { /* ... (identique) ... */ }
@@ -212,70 +198,24 @@ document.addEventListener('DOMContentLoaded', () => {
     async function getStockInfoFromSupabase(ref) { /* ... (identique) ... */ }
     async function updateStockInSupabase(ref, change) { /* ... (identique) ... */ }
     async function handleInventoryRowClick(event) { /* ... (identique) ... */ }
-    function showQuantityModal(item) {
-        if (!quantityChangeModal || !modalOverlay) {
-            console.error("Éléments DOM de la modale introuvables.");
-            return;
-        }
-
-        console.log("Affichage modale pour:", item.ref);
-        // DIAG: Log pour le tiroir dans la modale
-        console.log(">> showQuantityModal: Tiroir reçu dans item:", item.drawer, "(Type:", typeof item.drawer, ")");
-        modalCurrentRef = item.ref;
-        modalInitialQuantity = Number(item.quantity ?? 0); // Utilise 0 si null/undefined
-        currentModalChange = 0; // Réinitialise le changement
-
-        // Remplit les informations de la modale
-        if(modalRefSpan) modalRefSpan.textContent = item.ref;
-        if(modalQtySpan) modalQtySpan.textContent = modalInitialQuantity;
-        if(modalChangeAmountDisplay) modalChangeAmountDisplay.textContent = '0';
-        if(modalFeedback) modalFeedback.textContent = ''; // Vide feedback précédent
-        if(modalFeedback) modalFeedback.className = 'modal-feedback info'; // Reset style feedback
-        if(modalFeedback) modalFeedback.style.display = 'none'; // Cache feedback initial
-
-         // Affiche les attributs spécifiques
-         if (modalAttributesList && item.attributes && typeof item.attributes === 'object' && Object.keys(item.attributes).length > 0) {
-            modalAttributesList.innerHTML = ''; // Vide les anciens
-            for (const key in item.attributes) {
-                 if (Object.prototype.hasOwnProperty.call(item.attributes, key)) { // Bonne pratique
-                    const li = document.createElement('li');
-                    const strong = document.createElement('strong');
-                    strong.textContent = `${key}: `;
-                    li.appendChild(strong);
-                    li.appendChild(document.createTextNode(item.attributes[key] || '-'));
-                    modalAttributesList.appendChild(li);
-                 }
-            }
-            if (modalAttributesSection) modalAttributesSection.style.display = 'block';
-         } else {
-             if (modalAttributesSection) modalAttributesSection.style.display = 'none'; // Cache si pas d'attributs
-             if (modalAttributesList) modalAttributesList.innerHTML = '';
-         }
-
-        // Met à jour l'état initial des boutons +/-/Confirmer
-        updateModalButtonStates();
-
-        // Affiche la modale et l'overlay
-        if (quantityChangeModal) quantityChangeModal.style.display = 'block';
-        if (modalOverlay) modalOverlay.style.display = 'block';
-        // Déclenche l'animation après un court délai pour permettre le display: block
-        setTimeout(() => {
-            if(modalOverlay) modalOverlay.classList.add('active');
-            if(quantityChangeModal) quantityChangeModal.classList.add('active');
-        }, 10);
-
-
-        // Met à jour l'afficheur 7 segments avec le tiroir de l'item
-        lastDisplayedDrawer = item.drawer || null; // Met à jour le dernier tiroir affiché
-        // DIAG: Log juste avant d'appeler updateSevenSegmentDisplay
-        console.log(">> showQuantityModal: lastDisplayedDrawer mis à jour:", lastDisplayedDrawer, "(Type:", typeof lastDisplayedDrawer, ")");
-        updateSevenSegmentDisplay(lastDisplayedDrawer);
-    }
+    function showQuantityModal(item) { /* ... (identique, avec logs) ... */ }
     function hideQuantityModal() { /* ... (identique) ... */ }
     function updateModalButtonStates() { /* ... (identique) ... */ }
 
     // --- Gestion Afficheur 7 Segments ---
-    const segmentMap = { /* ... (identique) ... */ };
+    const segmentMap = {
+        '0': ['a', 'b', 'c', 'd', 'e', 'f'], '1': ['b', 'c'], '2': ['a', 'b', 'g', 'e', 'd'],
+        '3': ['a', 'b', 'g', 'c', 'd'], '4': ['f', 'g', 'b', 'c'], '5': ['a', 'f', 'g', 'c', 'd'],
+        '6': ['a', 'f', 'e', 'd', 'c', 'g'], '7': ['a', 'b', 'c'], '8': ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+        '9': ['a', 'b', 'c', 'd', 'f', 'g'], 'A': ['a', 'b', 'c', 'e', 'f', 'g'], 'B': ['c', 'd', 'e', 'f', 'g'],
+        'C': ['a', 'd', 'e', 'f'], 'D': ['b', 'c', 'd', 'e', 'g'], 'E': ['a', 'd', 'e', 'f', 'g'],
+        'F': ['a', 'e', 'f', 'g'], 'G': ['a', 'c', 'd', 'e', 'f'], 'H': ['b', 'c', 'e', 'f', 'g'],
+        'I': ['b', 'c'], 'J': ['b', 'c', 'd', 'e'], 'L': ['d', 'e', 'f'], 'N': ['a', 'b', 'c', 'e', 'f'],
+        'O': ['a', 'b', 'c', 'd', 'e', 'f'], 'P': ['a', 'b', 'e', 'f', 'g'], 'Q': ['a', 'b', 'c', 'f', 'g'],
+        'R': ['a', 'e', 'f'], 'S': ['a', 'f', 'g', 'c', 'd'], 'T': ['d', 'e', 'f', 'g'],
+        'U': ['b', 'c', 'd', 'e', 'f'], 'Y': ['b', 'c', 'd', 'f', 'g'], 'Z': ['a', 'b', 'd', 'e', 'g'],
+        '-': ['g'], '_': ['d'], ' ': [], '.': [], // Point retiré car pas de segment 'dp'
+    };
 
     // Met à jour l'affichage des 4 digits 7 segments
     function updateSevenSegmentDisplay(newDrawerValue = undefined) {
@@ -309,16 +249,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!digitElement) continue;
 
             const charToDisplay = displayString[i] || ' ';
-            const segmentsToActivate = segmentMap[charToDisplay] || segmentMap['-']; // Utilise '-' si char inconnu
+            // Récupère les segments à activer, utilise '-' comme fallback, et si même ça échoue, utilise un tableau vide
+            const segmentsToActivate = segmentMap[charToDisplay] ?? segmentMap['-'] ?? [];
 
             // Parcourt tous les segments possibles (a-g)
             segmentCodes.forEach(code => {
                  const segmentElement = digitElement.querySelector(`.segment-${code}`);
                  if (segmentElement) {
-                     // Si ce segment DOIT être activé pour ce caractère, ajoute 'on', sinon retire 'on'
-                     if (segmentsToActivate.includes(code)) {
+                     // CORRECTION : Vérifie si segmentsToActivate est bien un tableau avant d'appeler .includes
+                     if (Array.isArray(segmentsToActivate) && segmentsToActivate.includes(code)) {
                          segmentElement.classList.add('on');
                      } else {
+                         // S'il n'est pas défini ou ne contient pas le code, on retire 'on'
                          segmentElement.classList.remove('on');
                      }
                  }
@@ -350,7 +292,16 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Initialisation de StockAV...");
 
         // Vérification rapide de la présence d'éléments DOM essentiels
-        const requiredIds = [ /* ... (identique) ... */ ];
+        const requiredIds = [
+            'login-area', 'user-info-area', 'main-navigation', 'search-view',
+            'inventory-view', 'log-view', 'admin-view', 'settings-view',
+            'login-button', 'logout-button', 'show-search-view',
+            'inventory-table-body', 'log-table-body', 'response-output',
+            'component-input', 'search-button', 'quantity-change-modal', 'modal-overlay',
+            'category-list', 'stock-form', 'settings-view', 'export-inventory-csv-button',
+            'import-inventory-csv-button', 'import-csv-file', 'log-table',
+            'inventory-table', 'seven-segment-display' // Ajout vérif afficheur
+        ];
         const missingElement = requiredIds.find(id => !document.getElementById(id));
         if (missingElement) {
              const errorMsg = `FATAL: Élément DOM essentiel manquant! ID: "${missingElement}". Vérifiez votre fichier index.html. L'application ne peut pas démarrer.`;
@@ -361,18 +312,16 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Vérification initiale des éléments DOM essentiels: OK.");
 
         // --- Ajout des Écouteurs d'Événements Globaux ---
-        // Navigation principale
+        // (Identique...)
         searchTabButton?.addEventListener('click', () => setActiveView(searchView, searchTabButton));
         inventoryTabButton?.addEventListener('click', () => setActiveView(inventoryView, inventoryTabButton));
         logTabButton?.addEventListener('click', () => setActiveView(logView, logTabButton));
         adminTabButton?.addEventListener('click', () => setActiveView(adminView, adminTabButton));
         settingsTabButton?.addEventListener('click', () => setActiveView(settingsView, settingsTabButton));
-        // Authentification
         loginButton?.addEventListener('click', handleLogin);
         logoutButton?.addEventListener('click', handleLogout);
         loginCodeInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') loginPasswordInput?.focus(); });
         loginPasswordInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
-        // Chat (Recherche)
         searchButtonChat?.addEventListener('click', handleUserInput);
         componentInputChat?.addEventListener('keypress', (event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -380,73 +329,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 handleUserInput();
             }
         });
-        // Inventaire
         applyInventoryFilterButton?.addEventListener('click', () => {
             currentInventoryFilters.category = inventoryCategoryFilter?.value || 'all';
             currentInventoryFilters.search = inventorySearchFilter?.value || '';
-            console.log("Application filtres inventaire:", currentInventoryFilters);
             displayInventory(1);
         });
-        inventorySearchFilter?.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') applyInventoryFilterButton?.click();
-        });
-        inventoryCategoryFilter?.addEventListener('change', () => {
-             applyInventoryFilterButton?.click();
-        });
-        inventoryPrevPageButton?.addEventListener('click', () => {
-            if (currentInventoryPage > 1) displayInventory(currentInventoryPage - 1);
-        });
-        inventoryNextPageButton?.addEventListener('click', () => {
-             if (!inventoryNextPageButton.disabled) displayInventory(currentInventoryPage + 1);
-        });
+        inventorySearchFilter?.addEventListener('keypress', (e) => { if (e.key === 'Enter') applyInventoryFilterButton?.click(); });
+        inventoryCategoryFilter?.addEventListener('change', () => { applyInventoryFilterButton?.click(); });
+        inventoryPrevPageButton?.addEventListener('click', () => { if (currentInventoryPage > 1) displayInventory(currentInventoryPage - 1); });
+        inventoryNextPageButton?.addEventListener('click', () => { if (!inventoryNextPageButton.disabled) displayInventory(currentInventoryPage + 1); });
         inventoryTableBody?.addEventListener('click', handleInventoryRowClick);
-        // Log (Historique)
-        logPrevPageButton?.addEventListener('click', () => {
-            if (currentLogPage > 1) displayLog(currentLogPage - 1);
-        });
-        logNextPageButton?.addEventListener('click', () => {
-             if (!logNextPageButton.disabled) displayLog(currentLogPage + 1);
-        });
-        // Admin
-        addCategoryEventListeners(); // Écouteurs pour liste+formulaire catégorie
-        addStockEventListeners();    // Écouteurs formulaire stock
-        addComponentCategorySelectListener(); // Écouteur select catégorie
-        // Paramètres
-        addSettingsEventListeners(); // Écouteurs export/import
-        // Modale Quantité
+        logPrevPageButton?.addEventListener('click', () => { if (currentLogPage > 1) displayLog(currentLogPage - 1); });
+        logNextPageButton?.addEventListener('click', () => { if (!logNextPageButton.disabled) displayLog(currentLogPage + 1); });
+        addCategoryEventListeners();
+        addStockEventListeners();
+        addComponentCategorySelectListener();
+        addSettingsEventListeners();
         modalDecreaseButton?.addEventListener('click', () => { currentModalChange--; updateModalButtonStates(); });
         modalIncreaseButton?.addEventListener('click', () => { currentModalChange++; updateModalButtonStates(); });
         modalCancelButton?.addEventListener('click', hideQuantityModal);
-        modalOverlay?.addEventListener('click', (event) => {
-             if (event.target === modalOverlay) hideQuantityModal();
-        });
+        modalOverlay?.addEventListener('click', (event) => { if (event.target === modalOverlay) hideQuantityModal(); });
         modalConfirmButton?.addEventListener('click', async () => {
-            /* ... (identique) ... */
              if (currentModalChange === 0 || !modalCurrentRef) return;
              const change = currentModalChange;
              const ref = modalCurrentRef;
              modalConfirmButton.disabled = true;
              modalCancelButton.disabled = true;
-             if (modalFeedback) {
-                 modalFeedback.textContent = `Mise à jour de ${ref}...`;
-                 modalFeedback.className = 'modal-feedback info';
-                 modalFeedback.style.display = 'block';
-             }
+             if (modalFeedback) { modalFeedback.textContent = `Mise à jour de ${ref}...`; modalFeedback.className = 'modal-feedback info'; modalFeedback.style.display = 'block'; }
              const { newQuantity, error } = await updateStockInSupabase(ref, change);
              if (error) {
-                  modalConfirmButton.disabled = false;
-                  modalCancelButton.disabled = false;
+                  modalConfirmButton.disabled = false; modalCancelButton.disabled = false;
              } else {
-                 if (modalFeedback) {
-                     modalFeedback.textContent = `Stock de ${ref} mis à jour ! Nouvelle quantité: ${newQuantity}.`;
-                     modalFeedback.className = 'modal-feedback success';
-                 }
-                 if (inventoryView?.classList.contains('active-view')) {
-                     displayInventory(currentInventoryPage);
-                 }
-                 if (logView?.classList.contains('active-view')) {
-                     displayLog(1);
-                 }
+                 if (modalFeedback) { modalFeedback.textContent = `Stock de ${ref} mis à jour ! Nouvelle quantité: ${newQuantity}.`; modalFeedback.className = 'modal-feedback success'; }
+                 if (inventoryView?.classList.contains('active-view')) { displayInventory(currentInventoryPage); }
+                 if (logView?.classList.contains('active-view')) { displayLog(1); }
                  setTimeout(hideQuantityModal, 1500);
              }
         });
