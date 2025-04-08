@@ -894,7 +894,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Gère les erreurs de la requête (y compris RLS potentiel si mal configuré)
             if (error) {
-                if (error.message.includes("security barrier") || error.message.includes("policy")) {
+                // Vérifie si l'erreur est due à la table manquante ou RLS
+                if (error.message.includes('relation "public.log" does not exist')) {
+                    console.error("Erreur: La table 'public.log' n'existe pas dans la base de données.", error);
+                    throw new Error("Erreur: La table de l'historique n'a pas été trouvée. Veuillez contacter l'administrateur.");
+                } else if (error.message.includes("security barrier") || error.message.includes("policy")) {
                     console.error(`Erreur RLS lors de la lecture du log: ${error.message}`);
                     throw new Error(`Accès refusé à l'historique (RLS). Vérifiez les politiques Supabase.`);
                 } else {
@@ -987,6 +991,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             // Gère les erreurs survenues pendant le processus
             console.error("Erreur lors de l'affichage du log:", error);
+            // CORRECTION TYPO: Utilise isAdminZine ici
             logTableBody.innerHTML = `<tr class="error-row"><td colspan="${isAdminZine ? 6 : 5}" style="text-align:center; color: var(--error-color); padding: 20px;">Erreur lors du chargement de l'historique: ${error.message}</td></tr>`;
             if(logPageInfo) logPageInfo.textContent = 'Erreur';
             if(logPrevPageButton) logPrevPageButton.disabled = true;
@@ -1020,6 +1025,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Ajoute une nouvelle entrée dans la table 'log' (n'est plus appelée directement si RPC utilisé)
     async function addLogEntry(itemRef, change, newQuantity) {
+        // Vérifie si la table log existe avant de tenter d'insérer
+         // Pas idéal de le faire à chaque fois, mais évite l'erreur si la table est créée après le chargement initial
+        // Une meilleure approche serait de vérifier une seule fois au démarrage ou après une erreur.
+
         console.warn("addLogEntry appelée directement. La fonction RPC 'update_stock' devrait gérer le log.");
         // Garder le code ici comme fallback ou si la fonction RPC n'est pas utilisée pour certaines opérations
         if (!supabase || !currentUser || !currentUserCode) {
@@ -1044,8 +1053,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
             if (error) {
-                console.error("Erreur lors de l'insertion dans le log Supabase (manuel):", error.message);
-                showLogFeedback(`Erreur lors de l'enregistrement de l'opération dans l'historique: ${error.message}`, 'error');
+                 if (error.message.includes('relation "public.log" does not exist')) {
+                    console.error("Erreur: La table 'public.log' n'existe pas. Impossible d'ajouter l'entrée (manuel).");
+                    showLogFeedback("Erreur: Impossible d'enregistrer dans l'historique (table manquante).", 'error');
+                 } else {
+                    console.error("Erreur lors de l'insertion dans le log Supabase (manuel):", error.message);
+                    showLogFeedback(`Erreur lors de l'enregistrement de l'opération dans l'historique: ${error.message}`, 'error');
+                 }
                 return false;
             } else {
                 console.log("Entrée ajoutée au log avec succès (manuel).");
@@ -1066,7 +1080,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!logFeedbackDiv) return;
 
         logFeedbackDiv.textContent = message;
-        logFeedbackDiv.className = `feedback ${type}`; // Applique la classe CSS pour le style
+        logFeedbackDiv.className = `feedback-area ${type}`; // Utilise feedback-area maintenant
 
         if (type === 'none' || !message) {
             logFeedbackDiv.style.display = 'none'; // Cache si 'none' ou message vide
@@ -1119,7 +1133,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log(`Log ID ${logId} supprimé avec succès.`);
                 showLogFeedback(`Entrée ID ${logId} supprimée avec succès.`, 'success');
                 // Rafraîchit la vue log sur la page actuelle pour refléter la suppression
-                displayLog(currentLogPage);
+                // Il faut recharger la page pour s'assurer que le count est correct après suppression
+                const totalItems = parseInt(logPageInfo.textContent.split('/')[1].trim(), 10);
+                 const itemsOnCurrentPage = logTableBody.rows.length;
+                 // Si c'était le dernier item de la page et pas la première page, aller page précédente
+                 if (itemsOnCurrentPage === 1 && currentLogPage > 1) {
+                    displayLog(currentLogPage - 1);
+                 } else {
+                    displayLog(currentLogPage);
+                 }
             }
         } catch (err) {
             console.error("Erreur JavaScript lors de la suppression du log:", err);
@@ -1151,6 +1173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
              // Pour supprimer toutes les lignes, on utilise une condition qui est toujours vraie
              // Ici, on supprime toutes les lignes où l'ID est supérieur ou égal à 0 (ce qui est toujours vrai pour les ID auto-incrémentés)
+             // Utilisation de `gte('id', 0)` est plus sûr que `neq('id', -1)` qui pourrait échouer si aucun ID n'est -1.
             const { error, count } = await supabase
                 .from('log')
                 .delete()
@@ -1247,11 +1270,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Attributs: affiche les clés JSON ou 'Aucun'
                     let attributesText = '(Aucun attribut)';
                     if (cat.attributes) {
-                        if (Array.isArray(cat.attributes) && cat.attributes.length > 0) {
-                            attributesText = `[${cat.attributes.join(', ')}]`;
-                        } else if (typeof cat.attributes === 'object' && Object.keys(cat.attributes).length > 0) {
-                            attributesText = `{${Object.keys(cat.attributes).join(', ')}}`;
-                        }
+                        try {
+                            if (Array.isArray(cat.attributes) && cat.attributes.length > 0) {
+                                attributesText = `[${cat.attributes.join(', ')}]`;
+                            } else if (typeof cat.attributes === 'object' && Object.keys(cat.attributes).length > 0) {
+                                attributesText = `{${Object.keys(cat.attributes).join(', ')}}`;
+                            }
+                        } catch (e) { attributesText = '(Format attributs invalide)'; }
                     }
 
 
@@ -1558,7 +1583,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showAdminFeedback(message, type = 'info'){ // types: 'info', 'success', 'warning', 'error', 'none'
         if (!adminFeedbackDiv) return;
         adminFeedbackDiv.textContent = message;
-        adminFeedbackDiv.className = `feedback ${type}`; // Applique classe CSS
+        adminFeedbackDiv.className = `feedback-area ${type}`; // Utilise feedback-area maintenant
         if (type === 'none' || !message) {
             adminFeedbackDiv.style.display = 'none';
         } else {
@@ -1700,6 +1725,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally {
                  // Ne réactive pas checkStockButton ici pour forcer soit modif soit ajout via l'autre bouton
                  // Laisse checkStockButton désactivé jusqu'à ce que l'utilisateur reset ou sauve.
+                 // Mise à jour : Réactivons-le pour permettre une nouvelle vérification si l'utilisateur change d'avis
+                 if (checkStockButton) checkStockButton.disabled = false;
             }
         });
 
@@ -1844,8 +1871,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // pour ne pas écraser une modif faite par l'autre bouton.
                 const dataToUpsert = { ...componentData };
                 if (!isAdding) {
-                    // En mode modification, on ne met à jour QUE les champs fournis
-                    // Si la quantité était gérée ici, il faudrait l'exclure: delete dataToUpsert.quantity;
+                    // En mode modification, on ne met à jour QUE les champs fournis via l'upsert.
+                    // La quantité n'est pas incluse dans dataToUpsert si isAdding est faux.
+                    // La fonction upsert mettra à jour les colonnes fournies.
                 }
 
 
@@ -1867,26 +1895,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     showAdminFeedback(`Composant ${ref} sauvegardé avec succès.`, 'success');
                     console.log("Résultat Upsert:", data);
 
-                     // Si c'était un ajout, ajoute une entrée au log pour la quantité initiale
-                     // Utilise la fonction RPC si disponible, sinon addLogEntry
+                     // Si c'était un ajout avec une quantité initiale > 0, logguer cette quantité initiale.
+                     // La fonction RPC 'update_stock' est conçue pour les *changements*.
+                     // Pour l'ajout initial, on peut soit appeler addLogEntry, soit adapter/créer une fonction RPC.
+                     // Appelons addLogEntry ici pour l'instant.
                      if (isAdding && data.quantity > 0) {
-                          // await addLogEntry(ref, data.quantity, data.quantity); // Log l'ajout initial - Fait par RPC?
-                          // Si la fonction RPC update_stock gère aussi l'ajout initial (change > 0), pas besoin ici.
-                          // Sinon, il faut une logique pour logguer l'ajout.
-                          // Pour l'instant, on assume que la création n'est pas logguée automatiquement,
-                          // ou qu'une opération +X est faite ensuite via l'autre bouton si besoin.
-                          // Solution possible: appeler updateStockInSupabase AVEC la quantité initiale
-                           if (data.quantity > 0) {
-                              // On simule un ajout de stock via la fonction RPC pour logguer
-                              // Ceci est un peu redondant si upsert a déjà mis la quantité...
-                              // Alternative: une fonction RPC 'add_new_item' qui gère upsert + log
-                              console.log(`Tentative de log de l'ajout initial de ${data.quantity} pour ${ref}`);
-                              await updateStockInSupabase(ref, 0); // Appel RPC avec change=0 juste pour log l'état actuel après ajout? Non, mauvaise idée.
-                              // => Le mieux est d'avoir une fonction RPC dédiée à l'ajout, ou d'appeler addLogEntry ici si RPC gère pas.
-                              // Pour l'instant, appelons addLogEntry manuellement:
-                               console.warn("Ajout manuel au log pour la quantité initiale.");
-                               await addLogEntry(ref, data.quantity, data.quantity);
-                           }
+                          console.log(`Ajout initial détecté pour ${ref} avec quantité ${data.quantity}. Tentative de log manuel.`);
+                          await addLogEntry(ref, data.quantity, data.quantity);
                      }
 
                     resetStockForm(); // Réinitialise le formulaire après succès
@@ -2020,9 +2035,11 @@ document.addEventListener('DOMContentLoaded', () => {
          while ((match = refPattern.exec(upperText)) !== null) {
              const currentMatch = match[1] || match[2] || match[3] || match[4];
              if (currentMatch) {
+                 // Utilise la ref nettoyée (sans espaces/tirets) pour la logique, mais on pourrait garder l'originale aussi si besoin
                  refs.push(currentMatch.replace(/[\s\-]+/g, ''));
              }
          }
+        // Tri par longueur décroissante puis garde les refs uniques
         refs.sort((a, b) => b.length - a.length);
         refs = [...new Set(refs)];
 
@@ -2033,23 +2050,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const equivalentsKeywords = /\b([EÉ]QUIVALENTS?|REMPLACANTS?|SIMILAIRES?|ALTERNATIVES?)\b/;
         const quantityKeywords = /\b(STOCK|QUANTIT[EÉ]|DISPO|COMBIEN)\b/;
 
-        // Détermination de l'intention
+        // Détermination de l'intention (logique simple, priorité aux mots-clés explicites)
         if (compareKeywords.test(upperText) && refs.length >= 2) {
             intent = 'compare';
+        } else if (equivalentsKeywords.test(upperText) && refs.length >= 1) {
+            intent = 'equivalents';
         } else if (pinoutKeywords.test(upperText) && refs.length >= 1) {
             intent = 'pinout';
         } else if (describeKeywords.test(upperText) && refs.length >= 1) {
             intent = 'describe';
-        } else if (equivalentsKeywords.test(upperText)) {
-            intent = 'equivalents'; // Même si pas de ref, on demandera ensuite
         } else if (quantityKeywords.test(upperText) && refs.length >= 1) {
             intent = 'quantity';
         } else if (refs.length > 0) {
-            // Si référence trouvée sans mot clé clair, l'intention par défaut est 'quantity' ou 'equivalents'
-            intent = 'quantity'; // Priorise la demande de quantité si juste une ref est donnée
+            // Si référence trouvée sans mot clé clair, l'intention par défaut est 'quantity'
+            intent = 'quantity';
             console.log("Référence trouvée sans intention claire, intention par défaut: quantity");
+        } else if (equivalentsKeywords.test(upperText)) {
+             // Cas spécial: "cherche équivalents" sans préciser la réf
+             intent = 'ask_for_ref_equivalents';
+        } else if (compareKeywords.test(upperText)) {
+             // Cas spécial: "compare" sans refs suffisantes
+             intent = 'ask_for_ref_compare';
         }
-        // Pas besoin de vérifier si l'intention nécessite une réf ici, la fonction appelante le fera
+        // Ajouter d'autres cas si besoin (ex: demande de datasheet -> recherche google?)
 
         console.log(`parseIntentAndRefs - Texte: "${text}", Intent: ${intent}, Refs trouvées: ${refs.join(', ')}`);
         return { intent: intent, refs: refs.slice(0, 2) }; // Prend les 2 premières refs max
@@ -2088,37 +2111,46 @@ document.addEventListener('DOMContentLoaded', () => {
             // Analyse l'intention et les références de la nouvelle requête
             const intentInfo = parseIntentAndRefs(userInput);
             let requestType = intentInfo.intent;
-            let param1 = intentInfo.refs.length > 0 ? intentInfo.refs[0] : userInput; // Utilise la réf ou le texte brut
-            let param2 = intentInfo.refs.length > 1 ? intentInfo.refs[1] : null;
+            let param1 = intentInfo.refs.length > 0 ? intentInfo.refs[0] : null; // Réf 1 ou null
+            let param2 = intentInfo.refs.length > 1 ? intentInfo.refs[1] : null; // Réf 2 ou null
 
-            // Ajustements basés sur l'intention et les refs
-            if (requestType === 'unknown') {
-                 // Si l'intention est inconnue, on envoie le texte brut pour une requête générique
-                 console.log("Intention inconnue, envoi comme requête générique.");
-                 requestType = 'generic_query';
-                 param1 = userInput; // Le texte brut est le param1
-                 param2 = null;
-            } else if ((requestType === 'quantity' || requestType === 'describe' || requestType === 'pinout' || requestType === 'compare') && intentInfo.refs.length === 0) {
-                 // Si l'intention nécessite une référence mais qu'aucune n'est trouvée
-                 console.log(`Intention '${requestType}' nécessite une référence, mais aucune trouvée.`);
-                 await addMessageToChat('AI', `Pour que je puisse traiter votre demande de '${requestType}', veuillez spécifier la ou les référence(s) du composant (ex: ${requestType === 'compare' ? 'compare LM358 vs TL072' : `${requestType} BC547`}).`);
-                 resetConversationState(); // Reset car on attend une nouvelle entrée
-                 // Sortir sans appeler l'IA
-                 return; // Ne pas oublier de réactiver les boutons dans finally
-            } else if (requestType === 'compare' && intentInfo.refs.length < 2) {
-                 // Si compare est demandé mais avec moins de 2 refs
-                 console.log("Intention 'compare' nécessite deux références.");
-                 await addMessageToChat('AI', `Pour comparer, veuillez fournir deux références (ex: 'compare LM358 et TL072').`);
-                 resetConversationState();
-                 return; // Sortir
-            } else if (requestType === 'equivalents' && intentInfo.refs.length === 0) {
-                // Si l'intention est 'equivalents' mais sans référence
-                 await addMessageToChat('AI', "Pour quelle référence souhaitez-vous trouver des équivalents ?");
-                 resetConversationState();
-                 return; // Sortir
+            // --- Logique de traitement basée sur l'intention ---
+            switch (requestType) {
+                case 'quantity':
+                case 'describe':
+                case 'pinout':
+                case 'equivalents':
+                    if (!param1) { // Ces intentions nécessitent une référence
+                        await addMessageToChat('AI', `Pour que je puisse traiter votre demande de '${requestType}', veuillez spécifier la référence du composant (ex: '${requestType} LM358').`);
+                        resetConversationState();
+                    } else {
+                        await handleAIChatRequest(requestType, param1); // Appelle l'IA avec la référence
+                    }
+                    break;
+                case 'compare':
+                    if (!param1 || !param2) { // Nécessite deux références
+                        await addMessageToChat('AI', `Pour comparer, veuillez fournir deux références (ex: 'compare LM358 et TL072').`);
+                        resetConversationState();
+                    } else {
+                        await handleAIChatRequest(requestType, param1, param2); // Appelle l'IA avec les deux références
+                    }
+                    break;
+                 case 'ask_for_ref_equivalents':
+                     await addMessageToChat('AI', "Pour quelle référence souhaitez-vous trouver des équivalents ?");
+                     resetConversationState(); // Attend nouvelle entrée utilisateur
+                     break;
+                 case 'ask_for_ref_compare':
+                     await addMessageToChat('AI', `Quelles sont les deux références que vous souhaitez comparer ?`);
+                     resetConversationState();
+                     break;
+                case 'unknown':
+                default:
+                    // Si l'intention est inconnue ou non gérée, on pourrait soit demander de reformuler,
+                    // soit tenter une requête générique (mais moins fiable)
+                    await addMessageToChat('AI', "Désolé, je ne suis pas sûr de comprendre. Pouvez-vous reformuler en utilisant des mots-clés comme 'stock', 'quantité', 'équivalent', 'décris', 'pinout', 'compare' suivis de la référence ?");
+                    resetConversationState();
+                    break;
             }
-             // Si tout est bon, on appelle l'IA
-            await handleAIChatRequest(requestType, param1, param2);
 
         } catch (error) {
             console.error("Erreur majeure dans handleUserInput:", error);
@@ -2147,79 +2179,91 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Prépare le corps de la requête pour la fonction Edge
-        // Renomme les paramètres pour correspondre à ce qu'attend la fonction Edge
         const requestBody = {
             request_type: requestType,
-            reference1: param1, // Attend 'reference1'
-            reference2: param2, // Attend 'reference2'
-            history: chatHistory // Envoie l'historique récent pour le contexte
+            reference1: param1,
+            reference2: param2, // Sera null si non fourni
+            // history: chatHistory // Envoi de l'historique désactivé pour l'instant (simplification)
         };
 
         console.log(`Appel Fonction Edge: ${AI_FUNCTION_NAME} avec body:`, JSON.stringify(requestBody));
-        // L'indicateur de chargement est géré par addMessageToChat('AI', ...)
-        // On va afficher un message AI vide pour montrer le chargement explicitement ici.
-         const aiThinkingMessage = addMessageToChat('AI', "..."); // Ajoute '...' et démarre l'indicateur
+        // L'indicateur de chargement est géré via addMessageToChat('AI', "...")
+        const aiThinkingMessagePromise = addMessageToChat('AI', "..."); // Ajoute '...' et démarre l'indicateur
 
         try {
             // Appelle la fonction Edge
-            const { data, error } = await supabase.functions.invoke(AI_FUNCTION_NAME, {
+            const { data: responseData, error: functionError } = await supabase.functions.invoke(AI_FUNCTION_NAME, {
                 body: requestBody
             });
 
+            // Attend que le message "..." soit ajouté avant de potentiellement le supprimer
+            await aiThinkingMessagePromise;
             // Supprime le message "..." avant d'afficher la vraie réponse
-             const thinkingElement = responseOutputChat?.querySelector('.message.ai:last-child');
-             if (thinkingElement && thinkingElement.textContent === '...') {
-                thinkingElement.remove();
-             }
-             if (loadingIndicatorChat) loadingIndicatorChat.style.display = 'none'; // Cache l'indicateur si besoin
+            const thinkingElement = responseOutputChat?.querySelector('.message.ai:last-child');
+            if (thinkingElement && thinkingElement.textContent === '...') {
+               thinkingElement.remove();
+            }
+            if (loadingIndicatorChat) loadingIndicatorChat.style.display = 'none'; // Cache l'indicateur si besoin
 
-            if (error) {
-                console.error("Erreur retournée par la fonction Edge Supabase:", error);
+            // Gère les erreurs *de l'invocation elle-même* (ex: réseau, fonction non trouvée, 5xx)
+            if (functionError) {
+                console.error("Erreur invocation fonction Edge Supabase:", functionError);
                 let errorMessage = "Désolé, une erreur s'est produite en contactant l'assistant IA.";
-                 // Tente de déduire l'erreur de la réponse (peut être un objet FunctionsHttpError)
-                 if (error instanceof Error) { // Vérifie si c'est une instance d'Erreur JS
-                     if (error.message.includes('Function not found')) errorMessage = "Erreur: Le service IA est introuvable.";
-                     else if (error.message.includes('timeout')) errorMessage = "Désolé, la réponse de l'assistant IA a mis trop de temps.";
-                     else if (error.message.includes('failed to fetch')) errorMessage = "Impossible de contacter le service IA. Vérifiez la connexion ou l'URL.";
-                     // Tente d'extraire plus de détails si disponible (parfois dans context)
-                     else if (error.context && error.context.msg) errorMessage += ` Détails: ${error.context.msg}`;
-                     else errorMessage += ` Détails: ${error.message}`;
+                 // Tente de déduire l'erreur de la réponse (peut être un objet FunctionsHttpError, FunctionsRelayError, FunctionsFetchError)
+                 if (functionError.message) {
+                     if (functionError.message.includes('Function not found')) errorMessage = "Erreur: Le service IA est introuvable.";
+                     else if (functionError.message.includes('timeout')) errorMessage = "Désolé, la réponse de l'assistant IA a mis trop de temps.";
+                     else if (functionError.message.includes('failed to fetch') || functionError instanceof TypeError) errorMessage = "Impossible de contacter le service IA. Vérifiez la connexion ou l'URL de la fonction.";
+                     // Spécifique pour les erreurs 5xx retournées par la fonction elle-même
+                     else if (functionError.message.includes('status code 500') || functionError.message.includes('non-2xx status code')) {
+                         errorMessage = "L'assistant IA a rencontré une erreur interne (Code 500).";
+                         // On pourrait essayer de lire responseData si disponible, mais c'est souvent non défini pour les 500
+                     } else {
+                         errorMessage += ` Détails: ${functionError.message}`;
+                     }
                  } else {
-                      errorMessage += ` Détails: ${String(error)}`; // Fallback si pas une Error
+                     errorMessage += ` Type: ${functionError.name || 'Inconnu'}`;
                  }
                  await addMessageToChat('AI', errorMessage);
                  resetConversationState(); // Reset en cas d'erreur de l'IA
-                 return; // Sortir si erreur IA
+                 return; // Sortir si erreur invocation
             }
 
-            // Traite la réponse de la fonction Edge (structure attendue : { response_type, content })
-            console.log("Réponse reçue de la fonction Edge:", data);
+            // Traite la réponse de la fonction Edge (si l'invocation a réussi, statut 2xx)
+             // La fonction Edge doit retourner { response_type, content }
+            console.log("Réponse reçue de la fonction Edge (data):", responseData);
 
-            // La fonction Edge renvoie maintenant une structure { response_type, content }
-             if (!data || !data.response_type || data.content === undefined) {
+             if (!responseData || !responseData.response_type || responseData.content === undefined) {
                  await addMessageToChat('AI', "Désolé, j'ai reçu une réponse inattendue ou incomplète de l'assistant.");
                  resetConversationState();
                  return;
              }
 
-            const responseType = data.response_type;
-            const responseContent = data.content;
+            // --- Traitement du contenu basé sur response_type retourné par la fonction ---
+            const returnedType = responseData.response_type;
+            const responseContent = responseData.content;
+
+            // Si la fonction elle-même a renvoyé une erreur interne structurée
+             if (returnedType === 'error') {
+                await addMessageToChat('AI', `Erreur de l'assistant: ${responseContent}`);
+                resetConversationState();
+                return;
+             }
 
              // --- Formatage de la réponse basée sur le type ---
              let formattedReply = "";
              let isHtmlReply = false;
 
-             if (responseType === 'error') {
-                 formattedReply = `Erreur: ${responseContent}`;
-                 resetConversationState(); // Reset si l'IA elle-même renvoie une erreur
-             } else if (responseType === 'equivalents') {
+             if (returnedType === 'equivalents') {
                  if (Array.isArray(responseContent) && responseContent.length > 0) {
-                     formattedReply = `Voici quelques équivalents possibles pour <strong>${param1}</strong> :\n<ul>`;
+                     formattedReply = `Voici quelques équivalents possibles pour <strong>${param1}</strong> (vérifiez toujours la datasheet avant utilisation) :\n<ul>`;
                      // Ajoute la vérification du stock pour chaque équivalent
                      for (const eq of responseContent) {
                           const stockInfo = await getStockInfoFromSupabase(eq.ref);
                           const stockIndicator = createStockIndicatorHTML(stockInfo?.quantity, stockInfo?.critical_threshold);
-                          formattedReply += `<li>${stockIndicator} <strong>${eq.ref}</strong> : ${eq.reason || 'N/A'}</li>`;
+                          // Rend la réf cliquable pour voir ses détails/stock
+                          const clickableRef = `<a href="#" class="ref-link" data-ref="${eq.ref}" title="Voir détails/stock pour ${eq.ref}">${eq.ref}</a>`;
+                          formattedReply += `<li>${stockIndicator} <strong>${clickableRef}</strong> : ${eq.reason || 'N/A'}</li>`;
                      }
                      formattedReply += `</ul>`;
                      isHtmlReply = true;
@@ -2231,8 +2275,8 @@ document.addEventListener('DOMContentLoaded', () => {
                  // Ajoute les liens externes après la liste
                  formattedReply += provideExternalLinksHTML(param1); // Ajoute les liens pour la réf originale
 
-             } else if (responseType === 'compare') {
-                 if (typeof responseContent === 'object' && responseContent !== null) {
+             } else if (returnedType === 'compare') {
+                 if (typeof responseContent === 'object' && responseContent !== null && (responseContent.similarities || responseContent.differences)) {
                      formattedReply = `Comparaison entre <strong>${param1}</strong> et <strong>${param2}</strong> :\n`;
                      if (responseContent.similarities && responseContent.similarities.length > 0) {
                          formattedReply += `\n<strong>Similitudes :</strong>\n<ul>${responseContent.similarities.map(s => `<li>${s}</li>`).join('')}</ul>`;
@@ -2251,7 +2295,7 @@ document.addEventListener('DOMContentLoaded', () => {
                  formattedReply += provideExternalLinksHTML(param1, false);
                  formattedReply += provideExternalLinksHTML(param2, false);
 
-             } else if (responseType === 'quantity') { // Gère le type 'quantity'
+             } else if (returnedType === 'quantity') { // Gère le type 'quantity'
                 const stockInfo = await getStockInfoFromSupabase(param1);
                 if (stockInfo) {
                     const status = getStockStatus(stockInfo.quantity, stockInfo.critical_threshold);
@@ -2260,12 +2304,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Propose de prendre du stock si > 0
                      if (stockInfo.quantity > 0) {
                          formattedReply += `<br><button class="take-button" data-action="take_stock" data-ref="${param1}" data-quantity="1">Prendre 1</button>`;
-                         // Mettre à jour l'état pour une confirmation future si nécessaire
-                         // conversationState.awaitingQuantityConfirmation = true;
-                         // conversationState.chosenRefForStockCheck = param1;
-                         // conversationState.availableQuantity = stockInfo.quantity;
-                         // conversationState.suggestedQuantity = 1;
-                         // Pour l'instant, l'action est directe via le bouton.
                      }
                     isHtmlReply = true;
                  } else {
@@ -2277,7 +2315,7 @@ document.addEventListener('DOMContentLoaded', () => {
                  formattedReply = String(responseContent).replace(/\n/g, '<br>'); // Remplace retours ligne par <br>
                  isHtmlReply = true;
                  // Ajoute les liens pour la réf principale si disponible
-                  if (param1 && (requestType === 'describe' || requestType === 'pinout')) {
+                  if (param1 && (returnedType === 'describe' || returnedType === 'pinout')) {
                      formattedReply += provideExternalLinksHTML(param1);
                   }
              }
@@ -2286,11 +2324,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Affiche la réponse formatée de l'IA
             await addMessageToChat('AI', formattedReply, isHtmlReply);
 
-             // Pas de mise à jour d'état nécessaire ici car la fonction Edge ne le renvoie pas pour l'instant
-             // Si elle devait le faire, le code serait ici :
-             // if (data.conversation_state) { ... }
-
-             // On reset les flags 'awaiting' car cet échange est terminé (sauf si l'IA renvoyait un nouvel état)
+             // Reset les flags 'awaiting' car cet échange est terminé
              conversationState.awaitingEquivalentChoice = false;
              conversationState.awaitingQuantityConfirmation = false;
 
@@ -2308,72 +2342,84 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    // Gère le clic sur les boutons dans les messages de l'IA (ex: "Prendre 1", choix équivalent)
+    // Gère le clic sur les boutons ou liens dans les messages de l'IA
     responseOutputChat?.addEventListener('click', async (event) => {
         const button = event.target.closest('button[data-action]'); // Cherche un bouton avec data-action
-        if (!button) return; // Si ce n'est pas un bouton avec action, ignorer
+        const link = event.target.closest('a.ref-link[data-ref]'); // Cherche un lien de référence cliquable
 
-        const action = button.dataset.action;
-        const ref = button.dataset.ref;
-        const quantity = button.dataset.quantity ? parseInt(button.dataset.quantity, 10) : null;
+        if (!button && !link) return; // Si ce n'est ni l'un ni l'autre, ignorer
 
-        console.log(`Clic sur bouton IA: Action=${action}, Ref=${ref}, Quantité=${quantity}`);
+        event.preventDefault(); // Empêche le comportement par défaut (surtout pour les liens #)
 
-        // Désactive le bouton immédiatement pour éviter double-clic
-        button.disabled = true;
-        const originalButtonText = button.textContent; // Sauvegarde le texte original
-        button.textContent = '...'; // Indique le traitement
+        if (button) {
+            // --- Traitement Bouton ---
+            const action = button.dataset.action;
+            const ref = button.dataset.ref;
+            const quantity = button.dataset.quantity ? parseInt(button.dataset.quantity, 10) : null;
 
-        try {
-            if (action === 'take_stock') {
-                if (!ref || quantity === null || quantity <= 0) {
-                    await addMessageToChat('AI', "Action invalide. Référence ou quantité manquante pour prendre du stock.");
-                     button.disabled = false; button.textContent = originalButtonText; // Réactive
-                    return;
-                }
-                 // 1. Vérifier si l'utilisateur est connecté
-                if (!currentUser) {
-                    await promptLoginBeforeAction(`prendre ${quantity} x ${ref}`);
-                     button.disabled = false; button.textContent = originalButtonText; // Réactive car interrompu
-                     resetConversationState();
-                    return;
-                }
-                // 2. Si connecté, tenter de prendre le stock
-                 await addMessageToChat('User', `Je prends ${quantity} x ${ref}`); // Simule l'entrée utilisateur
-                 const { newQuantity, error } = await updateStockInSupabase(ref, -quantity); // Tente de retirer la quantité
-                if (error) {
-                    // updateStockInSupabase gère l'affichage de l'erreur log/admin
-                    await addMessageToChat('AI', `Impossible de prendre ${quantity} x ${ref}. ${error}`);
-                     button.disabled = false; button.textContent = originalButtonText; // Réactive
-                     resetConversationState();
-                } else {
-                     await addMessageToChat('AI', `Ok, ${quantity} x ${ref} retiré(s) du stock. Nouvelle quantité: ${newQuantity}.`);
-                     // Laisse le bouton désactivé car l'action est faite.
-                     resetConversationState(); // L'action termine la conversation sur ce point.
-                     // Mettre à jour l'inventaire si visible
-                      if (inventoryView?.classList.contains('active-view')) {
-                        displayInventory(currentInventoryPage);
+            console.log(`Clic sur bouton IA: Action=${action}, Ref=${ref}, Quantité=${quantity}`);
+
+            // Désactive le bouton immédiatement pour éviter double-clic
+            button.disabled = true;
+            const originalButtonText = button.textContent; // Sauvegarde le texte original
+            button.textContent = '...'; // Indique le traitement
+
+            try {
+                if (action === 'take_stock') {
+                    if (!ref || quantity === null || quantity <= 0) {
+                        await addMessageToChat('AI', "Action invalide. Référence ou quantité manquante pour prendre du stock.");
+                         button.disabled = false; button.textContent = originalButtonText; // Réactive
+                        return;
                     }
+                     // 1. Vérifier si l'utilisateur est connecté
+                    if (!currentUser) {
+                        await promptLoginBeforeAction(`prendre ${quantity} x ${ref}`);
+                         button.disabled = false; button.textContent = originalButtonText; // Réactive car interrompu
+                         resetConversationState();
+                        return;
+                    }
+                    // 2. Si connecté, tenter de prendre le stock
+                     await addMessageToChat('User', `Je prends ${quantity} x ${ref}`); // Simule l'entrée utilisateur
+                     const { newQuantity, error } = await updateStockInSupabase(ref, -quantity); // Tente de retirer la quantité
+                    if (error) {
+                        // updateStockInSupabase gère l'affichage de l'erreur log/admin
+                        await addMessageToChat('AI', `Impossible de prendre ${quantity} x ${ref}. ${error}`);
+                         button.disabled = false; button.textContent = originalButtonText; // Réactive
+                         resetConversationState();
+                    } else {
+                         await addMessageToChat('AI', `Ok, ${quantity} x ${ref} retiré(s) du stock. Nouvelle quantité: ${newQuantity}.`);
+                         // Laisse le bouton désactivé car l'action est faite.
+                         resetConversationState(); // L'action termine la conversation sur ce point.
+                         // Mettre à jour l'inventaire si visible
+                          if (inventoryView?.classList.contains('active-view')) {
+                            displayInventory(currentInventoryPage);
+                        }
+                    }
+
                 }
+                // Ajouter d'autres actions de bouton ici si nécessaire...
+                 else {
+                     console.warn(`Action de bouton IA non gérée: ${action}`);
+                     await addMessageToChat('AI', "Action non reconnue.");
+                      button.disabled = false; button.textContent = originalButtonText; // Réactive
+                 }
 
+            } catch (err) {
+                 console.error("Erreur lors du traitement du clic sur bouton IA:", err);
+                 await addMessageToChat('AI', "Une erreur s'est produite lors du traitement de votre action.");
+                 resetConversationState();
+                 // Réactive le bouton en cas d'erreur JS inattendue
+                 button.disabled = false;
+                 button.textContent = "Erreur";
             }
-            // else if (action === 'choose_equivalent') { ... } // Logique si besoin
-            // else if (action === 'confirm_quantity_yes') { ... } // Logique si besoin
-            // else if (action === 'confirm_quantity_no') { ... } // Logique si besoin
-             // Ajouter d'autres actions ici si nécessaire...
-             else {
-                 console.warn(`Action de bouton IA non gérée: ${action}`);
-                 await addMessageToChat('AI', "Action non reconnue.");
-                  button.disabled = false; button.textContent = originalButtonText; // Réactive
+        } else if (link) {
+             // --- Traitement Lien Référence Cliquable ---
+             const ref = link.dataset.ref;
+             console.log(`Clic sur lien référence IA: ${ref}`);
+             if (componentInputChat) {
+                 componentInputChat.value = `${ref} quantité?`; // Pré-remplit l'input
+                 handleUserInput(); // Lance la recherche pour cette référence
              }
-
-        } catch (err) {
-             console.error("Erreur lors du traitement du clic sur bouton IA:", err);
-             await addMessageToChat('AI', "Une erreur s'est produite lors du traitement de votre action.");
-             resetConversationState();
-             // Réactive le bouton en cas d'erreur JS inattendue
-             button.disabled = false;
-             button.textContent = "Erreur"; // Ou remettre originalButtonText ?
         }
     });
 
@@ -2388,17 +2434,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isBlock) {
              return `
                 <div class="external-links-block">
-                    <a href="${googleUrl}" target="_blank" class="external-link" title="Rechercher datasheet sur Google">Datasheet (Google)</a>
-                    <a href="${octopartUrl}" target="_blank" class="external-link" title="Comparer prix et stocks sur Octopart">Prix/Stock (Octopart)</a>
-                    {/* <a href="${aliexpressUrl}" target="_blank" class="external-link aliexpress" title="Rechercher sur AliExpress">AliExpress</a> */}
+                    <a href="${googleUrl}" target="_blank" rel="noopener noreferrer" class="external-link" title="Rechercher datasheet sur Google">Datasheet (Google)</a>
+                    <a href="${octopartUrl}" target="_blank" rel="noopener noreferrer" class="external-link" title="Comparer prix et stocks sur Octopart">Prix/Stock (Octopart)</a>
+                    {/* <a href="${aliexpressUrl}" target="_blank" rel="noopener noreferrer" class="external-link aliexpress" title="Rechercher sur AliExpress">AliExpress</a> */}
                 </div>`;
         } else {
              // Version inline (plus petite)
              return `
                  <span class="external-links-inline">
-                    (<a href="${googleUrl}" target="_blank" class="external-link-inline" title="Rechercher datasheet ${ref}">datasheet</a>
-                    | <a href="${octopartUrl}" target="_blank" class="external-link-inline" title="Comparer prix/stocks pour ${ref}">prix</a>)
-                    {/* | <a href="${aliexpressUrl}" target="_blank" class="external-link-inline aliexpress" title="Chercher ${ref} sur AliExpress">ali</a>) */}
+                    (<a href="${googleUrl}" target="_blank" rel="noopener noreferrer" class="external-link-inline" title="Rechercher datasheet ${ref}">datasheet</a>
+                    | <a href="${octopartUrl}" target="_blank" rel="noopener noreferrer" class="external-link-inline" title="Comparer prix/stocks pour ${ref}">prix</a>)
+                    {/* | <a href="${aliexpressUrl}" target="_blank" rel="noopener noreferrer" class="external-link-inline aliexpress" title="Chercher ${ref} sur AliExpress">ali</a>) */}
                 </span>`;
         }
     }
@@ -2543,12 +2589,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!supabase || !currentUser || !currentUserCode) {
             return { newQuantity: null, error: "Utilisateur non connecté ou Supabase non initialisé." };
         }
-        if (!ref || change === null || change === undefined || isNaN(change)) { // Autorise change = 0 pour log initial? Non.
+        if (!ref || change === null || change === undefined || isNaN(change)) {
              return { newQuantity: null, error: "Référence ou changement invalide/nul fourni." };
          }
          if (change === 0) {
              console.warn("Appel à updateStockInSupabase avec un changement de 0. Aucune action effectuée.");
-             // Pourrait retourner la quantité actuelle si besoin ?
              const currentInfo = await getStockInfoFromSupabase(ref);
              return { newQuantity: currentInfo?.quantity ?? null, error: null }; // Retourne quantité actuelle sans erreur
          }
@@ -2582,7 +2627,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Affiche l'erreur dans la modale si elle est ouverte, sinon dans le log/admin
                  if (quantityChangeModal?.style.display === 'block' && modalFeedback) {
                     modalFeedback.textContent = userErrorMessage;
-                    modalFeedback.className = 'feedback error';
+                    modalFeedback.className = 'modal-feedback error'; // Utilise classe modale
                     modalFeedback.style.display = 'block'; // Assure visibilité
                  } else {
                     showLogFeedback(userErrorMessage, 'error'); // Feedback dans le log si modale fermée
@@ -2597,7 +2642,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (newQuantity === null || newQuantity === undefined || isNaN(newQuantity)) {
                  console.error("La fonction RPC 'update_stock' n'a pas retourné une nouvelle quantité valide.", data);
                  const errMsg = "La mise à jour a peut-être réussi, mais la nouvelle quantité n'a pas pu être confirmée.";
-                 if (quantityChangeModal?.style.display === 'block' && modalFeedback) { modalFeedback.textContent = errMsg; modalFeedback.className = 'feedback warning'; modalFeedback.style.display = 'block';}
+                 if (quantityChangeModal?.style.display === 'block' && modalFeedback) { modalFeedback.textContent = errMsg; modalFeedback.className = 'modal-feedback warning'; modalFeedback.style.display = 'block';}
                  else { showLogFeedback(errMsg, 'warning'); showAdminFeedback(errMsg, 'warning');}
                  return { newQuantity: null, error: errMsg };
              }
@@ -2617,83 +2662,21 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error(`Erreur JavaScript inattendue dans updateStockInSupabase pour ${upperRef}:`, err);
             const errMsg = "Erreur technique inattendue lors de la mise à jour du stock.";
-             if (quantityChangeModal?.style.display === 'block' && modalFeedback) { modalFeedback.textContent = errMsg; modalFeedback.className = 'feedback error'; modalFeedback.style.display = 'block';}
+             if (quantityChangeModal?.style.display === 'block' && modalFeedback) { modalFeedback.textContent = errMsg; modalFeedback.className = 'modal-feedback error'; modalFeedback.style.display = 'block';}
              else { showLogFeedback(errMsg, 'error'); showAdminFeedback(errMsg, 'error');}
             return { newQuantity: null, error: errMsg };
         }
     }
-
-    /*
-    -- Fonction SQL `update_stock` pour Supabase (Exemple à adapter et créer via l'éditeur SQL)
-    -- Gère la mise à jour atomique du stock et l'ajout au log.
-
-    CREATE OR REPLACE FUNCTION update_stock(
-        p_ref TEXT,
-        p_change INTEGER,
-        p_user_code TEXT,
-        p_user_id UUID
-    )
-    RETURNS INTEGER -- Retourne la nouvelle quantité
-    LANGUAGE plpgsql
-    SECURITY DEFINER -- Important pour potentiellement outrepasser RLS si nécessaire (à utiliser avec précaution)
-    -- Ou SECURITY INVOKER si les RLS de l'utilisateur permettent l'update et l'insert log
-    AS $$
-    DECLARE
-        v_current_quantity INTEGER;
-        v_new_quantity INTEGER;
-        v_item_id BIGINT; -- Utilise BIGINT si id est bigserial/bigint
-    BEGIN
-        -- Verrouille la ligne pour éviter les conditions de concurrence
-        SELECT id, quantity INTO v_item_id, v_current_quantity
-        FROM public.inventory
-        WHERE ref = p_ref
-        FOR UPDATE;
-
-        -- Vérifie si l'item existe
-        IF v_item_id IS NULL THEN
-            RAISE EXCEPTION 'item_not_found' USING HINT = 'Référence ''' || p_ref || ''' non trouvée dans l''inventaire.';
-        END IF;
-
-        -- Calcule la nouvelle quantité
-        v_new_quantity := v_current_quantity + p_change;
-
-        -- Vérifie si le stock est suffisant en cas de retrait
-        IF v_new_quantity < 0 THEN
-            RAISE EXCEPTION 'insufficient_stock' USING HINT = 'Stock insuffisant pour ''' || p_ref || '''. Demandé: ' || p_change || ', Disponible: ' || v_current_quantity;
-        END IF;
-
-        -- Met à jour la quantité dans l'inventaire
-        UPDATE public.inventory
-        SET quantity = v_new_quantity
-        WHERE id = v_item_id; -- Utilise l'ID pour être sûr
-
-        -- Insère l'entrée dans le log
-        -- Assurez-vous que l'utilisateur appelant a les droits INSERT sur 'log' si SECURITY INVOKER
-        -- ou que la fonction (via SECURITY DEFINER) a les droits.
-        INSERT INTO public.log (user_code, user_id, item_ref, change, new_quantity)
-        VALUES (p_user_code, p_user_id, p_ref, p_change, v_new_quantity);
-
-        -- Retourne la nouvelle quantité
-        RETURN v_new_quantity;
-
-    -- Pas besoin de bloc EXCEPTION ici si on veut que les erreurs DB remontent directement (ce qui est souvent préférable)
-    END;
-    $$;
-
-    -- Accorder les permissions (adapter le rôle si besoin):
-    -- GRANT EXECUTE ON FUNCTION public.update_stock(text, integer, text, uuid) TO authenticated;
-    -- Si SECURITY DEFINER, l'utilisateur définissant la fonction doit avoir les droits UPDATE sur inventory et INSERT sur log.
-    */
-
 
     // --- Gestion Modale Quantité (+/-) ---
 
     // Gère le clic sur une ligne de la table d'inventaire pour ouvrir la modale
     async function handleInventoryRowClick(event) {
         if (!currentUser) {
-             // Avertir l'utilisateur qu'il doit se connecter ?
-             loginError.textContent = "Connectez-vous pour modifier la quantité.";
-             loginError.style.display = 'block';
+             if(loginError) {
+                 loginError.textContent = "Connectez-vous pour modifier la quantité.";
+                 loginError.style.display = 'block';
+             }
              loginCodeInput?.focus();
             return;
         }
@@ -2743,14 +2726,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if(modalQtySpan) modalQtySpan.textContent = modalInitialQuantity;
         if(modalChangeAmountDisplay) modalChangeAmountDisplay.textContent = '0';
         if(modalFeedback) modalFeedback.textContent = ''; // Vide feedback précédent
-        if(modalFeedback) modalFeedback.className = 'feedback info'; // Reset style feedback
+        if(modalFeedback) modalFeedback.className = 'modal-feedback info'; // Reset style feedback
         if(modalFeedback) modalFeedback.style.display = 'none'; // Cache feedback initial
 
          // Affiche les attributs spécifiques (correction: utilise UL et LI)
          if (modalAttributesList && item.attributes && typeof item.attributes === 'object' && Object.keys(item.attributes).length > 0) {
             modalAttributesList.innerHTML = ''; // Vide les anciens
             for (const key in item.attributes) {
-                 if (item.attributes.hasOwnProperty(key)) { // Bonne pratique
+                 if (Object.prototype.hasOwnProperty.call(item.attributes, key)) { // Bonne pratique
                     const li = document.createElement('li');
                     // Utilise textContent pour éviter injection HTML potentielle dans les clés/valeurs
                     const strong = document.createElement('strong');
@@ -2769,9 +2752,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Met à jour l'état initial des boutons +/-/Confirmer
         updateModalButtonStates();
 
-        // Affiche la modale et l'overlay avec un petit effet
-        if(modalOverlay) modalOverlay.classList.add('active');
-        if(quantityChangeModal) quantityChangeModal.classList.add('active');
+        // Affiche la modale et l'overlay
+        if (quantityChangeModal) quantityChangeModal.style.display = 'block';
+        if (modalOverlay) modalOverlay.style.display = 'block';
+        // Déclenche l'animation après un court délai pour permettre le display: block
+        setTimeout(() => {
+            if(modalOverlay) modalOverlay.classList.add('active');
+            if(quantityChangeModal) quantityChangeModal.classList.add('active');
+        }, 10);
+
 
         // Met à jour l'afficheur 7 segments avec le tiroir de l'item
         lastDisplayedDrawer = item.drawer || null; // Met à jour le dernier tiroir affiché
@@ -2782,7 +2771,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function hideQuantityModal() {
         if(modalOverlay) modalOverlay.classList.remove('active');
         if(quantityChangeModal) quantityChangeModal.classList.remove('active');
-        // Optionnel: Remettre l'opacité à 0 après la transition si nécessaire
+        // Cache les éléments après la fin de la transition
         setTimeout(() => {
              if (modalOverlay && !modalOverlay.classList.contains('active')) modalOverlay.style.display = 'none';
              if (quantityChangeModal && !quantityChangeModal.classList.contains('active')) quantityChangeModal.style.display = 'none';
@@ -2796,9 +2785,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Met à jour l'état (activé/désactivé) des boutons de la modale
     function updateModalButtonStates() {
+        if (!quantityChangeModal || !modalOverlay) return; // Assure que la modale existe
         const newQuantity = modalInitialQuantity + currentModalChange;
 
-        // Bouton - : Désactivé si la nouvelle quantité est 0 ou moins
+        // Bouton - : Désactivé si la nouvelle quantité serait négative
         if(modalDecreaseButton) modalDecreaseButton.disabled = (newQuantity <= 0);
 
         // Bouton + : Toujours activé (on peut toujours ajouter)
@@ -2817,8 +2807,8 @@ document.addEventListener('DOMContentLoaded', () => {
              modalChangeAmountDisplay.style.fontWeight = (currentModalChange !== 0) ? 'bold' : 'normal';
         }
 
-        // Met à jour la quantité affichée (potentielle après confirmation)
-        if(modalQtySpan) modalQtySpan.textContent = newQuantity;
+        // Met à jour la quantité *potentielle* après confirmation
+        if(modalQtySpan) modalQtySpan.textContent = newQuantity; // Affiche la quantité si le changement était appliqué
     }
 
     // --- Gestion Afficheur 7 Segments ---
@@ -2827,26 +2817,26 @@ document.addEventListener('DOMContentLoaded', () => {
         '0': ['a', 'b', 'c', 'd', 'e', 'f'], '1': ['b', 'c'], '2': ['a', 'b', 'g', 'e', 'd'],
         '3': ['a', 'b', 'g', 'c', 'd'], '4': ['f', 'g', 'b', 'c'], '5': ['a', 'f', 'g', 'c', 'd'],
         '6': ['a', 'f', 'e', 'd', 'c', 'g'], '7': ['a', 'b', 'c'], '8': ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
-        '9': ['a', 'b', 'c', 'd', 'f', 'g'], 'A': ['a', 'b', 'c', 'e', 'f', 'g'], 'B': ['c', 'd', 'e', 'f', 'g'], // 'b'
-        'C': ['a', 'd', 'e', 'f'], 'D': ['b', 'c', 'd', 'e', 'g'], // 'd'
-        'E': ['a', 'd', 'e', 'f', 'g'], 'F': ['a', 'e', 'f', 'g'], 'G': ['a', 'c', 'd', 'e', 'f'], // ou '9'?
-        'H': ['c', 'e', 'f', 'g'], // 'h'
-        'I': ['e', 'f'], // ou '1'
-        'J': ['b', 'c', 'd', 'e'], 'L': ['d', 'e', 'f'], 'N': ['c', 'e', 'g'], // 'n'
+        '9': ['a', 'b', 'c', 'd', 'f', 'g'], 'A': ['a', 'b', 'c', 'e', 'f', 'g'], 'B': ['c', 'd', 'e', 'f', 'g'], // 'b' majuscule ressemble à 8
+        'C': ['a', 'd', 'e', 'f'], 'D': ['b', 'c', 'd', 'e', 'g'], // 'd' minuscule
+        'E': ['a', 'd', 'e', 'f', 'g'], 'F': ['a', 'e', 'f', 'g'], 'G': ['a', 'c', 'd', 'e', 'f'], // Majuscule
+        'H': ['b', 'c', 'e', 'f', 'g'], // Majuscule
+        'I': ['b', 'c'], // Comme 1
+        'J': ['b', 'c', 'd', 'e'], 'L': ['d', 'e', 'f'], 'N': ['a', 'b', 'c', 'e', 'f'], // Majuscule
         'O': ['a', 'b', 'c', 'd', 'e', 'f'], // Comme 0
-        'P': ['a', 'b', 'e', 'f', 'g'], 'Q': ['a', 'b', 'c', 'f', 'g'], // 'q'
-        'R': ['e', 'g'], // 'r'
+        'P': ['a', 'b', 'e', 'f', 'g'], 'Q': ['a', 'b', 'c', 'f', 'g'],
+        'R': ['a', 'e', 'f'], // Majuscule (variante)
         'S': ['a', 'f', 'g', 'c', 'd'], // Comme 5
-        'T': ['d', 'e', 'f', 'g'], // 't'
+        'T': ['d', 'e', 'f', 'g'], // 't' minuscule
         'U': ['b', 'c', 'd', 'e', 'f'], // Majuscule
-        'Y': ['b', 'c', 'd', 'f', 'g'], // Ressemble à h inversé
+        'Y': ['b', 'c', 'd', 'f', 'g'], // Majuscule
+        'Z': ['a', 'b', 'd', 'e', 'g'], // Comme 2
         '-': ['g'], '_': ['d'], ' ': [], '.': ['dp'],
     };
 
     // Met à jour l'affichage des 4 digits 7 segments
     function updateSevenSegmentDisplay(newDrawerValue = undefined) {
         if (!sevenSegmentDisplay || !segmentDigits.every(d => d)) {
-            // console.warn("Afficheur 7 segments non trouvé ou incomplet dans le DOM.");
             return; // Ne rien faire si l'afficheur n'est pas prêt
         }
 
@@ -2857,7 +2847,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const valueToDisplay = (newDrawerValue !== undefined) ? newDrawerValue : lastDisplayedDrawer;
 
         if (valueToDisplay !== null && valueToDisplay !== undefined && String(valueToDisplay).trim() !== '') {
-            // Convertit en string, prend les 4 derniers caractères, met en majuscules, et pad avec des espaces à gauche si moins de 4 cars
+            // Prend les 4 derniers caractères, met en majuscules, et pad avec des espaces à gauche si moins de 4 cars
             displayString = String(valueToDisplay).slice(-4).toUpperCase().padStart(4, ' ');
             displayOn = true; // On a quelque chose à afficher
         } else {
@@ -2873,17 +2863,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const charToDisplay = displayString[i] || ' '; // Prend le caractère ou un espace si vide
 
-            // Retire toutes les classes de segments actifs précédentes
-            // On pourrait optimiser en ne retirant/ajoutant que ce qui change, mais c'est plus complexe
-             digitElement.className = 'digit'; // Reset classes (garde 'digit')
-             digitElement.classList.add(`digit-${i+1}`); // Remet la classe digit-N
+            // Récupère tous les segments possibles 'a' à 'g' pour ce digit
+            const allSegments = digitElement.querySelectorAll('.segment');
+            // Retire la classe 'on' de tous les segments
+            allSegments.forEach(seg => seg.classList.remove('on'));
 
             // Récupère les segments à activer pour ce caractère
             const segmentsToActivate = segmentMap[charToDisplay] || segmentMap['-']; // Utilise '-' si char inconnu
 
-            // Ajoute les classes pour les segments actifs
-            segmentsToActivate.forEach(segment => {
-                digitElement.classList.add(`seg-${segment}`, 'on'); // Ajoute aussi 'on' pour styles CSS
+            // Ajoute la classe 'on' aux segments corrects
+            segmentsToActivate.forEach(segmentCode => {
+                // Trouve le segment correspondant (ex: .segment-a)
+                const segmentElement = digitElement.querySelector(`.segment-${segmentCode}`);
+                if (segmentElement) {
+                    segmentElement.classList.add('on');
+                }
             });
         }
 
@@ -2893,7 +2887,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
              sevenSegmentDisplay.classList.add('display-off');
         }
-        // console.log(`Afficheur 7 segments mis à jour avec: "${displayString}" (valeur brute: ${valueToDisplay})`);
     }
 
 
@@ -2906,8 +2899,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         console.log("Chargement des données/états pour la vue Paramètres...");
-        // Pour l'instant, cette vue contient surtout des actions (export/import)
-        // Donc pas grand chose à pré-charger, mais on pourrait ajouter des états ici.
         resetImportState(); // Assure que la section import est dans l'état initial
         showSettingsFeedback('export', '', 'none'); // Cache les feedbacks
         showSettingsFeedback('import', '', 'none');
@@ -2919,7 +2910,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!feedbackDiv) return;
 
         feedbackDiv.textContent = message;
-        feedbackDiv.className = `feedback ${level}`; // Applique classe CSS (info, success, warning, error)
+        feedbackDiv.className = `feedback-area ${level}`; // Applique classe CSS (info, success, warning, error)
 
         if (level === 'none' || !message) {
             feedbackDiv.style.display = 'none';
@@ -2986,6 +2977,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!data || data.length === 0) {
                 showSettingsFeedback('export', "L'inventaire est vide, rien à exporter.", 'warning');
+                if(exportInventoryCsvButton) exportInventoryCsvButton.disabled = false; // Réactive bouton si vide
                 return;
             }
 
@@ -3070,6 +3062,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!data || data.length === 0) {
                 showSettingsFeedback('export', "L'historique est vide, rien à exporter.", 'warning');
+                if(exportLogTxtButton) exportLogTxtButton.disabled = false; // Réactive si vide
                 return;
             }
 
@@ -3131,10 +3124,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Utilise PapaParse pour lire le fichier CSV
         Papa.parse(file, {
             header: true,       // Le fichier doit avoir une ligne d'en-tête
-            skipEmptyLines: true, // Ignore les lignes vides
+            skipEmptyLines: 'greedy', // Ignore les lignes vides et celles avec seulement des espaces/délimiteurs
             dynamicTyping: false, // Traite tout comme string initialement pour éviter erreurs de type
             complete: async (results) => { // Fonction appelée quand le parsing est terminé
-                showSettingsFeedback('import', `Fichier lu. ${results.data.length} lignes trouvées. Traitement en cours...`, 'info');
+                showSettingsFeedback('import', `Fichier lu. ${results.data.length} lignes trouvées (hors lignes vides). Traitement en cours...`, 'info');
                 console.log("Données CSV parsées:", results.data);
                 console.log("Erreurs PapaParse:", results.errors);
                  if (results.errors.length > 0) {
@@ -3179,23 +3172,25 @@ document.addEventListener('DOMContentLoaded', () => {
                       resetImportState();
                       return;
                   }
-                 const actualHeadersLower = results.meta.fields.map(h => h.toLowerCase().trim());
+                 // Normalise les en-têtes lus pour comparaison insensible à la casse
+                 const actualHeadersLower = results.meta.fields.map(h => String(h || '').toLowerCase().trim());
 
                  if (!expectedHeaders.every(h => actualHeadersLower.includes(h))) {
                      headerError = true;
                      const missing = expectedHeaders.filter(h => !actualHeadersLower.includes(h));
-                     showSettingsFeedback('import', `Erreur: En-têtes requis manquants dans le CSV: ${missing.join(', ')}. Les en-têtes sont sensibles à la casse lors de l'import.`, 'error');
+                     showSettingsFeedback('import', `Erreur: En-têtes requis manquants dans le CSV: ${missing.join(', ')}. Les en-têtes attendus sont Ref, Quantity, Category (insensible à la casse).`, 'error');
                      resetImportState();
                      return;
                  }
 
 
                 results.data.forEach((row, index) => {
-                     // Normalise les clés de l'objet row (lowercase, trim pour la recherche, mais garde les clés originales de PapaParse)
+                     // Normalise les clés de l'objet row (lowercase, trim) pour la recherche
                      const normalizedRow = {};
-                      const originalKeys = results.meta.fields; // Utilise les clés originales
-                      originalKeys.forEach(key => {
-                         normalizedRow[key.toLowerCase().trim()] = row[key]?.trim() ?? ''; // Clé normalisée pour accès facile
+                     const originalKeys = results.meta.fields; // Utilise les clés originales de PapaParse
+                     originalKeys.forEach(key => {
+                         const lowerKey = String(key || '').toLowerCase().trim();
+                         normalizedRow[lowerKey] = String(row[key] ?? '').trim(); // Assure que c'est une string et trim
                      });
 
 
@@ -3300,6 +3295,8 @@ document.addEventListener('DOMContentLoaded', () => {
                              }
 
                             showSettingsFeedback('import', `Suppression de l'inventaire existant...`, 'warning');
+                             // Supprime les logs associés d'abord si nécessaire/voulu ? Non, l'inventaire seul.
+                             // Supprimer inventaire
                              const { error: deleteError } = await supabase.from('inventory').delete().gte('id', 0); // Supprime tout
                             if (deleteError) {
                                 throw new Error(`Erreur lors de la suppression de l'inventaire: ${deleteError.message}`);
@@ -3319,12 +3316,17 @@ document.addEventListener('DOMContentLoaded', () => {
                                 throw new Error(`Erreur lors de l'insertion (overwrite): ${errMsg}`);
                             }
                             successCount = count || itemsToProcess.length;
+                             // Log initial après overwrite ? Pourrait être lourd. À décider. Pas de log ici.
 
                         } else {
                             // --- Mode UPSERT (par défaut) ---
                             console.log("Mode UPSERT sélectionné. Mise à jour ou ajout...");
                             showSettingsFeedback('import', `Mise à jour/Ajout de ${itemsToProcess.length} lignes...`, 'info');
-                             const { error: upsertError, count } = await supabase.from('inventory').upsert(itemsToProcess, { onConflict: 'ref' });
+                             const { error: upsertError, data: upsertData, count } = await supabase
+                                .from('inventory')
+                                .upsert(itemsToProcess, { onConflict: 'ref' })
+                                .select('ref, quantity'); // Récupère qté après upsert pour log éventuel
+
                             if (upsertError) {
                                  let errMsg = upsertError.message;
                                  if (errMsg.includes('violates foreign key constraint') && errMsg.includes('inventory_category_id_fkey')) {
@@ -3332,8 +3334,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                  }
                                 throw new Error(`Erreur lors de l'upsert: ${errMsg}`);
                              }
-                             // Le 'count' pour upsert peut être moins fiable, on prend le nombre d'items traités
+                             // Le 'count' pour upsert peut être null, utiliser la longueur des données traitées
                              successCount = itemsToProcess.length;
+                             // Log pour upsert ? Peut-être logguer seulement si quantité change significativement? Pour l'instant, pas de log auto pour upsert.
                         }
 
                         // --- Fin de l'import ---
@@ -3380,10 +3383,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if(importInventoryCsvButton) importInventoryCsvButton.disabled = false;
         if(importCsvFileInput) importCsvFileInput.disabled = false;
         importModeRadios.forEach(radio => radio.disabled = false);
-        // Ne vide pas le feedback ici, il est géré par showSettingsFeedback
-        // Réinitialise le label du fichier
-         // if (importFileLabel) importFileLabel.textContent = 'Choisir un fichier CSV...';
-         // Ne pas reset le label ici, peut perturber si l'user voulait le même fichier après erreur
+        // On ne vide pas le fichier input ici, l'utilisateur pourrait vouloir corriger et relancer
+        // if (importCsvFileInput) importCsvFileInput.value = '';
+        // if (importFileLabel) importFileLabel.textContent = 'Choisir un fichier CSV...';
      }
 
     // Ajoute les écouteurs pour la vue Paramètres
@@ -3416,7 +3418,8 @@ document.addEventListener('DOMContentLoaded', () => {
             'inventory-table-body', 'log-table-body', 'response-output',
             'component-input', 'search-button', 'quantity-change-modal', 'modal-overlay',
             'category-list', 'stock-form', 'settings-view', 'export-inventory-csv-button',
-            'import-inventory-csv-button', 'import-csv-file'
+            'import-inventory-csv-button', 'import-csv-file', 'log-table', // Ajout log-table pour querySelector
+            'inventory-table' // Ajout inventory-table pour querySelector
         ];
         const missingElement = requiredIds.find(id => !document.getElementById(id));
         if (missingElement) {
@@ -3440,18 +3443,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Authentification
         loginButton?.addEventListener('click', handleLogin);
         logoutButton?.addEventListener('click', handleLogout);
-        loginCodeInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
+        loginCodeInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') loginPasswordInput?.focus(); }); // Passe au mdp sur Entrée
         loginPasswordInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
 
         // Chat (Recherche)
         searchButtonChat?.addEventListener('click', handleUserInput);
         componentInputChat?.addEventListener('keypress', (event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
+            if (event.key === 'Enter' && !event.shiftKey) { // Empêche Shift+Enter de soumettre
                 event.preventDefault();
                 handleUserInput();
             }
         });
-         // Le listener pour les clics DANS le chat (boutons IA) est ajouté plus haut.
+         // Le listener pour les clics DANS le chat (boutons/liens IA) est ajouté plus haut.
 
         // Inventaire
         applyInventoryFilterButton?.addEventListener('click', () => {
@@ -3482,10 +3485,10 @@ document.addEventListener('DOMContentLoaded', () => {
         logNextPageButton?.addEventListener('click', () => {
              if (!logNextPageButton.disabled) displayLog(currentLogPage + 1);
         });
-         // Listeners pour suppression log (simple/tout) ajoutés dans displayLog
+         // Listeners pour suppression log (simple/tout) ajoutés dynamiquement dans displayLog
 
         // Admin
-        addCategoryEventListeners(); // Attache listeners form catégorie (submit/cancel)
+        // Les listeners pour catégorie (liste et formulaire) sont ajoutés dans loadCategoriesAdmin
         addStockEventListeners(); // Attache listeners form stock (check/update/save)
         addComponentCategorySelectListener(); // Attache listener pour changement catégorie -> attributs
 
@@ -3509,7 +3512,7 @@ document.addEventListener('DOMContentLoaded', () => {
              modalCancelButton.disabled = true;
              if (modalFeedback) {
                  modalFeedback.textContent = `Mise à jour de ${ref}...`;
-                 modalFeedback.className = 'feedback info';
+                 modalFeedback.className = 'modal-feedback info';
                  modalFeedback.style.display = 'block'; // Assure visibilité
              }
 
@@ -3524,12 +3527,16 @@ document.addEventListener('DOMContentLoaded', () => {
                  // Succès
                  if (modalFeedback) {
                      modalFeedback.textContent = `Stock de ${ref} mis à jour ! Nouvelle quantité: ${newQuantity}.`;
-                     modalFeedback.className = 'feedback success';
+                     modalFeedback.className = 'modal-feedback success';
                      // Garde visible
                  }
                  // Met à jour l'inventaire en arrière-plan si visible
                  if (inventoryView?.classList.contains('active-view')) {
                      displayInventory(currentInventoryPage);
+                 }
+                  // Met à jour aussi le log si visible
+                 if (logView?.classList.contains('active-view')) {
+                     displayLog(1); // Retour page 1 du log après modif
                  }
                  // Ferme la modale après un court délai
                  setTimeout(hideQuantityModal, 1500);
@@ -3541,7 +3548,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Initialisation finale ---
         setupAuthListener(); // Lance l'écouteur d'authentification Supabase
         updateSevenSegmentDisplay(null); // Initialise l'afficheur
-        // La vue initiale est gérée par l'auth listener
+        // La vue initiale est gérée par l'auth listener / CSS par défaut
 
         console.log("StockAV initialisé et prêt.");
     }
