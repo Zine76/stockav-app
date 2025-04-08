@@ -1,0 +1,2460 @@
+# **Documentation Projet : StockAV**
+
+**Version :** [Date de création de ce document]
+
+**Auteur(s) :** [Ton nom/équipe], Assistant IA
+
+---
+
+**Table des Matières**
+
+1.  [Introduction](#1-introduction)
+2.  [Fonctionnalités](#2-fonctionnalités)
+3.  [Stack Technologique](#3-stack-technologique)
+4.  [Structure du Projet](#4-structure-du-projet)
+5.  [Schéma de la Base de Données (Supabase)](#5-schéma-de-la-base-de-données-supabase)
+6.  [Logique Principale & Modules](#6-logique-principale--modules)
+    *   [6.1 Authentification](#61-authentification)
+    *   [6.2 Navigation & Vues](#62-navigation--vues)
+    *   [6.3 Vue Recherche (Chat IA)](#63-vue-recherche-chat-ia)
+    *   [6.4 Vue Stock](#64-vue-stock)
+    *   [6.5 Vue Historique (Log)](#65-vue-historique-log)
+    *   [6.6 Vue Administration](#66-vue-administration)
+    *   [6.7 Vue Paramètres (Import/Export)](#67-vue-paramètres-importexport)
+    *   [6.8 Interaction Supabase (Frontend)](#68-interaction-supabase-frontend)
+    *   [6.9 Fonction Edge Supabase (`openai-equivalents`)](#69-fonction-edge-supabase-openai-equivalents)
+    *   [6.10 Afficheur 7 Segments](#610-afficheur-7-segments)
+7.  [Configuration & Installation Locale](#7-configuration--installation-locale)
+8.  [Déploiement](#8-déploiement)
+    *   [8.1 Déploiement Fonction Edge Supabase](#81-déploiement-fonction-edge-supabase)
+    *   [8.2 Déploiement Frontend (GitHub Pages)](#82-déploiement-frontend-github-pages)
+9.  [Utilisation](#9-utilisation)
+10. [Considérations de Sécurité](#10-considérations-de-sécurité)
+11. [Code Source Complet](#11-code-source-complet)
+    *   [11.1 `index.html`](#111-indexhtml)
+    *   [11.2 `style.css`](#112-stylecss)
+    *   [11.3 `script.js`](#113-scriptjs)
+    *   [11.4 `supabase/functions/_shared/cors.ts`](#114-supabasefunctions_sharedcorsts)
+    *   [11.5 `supabase/functions/openai-equivalents/index.ts`](#115-supabasefunctionsopenai-equivalentsindexts)
+12. [Améliorations Possibles](#12-améliorations-possibles)
+
+---
+
+## 1. Introduction
+
+**StockAV** est une application web monopage (Single Page Application - SPA) conçue pour la gestion intelligente du stock de composants électroniques. Elle permet aux techniciens de rechercher des composants, de vérifier leur disponibilité locale, de trouver des équivalents via une IA, de gérer les entrées/sorties de stock, et d'administrer les données de base.
+
+L'application vise à simplifier et accélérer le processus de recherche et de prélèvement de composants dans un atelier ou un laboratoire.
+
+## 2. Fonctionnalités
+
+*   **Authentification Utilisateur :** Connexion sécurisée par code technicien et mot de passe via Supabase Auth. Les fonctionnalités sensibles sont protégées.
+*   **Navigation par Onglets :** Interface claire divisée en sections : Recherche, Stock, Log (Historique), Administration, Paramètres.
+*   **Recherche Intelligente (Chat IA) :**
+    *   Interface conversationnelle pour demander des composants.
+    *   Extraction de la référence du composant depuis une requête en langage naturel.
+    *   Vérification de la disponibilité et de la localisation (tiroir) du composant original dans le stock local (via Supabase DB).
+    *   **Recherche d'Équivalents via IA :** Utilise l'API OpenRouter (modèle Mistral 7B Instruct) via une fonction Edge Supabase sécurisée pour suggérer jusqu'à 5 équivalents techniques.
+    *   Vérification du stock local pour chaque équivalent trouvé.
+    *   Affichage structuré des résultats : statut original, liste des équivalents avec leur statut local et raison.
+    *   Liens de recherche externes (Mouser, Digi-Key, AliExpress) pour les composants non disponibles.
+    *   Flux de prise de stock intégré au chat pour les composants disponibles (si connecté).
+*   **Visualisation du Stock :**
+    *   Tableau paginé de l'inventaire complet.
+    *   Indicateurs visuels de niveau de stock (OK, Avertissement, Critique) basés sur des seuils.
+    *   Filtrage par catégorie et recherche textuelle (référence, description, fabricant, tiroir).
+    *   Affichage du tiroir et lien vers datasheet.
+    *   Interaction rapide via clic sur une ligne pour modifier la quantité (si connecté).
+*   **Historique des Mouvements (Log) :**
+    *   Tableau paginé de toutes les entrées et sorties de stock.
+    *   Indique la date/heure, le technicien, l'action (+/-), la référence, la quantité modifiée et le stock final.
+*   **Administration :** (Accessible si connecté)
+    *   **Gestion des Catégories :** Ajout, modification, suppression de catégories de composants. Définition d'attributs spécifiques par catégorie.
+    *   **Gestion du Stock :**
+        *   Vérification rapide du stock d'un composant.
+        *   Mise à jour rapide de la quantité (+/-).
+        *   Ajout ou modification complète des détails d'un composant (référence, description, catégorie, quantité, seuil, tiroir, datasheet, attributs spécifiques, etc.) via `upsert`.
+*   **Paramètres & Données :** (Accessible si connecté)
+    *   **Export :** Exportation de l'inventaire complet au format CSV et de l'historique des mouvements au format TXT.
+    *   **Import :** Importation de données d'inventaire via un fichier CSV structuré (avec validation des données).
+*   **Afficheur 7 Segments :** Affiche le numéro de tiroir du dernier composant sélectionné (via clic inventaire, clic chat "Prendre", ou vérification/modification admin), persiste tant que l'utilisateur est connecté.
+
+## 3. Stack Technologique
+
+*   **Frontend :**
+    *   HTML5
+    *   CSS3 (avec variables CSS, police Inter)
+    *   JavaScript (ES6+, async/await)
+*   **Backend & Base de Données (BaaS) :**
+    *   **Supabase v2 :**
+        *   Base de données PostgreSQL
+        *   Authentification (Supabase Auth)
+        *   Stockage (Supabase Storage - pour hébergement frontend optionnel)
+        *   Fonctions Edge (Supabase Edge Functions - écrites en Deno/TypeScript)
+    *   **Supabase Client Library :** `supabase-js` v2
+*   **API IA :**
+    *   **OpenRouter.ai :** Utilisé comme proxy pour accéder aux modèles de langage (LLM).
+    *   **Modèle IA :** `mistralai/mistral-7b-instruct:free` (via OpenRouter)
+*   **Librairies JavaScript Externes :**
+    *   **PapaParse :** Pour l'analyse syntaxique (parsing) et la génération de fichiers CSV (Import/Export).
+*   **Environnement d'Exécution Fonction Edge :**
+    *   **Deno**
+
+## 4. Structure du Projet
+
+```
+/component-ai-app/      <-- Dossier racine du projet
+|
+├── index.html          <-- Fichier principal HTML de l'application
+├── style.css           <-- Fichier des styles CSS
+├── script.js           <-- Fichier principal JavaScript (logique frontend)
+|
+└── supabase/           <-- Dossier pour la configuration Supabase local/CLI
+    |
+    └── functions/      <-- Dossier pour les Fonctions Edge Supabase
+        |
+        ├── openai-equivalents/ <-- Dossier de la fonction pour l'IA
+        │   └── index.ts      <-- Code source de la fonction Edge (TypeScript/Deno)
+        |
+        └── _shared/          <-- Dossier pour le code partagé entre fonctions
+            └── cors.ts       <-- Fichier gérant les en-têtes CORS
+```
+
+## 5. Schéma de la Base de Données (Supabase)
+
+La base de données Supabase est structurée avec les tables principales suivantes :
+
+*   **`categories`**
+    *   `id` (uuid, PK, default: `gen_random_uuid()`)
+    *   `name` (text, unique, not null)
+    *   `attributes` (text, nullable) - Liste de noms d'attributs séparés par des virgules (ex: "Tension,Capacité").
+    *   `created_at` (timestamptz, default: `now()`)
+
+*   **`inventory`**
+    *   `id` (uuid, PK, default: `gen_random_uuid()`)
+    *   `ref` (text, unique, not null) - Référence principale du composant (ex: "LM358N"). **Indexé**.
+    *   `description` (text, nullable)
+    *   `manufacturer` (text, nullable)
+    *   `quantity` (integer, not null, default: 0, check: `quantity >= 0`)
+    *   `datasheet` (text, nullable) - URL vers la datasheet.
+    *   `drawer` (text, nullable) - Localisation physique (tiroir, boîte...). **Indexé**.
+    *   `category_id` (uuid, nullable, FK -> `categories.id` on delete set null) - Lien vers la catégorie.
+    *   `attributes` (jsonb, nullable) - Stocke les valeurs des attributs spécifiques à la catégorie (ex: `{"Tension": "5V", "Capacité": "100nF"}`).
+    *   `critical_threshold` (integer, nullable, default: null, check: `critical_threshold >= 0`) - Seuil pour l'indicateur de stock.
+    *   `created_at` (timestamptz, default: `now()`)
+    *   `updated_at` (timestamptz, default: `now()`) - *Trigger pour mise à jour auto recommandé.*
+
+*   **`logs`**
+    *   `id` (uuid, PK, default: `gen_random_uuid()`)
+    *   `created_at` (timestamptz, default: `now()`) - **Indexé**.
+    *   `user_id` (uuid, nullable, FK -> `auth.users.id` on delete set null) - Qui a fait l'action.
+    *   `user_code` (text, nullable) - Code technicien (redondant mais pratique pour affichage).
+    *   `component_ref` (text, not null) - Référence du composant affecté. **Indexé**.
+    *   `quantity_change` (integer, not null, check: `quantity_change != 0`) - Modification (+ ou -).
+    *   `quantity_after` (integer, not null, check: `quantity_after >= 0`) - Stock résultant.
+
+*(Note : La sécurité RLS (Row Level Security) n'est pas activée par défaut dans ce projet mais est fortement recommandée pour la production).*
+
+## 6. Logique Principale & Modules
+
+### 6.1 Authentification
+
+*   Gérée via `supabase.auth.signInWithPassword` et `supabase.auth.signOut`.
+*   Utilise un email factice construit à partir du code technicien et du domaine `@stockav.local` (défini dans `FAKE_EMAIL_DOMAIN`).
+*   `setupAuthListener` écoute les changements d'état (`onAuthStateChange`) pour mettre à jour l'UI (afficher/masquer zone de login, activer/désactiver boutons protégés) via `handleUserConnected` et `handleUserDisconnected`.
+*   La variable globale `currentUser` stocke les informations de l'utilisateur connecté.
+*   La classe `user-logged-in` est ajoutée/retirée du `<body>` pour adapter certains styles CSS.
+
+### 6.2 Navigation & Vues
+
+*   Fonction `setActiveView(viewToShow, buttonToActivate)` gère l'affichage de la section principale correspondante (`<main id="...">`) et l'état actif du bouton de navigation.
+*   Vérifie si l'utilisateur est connecté avant d'afficher les vues protégées (Log, Admin, Paramètres).
+*   Charge les données spécifiques à la vue lors de son activation (ex: `displayInventory` pour la vue Stock).
+
+### 6.3 Vue Recherche (Chat IA)
+
+C'est le cœur de l'interaction intelligente.
+
+*   **Interface :** Zone d'input (`#component-input`), bouton "Envoyer" (`#search-button`), zone d'affichage des messages (`#response-output`).
+*   **Fonctionnement Principal (`handleUserInput` et `checkComponentWithAI`) :**
+    1.  L'utilisateur entre une requête.
+    2.  `handleUserInput` récupère le texte, l'ajoute au chat.
+    3.  `extractReference` tente d'identifier une référence de composant dans le texte.
+    4.  Si une référence est trouvée, `checkComponentWithAI` est appelée.
+        *   Appelle `getStockInfoFromSupabase` pour vérifier le stock local de la référence originale.
+        *   Appelle `getAIEquivalents` (qui appelle la fonction Edge `openai-equivalents`).
+        *   La fonction Edge interroge OpenRouter (Mistral 7B Instruct) pour trouver des équivalents.
+        *   `getAIEquivalents` retourne la liste des équivalents [{ref, reason}].
+        *   `checkComponentWithAI` appelle `getStockInfoFromSupabase` pour chaque équivalent afin de vérifier leur stock local.
+        *   Construit un message HTML complexe contenant :
+            *   Statut local de l'original (avec indicateur, qté, tiroir).
+            *   Liste des équivalents avec leur statut local (indicateur, qté, tiroir) et la raison fournie par l'IA.
+            *   Liens externes (Mouser, DK, Ali) pour les composants non dispos localement (`provideExternalLinksHTML`).
+            *   Boutons "Prendre" (`.take-button`) pour les composants disponibles (si connecté).
+        *   Met à jour `conversationState.awaitingEquivalentChoice`.
+    5.  `addMessageToChat` affiche la réponse de l'IA dans le chat.
+*   **Prise de Stock via Chat :**
+    1.  Un listener sur `#response-output` détecte les clics sur les boutons `.take-button`.
+    2.  Vérifie si l'utilisateur est connecté. Sinon, `promptLoginBeforeAction`.
+    3.  Si connecté, extrait `ref`, `qty`, `threshold` du bouton cliqué.
+    4.  Met à jour `conversationState` (fixe `chosenRefForStockCheck`, `availableQuantity`, `criticalThreshold`, met `awaitingQuantityConfirmation = true`).
+    5.  `addMessageToChat` demande la quantité à prendre.
+    6.  `handleUserInput` détecte qu'on attend une quantité (`awaitingQuantityConfirmation`).
+    7.  `handleQuantityResponse` valide la quantité entrée.
+    8.  Si valide, appelle `updateStockInSupabase` (qui met à jour DB et log).
+    9.  Affiche la confirmation ou l'erreur dans le chat.
+    10. Réinitialise `conversationState`.
+*   **Gestion d'état (`conversationState`) :** Suit si l'application attend un clic sur un choix ou une confirmation de quantité pour gérer le flux conversationnel.
+*   **Historique (`chatHistory`) :** Stocke les derniers messages (pourrait être envoyé à l'IA pour plus de contexte à l'avenir, mais pas utilisé actuellement pour la recherche d'équivalents).
+
+### 6.4 Vue Stock
+
+*   **Affichage (`displayInventory`) :** Récupère les données paginées de la table `inventory` via Supabase, en appliquant les filtres (`inventory-category-filter`, `inventory-search-filter`). Utilise `range()` et `count: 'exact'`.
+*   **Indicateurs :** Calcule le statut (ok, warning, critical, unknown) via `getStockStatus` basé sur `quantity` et `critical_threshold` et affiche un indicateur coloré (`stock-indicator`).
+*   **Interaction (`handleInventoryRowClick`) :** Au clic sur une ligne (si connecté), récupère les détails via `getStockInfoFromSupabase`, met à jour l'afficheur 7 segments avec le tiroir, et ouvre la modale de modification de quantité (`showQuantityModal`).
+*   **Modale (`quantity-change-modal`) :** Permet d'ajuster la quantité (+/-) via `modalDecreaseButton`, `modalIncreaseButton`. `modalConfirmButton` appelle `updateStockInSupabase` pour valider et enregistrer le changement.
+
+### 6.5 Vue Historique (Log)
+
+*   **Affichage (`displayLog`) :** Récupère les données paginées de la table `logs` via Supabase, triées par date décroissante.
+*   **Formatage :** Utilise `formatLogTimestamp` pour afficher la date/heure lisiblement. Met en couleur les changements (+/-).
+
+### 6.6 Vue Administration
+
+*   **Chargement (`loadAdminData`, `loadCategoriesAdmin`) :** Récupère les catégories (via `getCategories` qui utilise un cache `categoriesCache`) et remplit la liste et le sélecteur.
+*   **Gestion Catégories (`addCategoryEventListeners`) :**
+    *   Permet de sélectionner une catégorie pour modification (remplit le formulaire).
+    *   Permet de supprimer une catégorie (avec confirmation et vérification des dépendances via code d'erreur Supabase `23503`).
+    *   Le formulaire (`#category-form`) permet d'ajouter (si ID vide) ou de modifier (si ID présent) une catégorie via `supabase.from('categories').update()` ou `.insert()`. Gère les noms dupliqués (erreur `23505`).
+    *   Invalide le cache `categoriesCache` après modification/suppression.
+*   **Gestion Stock (`addStockEventListeners`) :**
+    *   **Vérifier Stock (`#check-stock-button`) :** Appelle `getStockInfoFromSupabase` et remplit le formulaire complet si trouvé, ou prépare pour l'ajout si inconnu. Met à jour le 7-segments si trouvé.
+    *   **Mise à Jour Rapide (`#update-quantity-button`) :** Appelle `updateStockInSupabase` avec la valeur du champ `quantity-change`.
+    *   **Enregistrer Composant (`#save-component-button`) :** Récupère toutes les valeurs du formulaire (réf, desc, qté, cat, tiroir, datasheet, seuil, attributs spécifiques). Valide les entrées. Appelle `supabase.from('inventory').upsert()` pour ajouter ou mettre à jour le composant en fonction de la `ref`. Met à jour le 7-segments si un tiroir est ajouté/modifié.
+    *   **Attributs Spécifiques (`addComponentCategorySelectListener`) :** Lorsque la catégorie est changée dans le formulaire de stock, affiche dynamiquement les champs input correspondants aux attributs définis pour cette catégorie.
+
+### 6.7 Vue Paramètres (Import/Export)
+
+*   **Export (`handleExportInventoryCSV`, `handleExportLogTXT`) :**
+    *   Récupère toutes les données (`inventory` ou `logs`) sans pagination.
+    *   Formate les données :
+        *   Pour CSV : Crée un tableau d'objets avec les bonnes colonnes, utilise `Papa.unparse` pour générer la chaîne CSV.
+        *   Pour TXT : Construit une chaîne de texte formatée avec des largeurs de colonnes fixes.
+    *   Utilise `downloadFile` (helper créant un lien `<a>` avec `Blob` et `URL.createObjectURL`) pour déclencher le téléchargement.
+*   **Import (`handleImportInventoryCSV`) :**
+    *   Utilise `Papa.parse` pour lire le fichier CSV sélectionné (`#import-csv-file`), avec l'option `header: true`.
+    *   Valide les en-têtes requis (`ref`, `quantity`).
+    *   Itère sur chaque ligne (`results.data`) :
+        *   Valide la référence, la quantité (nombre >= 0).
+        *   Valide l'URL datasheet si présente.
+        *   Valide le seuil si présent (nombre >= 0).
+        *   Recherche l'ID de catégorie correspondant au `category_name` (via `categoryMap` basé sur `categoriesCache`).
+        *   Valide le JSON des `attributes` si présent.
+        *   Collecte les erreurs de validation.
+    *   Si des erreurs de validation sont trouvées, les affiche dans `#import-feedback` et arrête.
+    *   Si aucune erreur, appelle `supabase.from('inventory').upsert()` avec le tableau des objets validés (`itemsToUpsert`).
+    *   Affiche un message de succès ou d'erreur de l'upsert.
+
+### 6.8 Interaction Supabase (Frontend)
+
+*   **`getStockInfoFromSupabase(ref)` :** Sélectionne un composant par sa référence (`ilike` + `.single()`). Gère l'erreur "non trouvé" (code `PGRST116`).
+*   **`updateStockInSupabase(ref, change)` :** Fonction critique qui :
+    1.  Lit la quantité actuelle.
+    2.  Vérifie si le stock deviendrait négatif (lance une erreur si c'est le cas).
+    3.  Met à jour la quantité via `supabase.from('inventory').update()`.
+    4.  Si succès, appelle `addLogEntry`.
+    5.  Retourne la nouvelle quantité ou relance une erreur.
+*   **`addLogEntry(...)` :** Insère une nouvelle ligne dans la table `logs`.
+*   **`getCategories()` :** Récupère toutes les catégories, utilise et met à jour le cache `categoriesCache`.
+*   Autres appels directs : `upsert` pour l'admin et l'import, `select` avec `range` et `count` pour l'inventaire et les logs, `delete` pour les catégories.
+
+### 6.9 Fonction Edge Supabase (`openai-equivalents`)
+
+*   **Objectif :** Servir de proxy sécurisé pour appeler l'API OpenRouter. La clé API OpenRouter n'est jamais exposée au frontend.
+*   **Déclencheur :** Appel HTTP `POST` depuis `script.js` (via `supabase.functions.invoke`).
+*   **Logique (`index.ts`) :**
+    1.  Gère la requête `OPTIONS` (pré-vol CORS) en renvoyant les en-têtes définis dans `_shared/cors.ts`.
+    2.  Récupère les secrets `OPENROUTER_API_KEY` et `APP_URL_REFERER` via `Deno.env.get()`. Renvoie une erreur 500 si manquants.
+    3.  Extrait la `reference` du corps JSON de la requête `POST`. Valide l'entrée.
+    4.  Construit le `userPrompt` spécifique pour demander des équivalents au format JSON.
+    5.  Appelle l'API OpenRouter (`https://openrouter.ai/api/v1/chat/completions`) via `fetch` :
+        *   Utilise la clé API dans l'en-tête `Authorization`.
+        *   Passe le `appUrlReferer` dans l'en-tête `HTTP-Referer` (requis par OpenRouter).
+        *   Spécifie le modèle (`mistralai/mistral-7b-instruct:free`).
+        *   Envoie le prompt dans `messages`.
+    6.  Vérifie si la réponse d'OpenRouter est OK (statut 2xx). Lance une erreur si non.
+    7.  Extrait le contenu de la réponse (`data.choices[0].message.content`).
+    8.  Tente de parser ce contenu comme un tableau JSON (en essayant d'isoler le `[...]` s'il y a du texte autour).
+    9.  Filtre, formate (MAJUSCULES) et limite les résultats valides à `MAX_EQUIVALENTS`.
+    10. Renvoie une réponse JSON `{"equivalents": [...]}` (peut être un tableau vide) avec un statut 200 au frontend.
+    11. Gère les erreurs potentielles (parsing, appel API, etc.) et renvoie une réponse JSON `{"error": "..."}` avec un statut 500.
+
+### 6.10 Afficheur 7 Segments
+
+*   **Élément HTML :** Div `#seven-segment-display` contenant 4 digits, chacun avec 7 segments (`.segment-a` à `.segment-g`).
+*   **Logique (`updateSevenSegmentDisplay`) :**
+    *   Mémorise la dernière valeur de tiroir valide dans `lastDisplayedDrawer`.
+    *   Ne s'active que si l'utilisateur est connecté (`currentUser` existe) et si `lastDisplayedDrawer` a une valeur.
+    *   Si actif, prend les 4 derniers caractères de `lastDisplayedDrawer` (complétés par des espaces si nécessaire).
+    *   Pour chaque caractère, utilise `segmentMap` pour déterminer quels segments allumer.
+    *   Ajoute/retire la classe `on` aux éléments `.segment` correspondants.
+    *   Retire la classe `display-off` de l'élément principal.
+    *   Si inactif (déconnecté ou pas de tiroir mémorisé), ajoute `display-off` et éteint tous les segments.
+*   **Déclencheurs :** Mis à jour lors de :
+    *   Clic sur une ligne d'inventaire (`handleInventoryRowClick`).
+    *   Clic sur un bouton "Prendre" dans le chat (via `responseOutputChat` listener qui appelle `getStockInfoFromSupabase`).
+    *   Vérification ou modification de stock réussie dans l'Admin (`addStockEventListeners`).
+    *   Connexion (`handleUserConnected`, pour réafficher la valeur mémorisée).
+    *   Déconnexion (`handleUserDisconnected`, pour l'éteindre).
+
+## 7. Configuration & Installation Locale
+
+Pour exécuter et développer l'application StockAV localement :
+
+1.  **Prérequis Logiciels :**
+    *   Un navigateur web moderne (Chrome, Firefox, Edge).
+    *   **Git :** Pour cloner le dépôt (si le code est sur GitHub). [git-scm.com](https://git-scm.com/)
+    *   **Supabase CLI :** Pour gérer les fonctions et secrets. (Installation via Scoop ou Chocolatey sous Windows, voir section Déploiement).
+    *   **Docker Desktop :** Requis par la Supabase CLI pour construire les fonctions. [docker.com](https://www.docker.com/products/docker-desktop/)
+    *   **(Optionnel mais recommandé) Python:** Pour lancer un serveur web local simple. (Intégré à macOS/Linux, installable sur Windows depuis [python.org](https://www.python.org/)). Ou utiliser `npx serve` (via Node.js) ou l'extension "Live Server" de VS Code.
+2.  **Projet Supabase :**
+    *   Assure-toi d'avoir un projet Supabase créé ([app.supabase.com](https://app.supabase.com/)).
+    *   Exécute le script SQL (ou utilise l'interface Supabase) pour créer les tables `categories`, `inventory`, `logs` avec les colonnes, clés, et relations définies dans le [Schéma de la Base de Données](#5-schéma-de-la-base-de-données-supabase).
+    *   **Désactiver RLS (pour le développement initial) :** Dans Supabase -> Authentication -> Policies, assure-toi que RLS est désactivé pour les tables `inventory`, `categories`, `logs`. **(IMPORTANT : Activer RLS pour la production !)**.
+    *   Configure l'authentification si nécessaire (mais le système de code technicien ne nécessite pas de config spéciale au-delà de la création des utilisateurs).
+3.  **Clé API OpenRouter :**
+    *   Crée un compte sur [OpenRouter.ai](https://openrouter.ai/).
+    *   Génère une clé API.
+4.  **Récupérer le Code :**
+    *   Clone le dépôt GitHub (si applicable) ou copie les fichiers `index.html`, `style.css`, `script.js` et le dossier `supabase` dans un répertoire local.
+5.  **Configurer les Secrets Supabase (via CLI) :**
+    *   Ouvre ton terminal (PowerShell admin recommandé sous Windows).
+    *   Navigue vers le dossier racine de ton projet.
+    *   Connecte-toi à la CLI : `supabase login` (suis les instructions).
+    *   Lie le projet : `supabase link --project-ref VOTRE_ID_PROJET` (remplace par l'ID de ton projet Supabase, entre le mot de passe DB).
+    *   Définis les secrets **OBLIGATOIRES** :
+        ```bash
+        supabase secrets set OPENROUTER_API_KEY=sk-or-v1-..... # TA VRAIE CLE OPENROUTER
+        supabase secrets set APP_URL_REFERER=StockAVAppLocalTest # Ou http://localhost:8000 si tu utilises ce port
+        ```
+    *   Vérifie : `supabase secrets list`
+6.  **Déployer la Fonction Edge :**
+    *   Assure-toi que Docker Desktop est lancé.
+    *   Dans le terminal (toujours dans le dossier racine), déploie :
+        ```bash
+        supabase functions deploy openai-equivalents --no-verify-jwt
+        ```
+    *   Vérifie le succès dans le terminal et sur le tableau de bord Supabase (Edge Functions -> `openai-equivalents` doit être active).
+7.  **Lancer le Serveur Web Local :**
+    *   Dans le terminal, navigue DANS le dossier contenant `index.html`.
+    *   Lance le serveur :
+        ```bash
+        python -m http.server 8000
+        ```
+        *(Laisse ce terminal ouvert).*
+8.  **Accéder à l'Application :**
+    *   Ouvre ton navigateur et va à l'adresse `http://localhost:8000`.
+
+L'application devrait maintenant être fonctionnelle localement.
+
+## 8. Déploiement
+
+### 8.1 Déploiement Fonction Edge Supabase
+
+Le déploiement de la fonction `openai-equivalents` a été réalisé via la Supabase CLI :
+
+1.  **Installation CLI:** Via Scoop (`scoop install supabase`).
+2.  **Connexion CLI:** `supabase login` (via code de vérification).
+3.  **Liaison Projet:** `supabase link --project-ref tjdergojgghzmopuuley`.
+4.  **Définition Secrets:**
+    *   `supabase secrets set OPENROUTER_API_KEY=sk-or-v1-.....`
+    *   `supabase secrets set APP_URL_REFERER=StockAVAppLocalTest`
+5.  **Déploiement:**
+    *   Docker Desktop doit être lancé.
+    *   `supabase functions deploy openai-equivalents --no-verify-jwt`
+
+La fonction est maintenant active sur le projet Supabase `tjdergojgghzmopuuley`.
+
+### 8.2 Déploiement Frontend (GitHub Pages)
+
+Le frontend (fichiers statiques `index.html`, `style.css`, `script.js`) a été déployé via GitHub Pages :
+
+1.  **Création Dépôt:** Dépôt public `stockav-app` créé sur GitHub (`https://github.com/Zine76/stockav-app.git`).
+2.  **Initialisation Git Local:** `git init`, `git add ...`, `git commit ...`, `git branch -M main`.
+3.  **Liaison Dépôt Distant:** `git remote add origin https://github.com/Zine76/stockav-app.git`.
+4.  **Push Initial:** `git push -u origin main` (en utilisant un Personal Access Token `ghp_...` avec scope `repo` comme mot de passe).
+5.  **Activation GitHub Pages:**
+    *   Dans les Settings du dépôt -> Pages.
+    *   Source: "Deploy from a branch".
+    *   Branch: `main`, Folder: `/ (root)`.
+    *   Sauvegardé.
+6.  **URL Publique:** Le site est maintenant accessible à l'adresse :
+    **`https://zine76.github.io/stockav-app/`**
+
+**Partage du Lien :** Le lien `https://zine76.github.io/stockav-app/` peut être partagé. La sécurité est gérée par l'authentification Supabase intégrée à l'application.
+
+## 9. Utilisation
+
+1.  **Accéder à l'Application :** Ouvrir l'URL `https://zine76.github.io/stockav-app/`.
+2.  **Connexion :** Entrer le code technicien et le mot de passe dans la zone en haut et cliquer sur "Connexion". L'état "Connecté: [CODE]" s'affiche.
+3.  **Recherche Composant (Chat) :**
+    *   Aller à l'onglet "Recherche Composant".
+    *   Entrer une référence (ex: "NE555P", "LM741", "BC547") ou une question ("stock 1N4148 ?").
+    *   Observer la réponse de StockAV (statut local, équivalents IA, statut local des équivalents, liens externes).
+    *   Si un composant est disponible et que vous êtes connecté, cliquer sur "Prendre l'original" ou "Prendre celui-ci".
+    *   Entrer la quantité souhaitée lorsque demandé (ou '0' pour annuler).
+4.  **Consulter le Stock :** Aller à l'onglet "Stock Actuel", utiliser les filtres et la pagination. Cliquer sur une ligne pour modifier la quantité via la modale (si connecté).
+5.  **Voir l'Historique :** Aller à l'onglet "Historique (LOG)" (si connecté).
+6.  **Administrer :** Aller à l'onglet "Administration" (si connecté) pour gérer les catégories ou le stock.
+7.  **Exporter/Importer :** Aller à l'onglet "Paramètres" (si connecté) pour exporter ou importer des données.
+8.  **Déconnexion :** Cliquer sur le bouton "Déconnexion".
+
+## 10. Considérations de Sécurité
+
+*   **Clé API OpenRouter :** La clé est stockée **de manière sécurisée** dans les secrets Supabase et n'est utilisée que par la fonction Edge côté serveur. Elle n'est **jamais** exposée dans le code frontend (`script.js`).
+*   **Authentification Git :** L'utilisation d'un **Personal Access Token (PAT)** avec le scope `repo` est requise pour pusher vers GitHub via HTTPS, remplaçant l'authentification par mot de passe (obsolète et moins sécurisée).
+*   **Authentification Application :** L'accès aux fonctionnalités sensibles est protégé par Supabase Auth. Seuls les utilisateurs enregistrés peuvent se connecter et modifier les données.
+*   **CORS :** La fonction Edge est configurée (`_shared/cors.ts`) pour accepter les requêtes venant de n'importe quelle origine (`*`). **Pour la production, il est fortement recommandé de remplacer `*` par l'URL exacte de l'application déployée** (`https://zine76.github.io`) pour restreindre les appels.
+*   **Row Level Security (RLS) :** Actuellement **DÉSACTIVÉE** sur les tables Supabase. C'est une **vulnérabilité majeure** car la clé `anon` de Supabase (présente dans `script.js`) permettrait potentiellement à un utilisateur malveillant (ayant la clé) de lire/modifier toutes les données s'il contourne l'UI. **IL EST CRUCIAL D'ACTIVER ET DE CONFIGURER DES POLITIQUES RLS** appropriées pour chaque table (`inventory`, `logs`, `categories`) en production. Par exemple, autoriser la lecture de l'inventaire à tous, mais l'écriture/modification uniquement aux utilisateurs authentifiés (`auth.role() = 'authenticated'`).
+*   **Validation Côté Serveur :** Bien qu'il y ait des validations dans le frontend (`script.js`), des validations supplémentaires devraient idéalement exister au niveau de la base de données (contraintes `CHECK`) ou via des fonctions/triggers pour assurer l'intégrité des données même si l'API est appelée directement.
+
+## 11. Code Source Complet
+
+### 11.1 `index.html`
+
+```html
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockAV</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Librairie Supabase JS v2 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Librairie PapaParse pour CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha512-dfX5uYVXzyU8+KHqj8bjo7UkOdg18PaOtpa48djpNbZHwExddghZ+ZmzWT06R5v6NSk3ZUfsH6FNEDepLx9hPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body> <!-- Classe 'user-logged-in' ajoutée/retirée par JS -->
+    <!-- Afficheur 7 Segments -->
+    <div id="seven-segment-display" class="display-off">
+        <div class="digit digit-1">
+            <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
+            <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
+            <div class="segment segment-g"></div>
+        </div>
+        <div class="digit digit-2">
+             <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
+             <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
+             <div class="segment segment-g"></div>
+        </div>
+        <div class="digit digit-3">
+             <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
+             <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
+             <div class="segment segment-g"></div>
+        </div>
+        <div class="digit digit-4">
+             <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
+             <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
+             <div class="segment segment-g"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <header class="app-header">
+            <h1>StockAV</h1>
+            <p class="app-subtitle">Gestion de stock des pièces éléctroniques</p>
+            <!-- Zone de Connexion / Infos Utilisateur -->
+            <div id="auth-section">
+                <div id="login-area" class="login-section">
+                    <label for="login-code">Code Technicien:</label>
+                    <input type="text" id="login-code" placeholder="Votre code unique">
+                    <label for="login-password">Mot de passe:</label>
+                    <input type="password" id="login-password" placeholder="Votre mot de passe">
+                    <button id="login-button">Connexion</button>
+                    <p id="login-error" class="error-message" style="display: none;"></p>
+                </div>
+                <div id="user-info-area" class="user-info" style="display: none;">
+                    Connecté: <strong id="user-display"></strong>
+                    <button id="logout-button" title="Se déconnecter">Déconnexion</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Principale -->
+        <nav id="main-navigation" class="view-navigation">
+            <button id="show-search-view" class="nav-button active">Recherche Composant</button>
+            <button id="show-inventory-view" class="nav-button">Stock Actuel</button>
+            <button id="show-log-view" class="nav-button protected" style="display: none;" disabled title="Connexion requise">Historique (LOG)</button>
+            <button id="show-admin-view" class="nav-button protected" style="display: none;" disabled title="Connexion requise">Administration</button>
+            <button id="show-settings-view" class="nav-button protected" style="display: none;" disabled title="Connexion requise">Paramètres</button>
+        </nav>
+
+        <!-- ================== VUE RECHERCHE UTILISATEUR (CHAT) ================== -->
+        <main id="search-view" class="view-section active-view">
+             <h2 class="view-title">Recherche de Composants</h2>
+             <div class="search-section">
+                 <div class="search-box">
+                     <input type="text" id="component-input" placeholder="Demandez à StockAV (ex: 'LM358N dispo ?')">
+                     <button id="search-button" title="Envoyer la requête">Envoyer</button>
+                 </div>
+             </div>
+             <div class="response-section">
+                 <h3 class="section-subtitle">Conversation avec StockAV</h3>
+                 <div id="response-output" class="output-box chat-box">
+                     <!-- Messages ajoutés par JS -->
+                 </div>
+                 <div id="loading-indicator" class="loading typing-indicator" style="display: none;">
+                     <i>StockAV réfléchit...</i>
+                 </div>
+             </div>
+        </main>
+
+        <!-- ===================== VUE INVENTAIRE ===================== -->
+        <main id="inventory-view" class="view-section" style="display: none;">
+            <h2 class="view-title">Stock Actuel</h2>
+            <div class="inventory-filters filter-box">
+                <div class="form-group">
+                    <label for="inventory-category-filter">Catégorie:</label>
+                    <select id="inventory-category-filter">
+                        <option value="all">Toutes</option>
+                        <!-- Options catégories ajoutées par JS -->
+                    </select>
+                </div>
+                <div class="form-group filter-search-group">
+                    <label for="inventory-search-filter">Recherche:</label>
+                    <input type="text" id="inventory-search-filter" placeholder="Réf, Desc, Fab...">
+                </div>
+                 <button id="apply-inventory-filter-button" title="Appliquer les filtres">Filtrer</button>
+            </div>
+
+            <div class="inventory-display data-display-box">
+                <table id="inventory-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Référence</th>
+                            <th>Description</th>
+                            <th>Catégorie</th>
+                            <th>Tiroir</th>
+                            <th>Fabricant</th>
+                            <th>Quantité</th>
+                            <th>Datasheet</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-table-body">
+                        <!-- Lignes générées par JS -->
+                    </tbody>
+                </table>
+                 <p id="inventory-no-results" class="no-results-message" style="display: none;">Aucun résultat.</p>
+            </div>
+
+            <div id="inventory-pagination" class="pagination-controls">
+                <button id="inventory-prev-page" disabled>« Préc.</button>
+                <span id="inventory-page-info">Page 1 / 1</span>
+                <button id="inventory-next-page" disabled>Suiv. »</button>
+            </div>
+        </main>
+
+         <!-- ===================== VUE HISTORIQUE (LOG) ===================== -->
+         <main id="log-view" class="view-section" style="display: none;">
+            <h2 class="view-title">Historique des Mouvements</h2>
+            <div class="log-display data-display-box">
+                 <table id="log-table" class="data-table">
+                     <thead>
+                         <tr>
+                             <th>Date & Heure</th>
+                             <th>Technicien</th>
+                             <th>Action</th>
+                             <th>Référence</th>
+                             <th>+/-</th>
+                             <th>Stock Final</th>
+                         </tr>
+                     </thead>
+                     <tbody id="log-table-body"></tbody>
+                 </table>
+                 <p id="log-no-results" class="no-results-message" style="display: none;">Historique vide.</p>
+            </div>
+            <div id="log-pagination" class="pagination-controls">
+                <button id="log-prev-page" disabled>« Préc.</button>
+                <span id="log-page-info">Page 1 / 1</span>
+                <button id="log-next-page" disabled>Suiv. »</button>
+            </div>
+         </main>
+
+        <!-- ===================== VUE ADMINISTRATION ===================== -->
+        <main id="admin-view" class="view-section" style="display: none;">
+             <h2 class="view-title">Administration</h2>
+             <!-- Section Gestion des Catégories -->
+            <section id="category-manager" class="admin-section">
+                <h3>Gestion des Catégories</h3>
+                 <div class="admin-columns">
+                    <div class="category-list-section">
+                        <h4>Catégories Existantes</h4>
+                        <ul id="category-list"></ul>
+                    </div>
+                    <div class="category-form-section">
+                        <h4 id="category-form-title">Ajouter une Catégorie</h4>
+                        <form id="category-form">
+                            <input type="hidden" id="category-id-edit" value="">
+                            <div class="form-group"><label for="category-name">Nom:</label><input type="text" id="category-name" required></div>
+                            <div class="form-group"><label for="category-attributes">Attributs (séparés par virgule):</label><textarea id="category-attributes" rows="3" placeholder="Ex: Type, Capacité, Tension"></textarea><small>Définit les champs spécifiques pour les composants.</small></div>
+                            <div class="form-actions"><button type="submit" id="save-category-button">Enregistrer</button><button type="button" id="cancel-edit-button" style="display: none;">Annuler</button></div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+            <!-- Section Gestion du Stock -->
+            <section id="stock-manager" class="admin-section">
+                <h3>Gestion du Stock</h3>
+                <form id="stock-form" onsubmit="return false;">
+                    <div class="form-group"><label for="component-ref-admin">Référence Composant:</label><input type="text" id="component-ref-admin" required placeholder="Ex: LM358N"><button type="button" id="check-stock-button">Vérifier Stock</button></div>
+                    <div id="component-info" style="display: none;">
+                        <div class="form-group inline-group">
+                            <label>Stock Actuel:</label><span id="current-quantity">N/A</span>
+                            <label for="quantity-change" style="margin-left: 20px;">Modifier (+/-):</label><input type="number" id="quantity-change" value="0">
+                            <button type="button" id="update-quantity-button">Mettre à jour</button>
+                        </div>
+                        <hr>
+                        <p><em>Ou modifiez les détails complets ci-dessous :</em></p>
+                    </div>
+                    <div id="component-details">
+                        <div class="form-group"><label for="component-category-select">Catégorie:</label><select id="component-category-select" required><option value="">-- Sélectionner --</option></select></div>
+                        <div class="form-group"><label for="component-desc">Description:</label><input type="text" id="component-desc" placeholder="Ex: Ampli Op Double"></div>
+                        <div class="form-group"><label for="component-mfg">Fabricant:</label><input type="text" id="component-mfg" placeholder="Ex: TI"></div>
+                        <div class="form-group"><label for="component-drawer-admin">Tiroir (optionnel):</label><input type="text" id="component-drawer-admin" placeholder="Ex: 01A5"></div>
+                        <div class="form-group"><label for="component-datasheet">Lien Datasheet (optionnel):</label><input type="url" id="component-datasheet" placeholder="https://..."></div>
+                        <div id="category-specific-attributes" class="form-group" style="display: none;"></div>
+                        <div class="form-group"><label for="component-initial-quantity">Quantité Totale:</label><input type="number" id="component-initial-quantity" value="0" min="0"></div>
+                        <div class="form-group">
+                            <label for="component-threshold">Seuil Critique (optionnel):</label>
+                            <input type="number" id="component-threshold" min="0" placeholder="Ex: 10">
+                            <small>Stock en dessous duquel l'indicateur devient orange/rouge.</small>
+                        </div>
+                        <div class="form-actions"><button type="submit" id="save-component-button">Enregistrer Composant</button></div>
+                    </div>
+                </form>
+            </section>
+             <div id="admin-feedback" class="feedback-area"></div>
+        </main> <!-- Fin de #admin-view -->
+
+        <!-- ===================== VUE PARAMÈTRES ===================== -->
+        <main id="settings-view" class="view-section" style="display: none;">
+            <h2 class="view-title">Paramètres & Gestion Données</h2>
+
+            <!-- Section Export -->
+            <section id="export-section" class="admin-section">
+                <h3>Exporter les Données</h3>
+                <div class="export-options">
+                    <div class="form-group">
+                        <label>Exporter le Stock Actuel :</label>
+                        <button id="export-inventory-csv-button" class="action-button">Exporter en CSV</button>
+                        <small>Télécharge un fichier CSV de tout l'inventaire.</small>
+                    </div>
+                    <hr>
+                    <div class="form-group">
+                        <label>Exporter l'Historique des Mouvements :</label>
+                        <button id="export-log-txt-button" class="action-button">Exporter en TXT</button>
+                        <small>Télécharge un fichier TXT de tous les logs.</small>
+                    </div>
+                </div>
+                <div id="export-feedback" class="feedback-area" style="margin-top: 15px;"></div>
+            </section>
+
+            <!-- Section Import -->
+            <section id="import-section" class="admin-section">
+                <h3>Importer du Stock (via CSV)</h3>
+                <div class="import-options">
+                    <div class="form-group">
+                        <label for="import-csv-file">Sélectionner un fichier CSV :</label>
+                        <input type="file" id="import-csv-file" accept=".csv">
+                        <small>Le fichier doit avoir les colonnes : <strong>ref</strong> (obligatoire), <strong>description</strong>, <strong>manufacturer</strong>, <strong>quantity</strong> (obligatoire, nombre >= 0), <strong>datasheet</strong>, <strong>drawer</strong>, <strong>category_name</strong> (nom exact de la catégorie existante, optionnel), <strong>critical_threshold</strong> (nombre >= 0, optionnel), <strong>attributes</strong> (JSON valide ou vide, optionnel, ex: {"Type":"Axial"}). La première ligne doit être l'en-tête.</small>
+                    </div>
+                    <button id="import-inventory-csv-button" class="action-button success">Lancer l'Importation</button>
+                </div>
+                <div id="import-feedback" class="feedback-area" style="margin-top: 15px;"></div>
+            </section>
+
+        </main> <!-- Fin de #settings-view -->
+
+
+        <footer class="app-footer">
+            <p>© 2025 StockAV - [Votre Nom/Organisation]</p>
+        </footer>
+    </div>
+
+    <!-- Fenêtre Modale pour Modifier Quantité (+/-) -->
+    <div id="modal-overlay"></div>
+    <div id="quantity-change-modal">
+        <h3>Modifier le Stock</h3>
+        <p>Composant: <strong id="modal-component-ref">N/A</strong></p>
+        <p>Quantité actuelle: <strong id="modal-current-quantity">N/A</strong></p>
+        <div class="quantity-adjuster">
+            <button id="modal-decrease-button" class="adjust-button" title="Diminuer la quantité">-</button>
+            <span id="modal-change-amount" class="change-amount-display">0</span>
+            <button id="modal-increase-button" class="adjust-button" title="Augmenter la quantité">+</button>
+        </div>
+        <div id="modal-feedback" class="modal-feedback"></div>
+        <div class="modal-actions">
+            <button id="modal-cancel-button">Annuler</button>
+            <button id="modal-confirm-button">Confirmer</button>
+        </div>
+    </div>
+
+    <!-- Charger le script JS APRES tout le HTML -->
+    <script src="script.js"></script>
+</body>
+</html>
+```
+
+### 11.2 `style.css`
+
+```css
+/* --- Polices et Réinitialisation --- */
+:root {
+    --primary-color: #0056b3; /* Bleu principal */
+    --primary-color-dark: #004085;
+    --secondary-color: #6c757d; /* Gris secondaire */
+    --light-gray: #f8f9fa;
+    --border-color: #dee2e6;
+    --text-color: #212529;
+    --text-muted: #6c757d;
+    --success-color: #155724; /* Vert succès */
+    --success-bg: #d4edda;
+    --error-color: #721c24; /* Rouge erreur */
+    --error-bg: #f8d7da;
+    --warning-color: #856404; /* Orange/Jaune pour Avertissement */
+    --warning-bg: #fff3cd;
+    --info-color: #004085; /* Bleu info */
+    --info-bg: #cce5ff;
+    --link-color: #0069d9;
+    --font-family-base: 'Inter', sans-serif;
+    --border-radius: 0.3rem; /* Rayon de bordure standard */
+    --box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --segment-on-color: #ff0000; /* Rouge vif pour segments ON */
+    --segment-off-color: #330000; /* Rouge très sombre pour segments OFF */
+    --segment-bg-color: #1a1a1a; /* Fond sombre pour l'afficheur */
+    /* Couleurs indicateur stock */
+    --stock-ok-color: #28a745;      /* Vert */
+    --stock-warning-color: #ffc107; /* Jaune/Orange */
+    --stock-critical-color: #dc3545;/* Rouge */
+    --stock-unknown-color: #adb5bd; /* Gris */
+}
+
+body {
+    font-family: var(--font-family-base);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    /* Padding haut pour laisser place à l'afficheur */
+    padding-top: 70px; /* Ajustez si nécessaire selon la hauteur finale de l'afficheur */
+    background-color: #eef2f7;
+    color: var(--text-color);
+    position: relative;
+    min-height: 100vh;
+}
+
+/* --- Conteneur Principal --- */
+.container {
+    max-width: 1100px;
+    margin: 0 auto 25px auto; /* Espace pour footer */
+    padding: 30px 35px;
+    background-color: #ffffff;
+    border-radius: var(--border-radius);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    position: relative; /* Pour contexte z-index */
+    z-index: 1;
+}
+
+/* --- En-tête --- */
+.app-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 20px;
+    margin-bottom: 25px;
+}
+.app-header h1 {
+    color: var(--primary-color);
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.8em;
+    width: 100%;
+    text-align: center;
+}
+.app-subtitle {
+    font-size: 1em;
+    color: var(--text-muted);
+    margin-top: 5px;
+    margin-bottom: 20px;
+    font-weight: 400;
+    width: 100%;
+    text-align: center;
+}
+#auth-section {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-top: 0;
+}
+
+/* --- Zone Connexion / Infos Utilisateur --- */
+.login-section {
+    background-color: transparent; padding: 0; border: none; margin: 0;
+    text-align: center; display: flex; align-items: center;
+    flex-wrap: wrap; justify-content: center; gap: 10px;
+}
+.login-section label { font-weight: 500; font-size: 0.9em; margin-bottom: 0; }
+.login-section input[type="text"],
+.login-section input[type="password"] {
+    padding: 7px 10px; border: 1px solid #ced4da; border-radius: var(--border-radius);
+    min-width: 150px; font-size: 0.9em; vertical-align: middle;
+}
+.login-section button {
+    padding: 7px 15px; background-color: var(--primary-color); color: white;
+    border: none; border-radius: var(--border-radius); cursor: pointer;
+    font-weight: 500; font-size: 0.9em; transition: background-color 0.2s ease; vertical-align: middle;
+}
+.login-section button:hover { background-color: var(--primary-color-dark); }
+.error-message {
+    color: var(--error-color); font-size: 0.85em; margin-top: 5px;
+    text-align: center; width: 100%;
+}
+.user-info {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9em; color: var(--text-muted); gap: 10px;
+}
+.user-info strong { color: var(--primary-color); font-weight: 600; }
+.user-info button {
+    padding: 4px 8px; font-size: 0.8em; background-color: var(--secondary-color); color: white; border: none;
+    border-radius: var(--border-radius); cursor: pointer; transition: background-color 0.2s ease;
+}
+.user-info button:hover { background-color: #5a6268; }
+
+/* --- Navigation Principale (Onglets) --- */
+.view-navigation {
+    margin-top: 0;
+    margin-bottom: 30px;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+}
+.nav-button {
+    padding: 12px 22px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background-color: transparent;
+    margin: 0 3px -1px 3px;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    font-size: 1em;
+    font-weight: 500;
+    color: var(--secondary-color);
+    position: relative;
+    bottom: -1px;
+    outline: none;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, display 0s;
+}
+.nav-button:hover:not(.active):not(:disabled) {
+    color: var(--primary-color);
+    background-color: #e9ecef;
+}
+.nav-button.active {
+    background-color: #ffffff;
+    border-color: var(--border-color);
+    border-bottom: 1px solid #ffffff;
+    font-weight: 600;
+    color: var(--primary-color);
+    z-index: 1;
+}
+.nav-button.protected:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    color: var(--text-muted);
+}
+.nav-button.protected:disabled:hover {
+    background-color: transparent;
+}
+
+/* --- Styles Communs Sections/Vues --- */
+.view-section {
+    padding: 10px 5px 15px 5px;
+    border-top: none;
+    display: none;
+}
+.view-section.active-view {
+    display: block;
+}
+.view-title {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 35px;
+    color: var(--text-color);
+    font-size: 1.6em;
+    font-weight: 600;
+}
+.section-subtitle {
+    margin-bottom: 15px;
+    color: var(--text-color);
+    font-size: 1.2em;
+    font-weight: 600;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
+}
+
+/* --- Styles Vue Recherche (Chat) --- */
+.search-section { margin-bottom: 25px; }
+.search-box { display: flex; align-items: center; box-shadow: var(--box-shadow); border-radius: var(--border-radius); }
+#component-input {
+    flex-grow: 1; padding: 12px 15px; border: 1px solid var(--border-color); border-right: none;
+    border-radius: var(--border-radius) 0 0 var(--border-radius); font-size: 1em; outline: none; transition: border-color 0.2s ease; height: auto;
+    box-sizing: border-box; position: relative; z-index: 1;
+}
+#component-input:focus { border-color: var(--primary-color); z-index: 2; }
+#search-button {
+    padding: 12px 25px; border: 1px solid var(--primary-color); background-color: var(--primary-color); color: white;
+    border-radius: 0 var(--border-radius) var(--border-radius) 0; cursor: pointer; font-size: 1em; font-weight: 500;
+    transition: background-color 0.2s ease, border-color 0.2s ease; height: auto; box-sizing: border-box; margin-left: -1px; position: relative; z-index: 1; outline: none;
+}
+#search-button:hover { background-color: var(--primary-color-dark); border-color: var(--primary-color-dark); z-index: 2;}
+.response-section { margin-top: 30px; }
+.chat-box {
+    background-color: var(--light-gray); border: 1px solid var(--border-color); border-radius: var(--border-radius);
+    padding: 20px; min-height: 300px; max-height: 500px; overflow-y: auto;
+    display: flex;
+    flex-direction: column-reverse; /* Messages récents en bas visuellement */
+    gap: 15px;
+}
+.message {
+    padding: 10px 16px; border-radius: 18px; max-width: 85%; line-height: 1.5; box-shadow: var(--box-shadow);
+    word-wrap: break-word; font-size: 0.95em;
+}
+.message.user {
+    background: linear-gradient(to right, #0062cc, #0056b3); color: white; border-radius: 18px 18px 5px 18px; align-self: flex-end; margin-left: auto;
+}
+.message.ai {
+    background-color: #ffffff; color: var(--text-color); border: 1px solid #e9ecef;
+    border-radius: 18px 18px 18px 5px; align-self: flex-start; margin-right: auto;
+    line-height: 1.7; /* Augmenté pour les indicateurs/boutons */
+    padding-bottom: 15px; /* Espace pour les boutons/liens en bas */
+}
+.message.ai a { color: var(--link-color); font-weight: 500; text-decoration: none; }
+.message.ai a:hover { text-decoration: underline; }
+.message.ai strong { font-weight: 600; color: var(--primary-color-dark);}
+.typing-indicator { text-align: left; margin-bottom: 10px; height: 20px; padding-left: 10px; }
+.typing-indicator i { color: var(--text-muted); font-style: italic; font-size: 0.9em; }
+
+/* Éléments spécifiques au Chat IA */
+.message.ai .equivalent-item {
+    padding: 8px 0 8px 15px; /* Indentation pour les équivalents */
+    margin-left: 5px;
+    border-left: 2px solid #e0e0e0; /* Ligne verticale pour séparer */
+    font-size: 0.95em;
+    line-height: 1.6;
+}
+.message.ai .equivalent-item:not(:last-child) { margin-bottom: 5px; }
+.message.ai .equivalent-item small { color: var(--text-muted); font-style: italic; font-size: 0.9em; }
+
+/* Boutons "Prendre" dans le chat */
+.message.ai button.take-button {
+    background-color: var(--success-color); /* Vert */
+    color: white;
+    padding: 5px 10px; /* Plus petit */
+    font-size: 0.85em;
+    margin-left: 8px;
+    vertical-align: middle;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+.message.ai button.take-button:hover { background-color: #126522; }
+
+/* Liens externes (inline et block) */
+.external-links-inline { font-size: 0.85em; margin-left: 5px; }
+.external-links-inline a { text-decoration: none; font-weight: 500; margin: 0 2px; padding: 1px 3px; border-radius: 3px; }
+.external-links-inline a.external-link-inline { color: #fff; background-color: var(--secondary-color); }
+.external-links-inline a.external-link-inline.aliexpress { background-color: #ff4747; }
+.external-links-inline a:hover { opacity: 0.8; }
+
+.external-links-block { margin-top: 15px; padding-top: 10px; border-top: 1px dashed var(--border-color); font-size: 0.9em; }
+.external-links-block a.external-link { display: inline-block; margin-top: 5px; margin-right: 8px; padding: 5px 10px; background-color: #ffc107; color: #333; text-decoration: none; border-radius: var(--border-radius); font-size: 0.85em; font-weight: 500; transition: background-color 0.2s ease; }
+.external-links-block a.external-link.aliexpress { background-color: #ff4747; color: white; }
+.external-links-block a.external-link:hover { background-color: #e0a800; color: #000; }
+.external-links-block a.external-link.aliexpress:hover { background-color: #e02020; }
+
+/* --- Styles Vues Inventaire & Log --- */
+.filter-box {
+    display: flex; gap: 15px; align-items: flex-end; margin-bottom: 25px;
+    padding: 20px; background-color: var(--light-gray); border-radius: var(--border-radius);
+    flex-wrap: wrap; border: 1px solid var(--border-color);
+}
+.filter-box .form-group { margin-bottom: 0; flex-grow: 1; }
+.filter-box label { margin-bottom: 6px; display: block; font-size: 0.9em; font-weight: 500; color: var(--text-muted);}
+.filter-box select, .filter-box input[type="text"] {
+    padding: 9px 12px; width: 100%;
+    border: 1px solid #ced4da; border-radius: var(--border-radius); font-size: 0.9em; box-sizing: border-box;
+}
+.filter-box .filter-search-group { flex-basis: 300px; }
+.filter-box button {
+    padding: 9px 18px; background-color: var(--secondary-color); color: white;
+    border: none; border-radius: var(--border-radius); cursor: pointer; height: 38px;
+    font-weight: 500; transition: background-color 0.2s ease; flex-shrink: 0; line-height: 1.5;
+}
+.filter-box button:hover { background-color: #5a6268; }
+
+.data-display-box { margin-top: 25px; overflow-x: auto; border: 1px solid var(--border-color); border-radius: var(--border-radius); }
+.data-table { width: 100%; border-collapse: collapse; margin: 0; font-size: 0.9em; }
+.data-table th, .data-table td { border: none; border-bottom: 1px solid var(--border-color); padding: 10px 14px; text-align: left; vertical-align: middle; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table thead { background-color: #e9ecef; border-bottom: 2px solid var(--border-color); }
+.data-table th { font-weight: 600; white-space: nowrap; color: var(--text-muted); text-transform: uppercase; font-size: 0.85em; }
+.data-table tbody tr:nth-child(even) { background-color: var(--light-gray); }
+.data-table tbody tr:hover { background-color: #e2e6ea; }
+.data-table tbody tr.inventory-item-row { cursor: pointer; }
+.data-table td a { color: var(--link-color); text-decoration: none; font-weight: 500;}
+.data-table td a:hover { text-decoration: underline; }
+#inventory-table th:nth-child(4), #inventory-table td:nth-child(4) { text-align: center; font-weight: 500; }
+/* Masquer/Afficher Tiroir basé sur connexion */
+#inventory-table th:nth-child(4), #inventory-table td:nth-child(4) { display: none; }
+body.user-logged-in #inventory-table th:nth-child(4), body.user-logged-in #inventory-table td:nth-child(4) { display: table-cell; }
+#inventory-table td:nth-last-child(1) { text-align: center; } /* Datasheet */
+#inventory-table td:nth-last-child(2) { text-align: center; font-weight: 600; font-size: 0.95em; } /* Quantité */
+#inventory-table td:first-child { position: relative; padding-left: 30px; } /* Réf avec espace indicateur */
+#log-table td:nth-child(1) { white-space: nowrap; font-size: 0.9em; color: var(--text-muted); } /* Date */
+#log-table td:nth-child(5), #log-table td:nth-child(6) { text-align: center; font-weight: 600; } /* +/- et Stock Final */
+#log-table td:nth-child(3).positive, #log-table td:nth-child(5).positive { color: var(--success-color); } /* Vert pour Ajout / + */
+#log-table td:nth-child(3).negative, #log-table td:nth-child(5).negative { color: var(--error-color); } /* Rouge pour Retrait / - */
+.no-results-message { text-align: center; margin: 30px 0; color: var(--text-muted); font-style: italic; }
+
+/* --- Indicateur de Seuil (Tableau Inventaire) --- */
+.stock-indicator {
+    display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+    background-color: var(--stock-unknown-color); position: absolute; left: 10px; top: 50%;
+    transform: translateY(-50%); box-shadow: 0 0 3px rgba(0,0,0,0.2);
+}
+.stock-indicator.level-ok { background-color: var(--stock-ok-color); }
+.stock-indicator.level-warning { background-color: var(--stock-warning-color); }
+.stock-indicator.level-critical { background-color: var(--stock-critical-color); }
+
+/* --- Indicateur de Seuil (Chat) --- */
+.stock-indicator-chat {
+    display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+    background-color: var(--stock-unknown-color); margin-right: 6px;
+    vertical-align: middle; box-shadow: 0 0 2px rgba(0,0,0,0.15);
+}
+.stock-indicator-chat.level-ok { background-color: var(--stock-ok-color); }
+.stock-indicator-chat.level-warning { background-color: var(--stock-warning-color); }
+.stock-indicator-chat.level-critical { background-color: var(--stock-critical-color); }
+
+/* --- Contrôles de Pagination --- */
+.pagination-controls { margin-top: 30px; text-align: center; }
+.pagination-controls button { padding: 7px 14px; margin: 0 6px; background-color: var(--secondary-color); color: white; border: none; border-radius: var(--border-radius); cursor: pointer; font-weight: 500; transition: background-color 0.2s ease; font-size: 0.9em; }
+.pagination-controls button:hover:not(:disabled) { background-color: #5a6268; }
+.pagination-controls button:disabled { background-color: #adb5bd; cursor: not-allowed; opacity: 0.7; }
+.pagination-controls span { display: inline-block; margin: 0 12px; font-size: 0.95em; color: var(--text-color); font-weight: 500;}
+
+/* --- Styles Vue Admin & Paramètres --- */
+.admin-section { /* Classe commune pour Admin et Settings */
+    border: 1px solid var(--border-color); border-radius: var(--border-radius);
+    padding: 30px; background-color: #ffffff; margin-bottom: 30px; box-shadow: var(--box-shadow);
+}
+.admin-section h3 {
+    margin-top: 0; color: var(--primary-color-dark); border-bottom: 1px solid #eee;
+    padding-bottom: 12px; margin-bottom: 25px; font-size: 1.4em; font-weight: 600;
+}
+.admin-section h4 { color: var(--text-color); margin-bottom: 18px; font-size: 1.15em; font-weight: 600; }
+.admin-columns { display: flex; gap: 35px; flex-wrap: wrap; }
+.category-list-section, .category-form-section { flex: 1; min-width: 320px; }
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-muted); font-size: 0.9em; }
+.form-group input[type="text"], .form-group input[type="number"], .form-group input[type="url"],
+.form-group input[type="file"], .form-group select, .form-group textarea {
+    width: 100%; padding: 10px 14px; border: 1px solid #ced4da; border-radius: var(--border-radius);
+    box-sizing: border-box; font-size: 0.95em; transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+}
+.form-group input[type="file"] {
+    padding: 8px;
+    background-color: var(--light-gray);
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color: var(--primary-color); outline: 0; box-shadow: 0 0 0 0.2rem rgba(0, 86, 179, 0.25);
+}
+.form-group textarea { resize: vertical; min-height: 70px; }
+.form-group small { display: block; margin-top: 6px; font-size: 0.8em; color: var(--text-muted); }
+.form-actions { margin-top: 30px; text-align: right; }
+
+/* Boutons dans Admin & Settings */
+.admin-section button, .admin-section button[type="button"], .admin-section button[type="submit"],
+button.action-button {
+    padding: 10px 16px; border: none; border-radius: var(--border-radius); cursor: pointer;
+    font-size: 0.9em; font-weight: 500; transition: background-color 0.2s ease, box-shadow 0.2s ease; margin-left: 8px;
+}
+/* Couleurs spécifiques */
+#save-category-button, #update-quantity-button, #save-component-button,
+button.action-button.success { /* Vert pour save/update/import */
+    background-color: var(--success-color); color: white;
+}
+#save-category-button:hover, #update-quantity-button:hover, #save-component-button:hover,
+button.action-button.success:hover {
+    background-color: #126522; box-shadow: var(--box-shadow);
+}
+#check-stock-button, #cancel-edit-button { /* Bleu clair pour vérifier/annuler */
+    background-color: #0dcaf0; color: #000;
+}
+#check-stock-button:hover, #cancel-edit-button:hover {
+    background-color: #0baccc; box-shadow: var(--box-shadow);
+}
+/* Bouton par défaut (Export) */
+button.action-button {
+    background-color: var(--primary-color); color: white;
+    margin-left: 0;
+    margin-right: 8px;
+}
+button.action-button:hover {
+    background-color: var(--primary-color-dark); box-shadow: var(--box-shadow);
+}
+/* Boutons Supprimer/Modifier Catégorie */
+button.delete-cat { background-color: #dc3545; color: white; padding: 5px 10px; font-size: 0.8em; }
+button.delete-cat:hover { background-color: #bb2d3b; box-shadow: var(--box-shadow);}
+button.edit-cat { background-color: #6c757d; color: white; padding: 5px 10px; font-size: 0.8em; }
+button.edit-cat:hover { background-color: #5a6268; box-shadow: var(--box-shadow);}
+/* Liste Catégories */
+#category-list { list-style: none; padding: 0; max-height: 350px; overflow-y: auto; border: 1px solid var(--border-color); padding: 15px; background: #ffffff; margin:0; border-radius: var(--border-radius); }
+#category-list li { padding: 10px 8px; border-bottom: 1px dashed #eee; display: flex; justify-content: space-between; align-items: center; font-size:0.95em; }
+#category-list li:last-child { border-bottom: none; }
+#category-list li button { margin-left: 10px; }
+#category-list li span:first-child { font-weight: 500; color: var(--text-color); }
+#category-list li span:last-child { flex-shrink: 0; }
+/* Zone de Feedback */
+.feedback-area {
+    margin-top: 20px; padding: 15px; border-radius: var(--border-radius); display: none;
+    text-align: center; font-size: 0.95em; border: 1px solid transparent; font-weight: 500;
+    white-space: normal; /* Défaut */
+}
+.feedback-area.success { background-color: var(--success-bg); color: var(--success-color); border-color: #badbcc; display: block; }
+.feedback-area.error { background-color: var(--error-bg); color: var(--error-color); border-color: #f5c2c7; display: block; white-space: pre-wrap; text-align: left;} /* Spécifique Import */
+.feedback-area.warning { background-color: var(--warning-bg); color: var(--warning-color); border-color: #ffeeba; display: block; }
+.feedback-area.info { background-color: var(--info-bg); color: var(--info-color); border-color: #b8daff; display: block; }
+/* Formulaire Admin Stock */
+#component-info { border: 1px dashed var(--border-color); padding: 15px 20px; margin: 20px 0; background-color: var(--light-gray); border-radius: var(--border-radius); }
+.inline-group label, .inline-group span, .inline-group input, .inline-group button { display: inline-block; vertical-align: middle; margin-right: 8px; margin-bottom: 0; }
+.inline-group label { font-weight: 600; width: auto;}
+#current-quantity { font-weight: 700; font-size: 1.1em; color: var(--primary-color); }
+#quantity-change { width: 75px; padding: 8px;}
+#category-specific-attributes { border: 1px dashed #a2a2a2; padding: 20px 25px; margin-top: 25px; background-color: #f0f5f9; border-radius: var(--border-radius); }
+#category-specific-attributes h4{ margin-top: 0; color:#2c3e50; margin-bottom: 18px; font-size: 1.05em; font-weight: 600;}
+#category-specific-attributes .form-group{ margin-bottom: 15px; }
+#category-specific-attributes label { font-weight: 500; font-size: 0.88em; }
+hr { border: 0; height: 1px; background-color: #e9ecef; margin: 30px 0; }
+
+/* --- MODALE DE QUANTITÉ (+/-) --- */
+#modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s ease-in-out; }
+#modal-overlay.active { display: block; opacity: 1; }
+#quantity-change-modal {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border-radius: var(--border-radius);
+    padding: 30px 35px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 1001; min-width: 350px; max-width: 90%;
+    display: none; opacity: 0; transition: opacity 0.3s ease-in-out, top 0.3s ease-in-out;
+}
+#quantity-change-modal.active { display: block; opacity: 1; }
+#quantity-change-modal h3 { margin-top: 0; margin-bottom: 20px; color: var(--primary-color-dark); font-size: 1.3em; text-align: center; }
+#quantity-change-modal p { margin-bottom: 15px; font-size: 0.95em; text-align: center; }
+#quantity-change-modal p strong { font-weight: 600; }
+.quantity-adjuster { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 25px 0; }
+.adjust-button {
+    padding: 0; width: 40px; height: 40px; font-size: 1.8em; font-weight: bold; line-height: 1; border: 1px solid var(--border-color); border-radius: 50%; background-color: var(--light-gray); color: var(--text-color);
+    cursor: pointer; transition: background-color 0.2s ease, box-shadow 0.2s ease; display: flex; align-items: center; justify-content: center;
+}
+.adjust-button:hover:not(:disabled) { background-color: #e2e6ea; box-shadow: var(--box-shadow); }
+.adjust-button:active:not(:disabled) { background-color: #d6dbe0; }
+.adjust-button:disabled { background-color: #e9ecef; color: #adb5bd; cursor: not-allowed; opacity: 0.7; }
+.change-amount-display { font-size: 1.8em; font-weight: 600; color: var(--primary-color); min-width: 60px; text-align: center; padding: 5px 10px; background-color: #ffffff; border-radius: var(--border-radius); border: 1px solid var(--border-color); }
+#quantity-change-modal .modal-actions { margin-top: 25px; text-align: center; display: flex; justify-content: center; gap: 15px;}
+#quantity-change-modal button { padding: 10px 22px; border-radius: var(--border-radius); cursor: pointer; font-size: 1em; font-weight: 500; transition: background-color 0.2s ease; border: none; }
+#modal-confirm-button { background-color: var(--primary-color); color: white; }
+#modal-confirm-button:hover:not(:disabled) { background-color: var(--primary-color-dark); }
+#modal-cancel-button { background-color: var(--secondary-color); color: white; }
+#modal-cancel-button:hover { background-color: #5a6268; }
+#modal-confirm-button:disabled { background-color: #adb5bd; cursor: not-allowed; }
+.modal-feedback { margin-top: 20px; padding: 10px; border-radius: var(--border-radius); font-size: 0.9em; text-align: center; display: none; border: 1px solid transparent; }
+.modal-feedback.success { background-color: var(--success-bg); color: var(--success-color); border-color: #badbcc; display: block; }
+.modal-feedback.error { background-color: var(--error-bg); color: var(--error-color); border-color: #f5c2c7; display: block; }
+.modal-feedback.info { background-color: var(--info-bg); color: var(--info-color); border-color: #b8daff; display: block; }
+
+/* --- AFFICHEUR 7 SEGMENTS --- */
+#seven-segment-display {
+    position: fixed;
+    top: 10px;
+    left: 15px; /* Alignement à gauche */
+    background-color: var(--segment-bg-color);
+    padding: 8px 12px;
+    border-radius: 5px;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.5) inset, 0 1px 4px rgba(0,0,0,0.3);
+    display: flex;
+    gap: 6px;
+    z-index: 50;
+    transition: opacity 0.3s ease;
+}
+#seven-segment-display.display-off { opacity: 0.6; }
+#seven-segment-display.display-off .segment { background-color: var(--segment-off-color) !important; opacity: 0.4; box-shadow: none;}
+.digit { width: 20px; height: 38px; position: relative; }
+.segment { background-color: var(--segment-off-color); position: absolute; border-radius: 1px; transition: background-color 0.1s ease; }
+.segment.on { background-color: var(--segment-on-color); box-shadow: 0 0 4px var(--segment-on-color); }
+.segment-a { top: 0; left: 2px; width: 16px; height: 3px; }
+.segment-b { top: 2px; right: 0; width: 3px; height: 17px; }
+.segment-c { top: 19px; right: 0; width: 3px; height: 17px; }
+.segment-d { bottom: 0; left: 2px; width: 16px; height: 3px; }
+.segment-e { top: 19px; left: 0; width: 3px; height: 17px; }
+.segment-f { top: 2px; left: 0; width: 3px; height: 17px; }
+.segment-g { top: 17.5px; left: 2px; width: 16px; height: 3px; } /* Ajusté pour centrer */
+.digit.off .segment { background-color: var(--segment-off-color) !important; opacity: 0.4; box-shadow: none;}
+
+/* --- Styles Footer --- */
+.app-footer {
+    text-align: center; margin-top: 40px; padding-top: 25px;
+    border-top: 1px solid var(--border-color); font-size: 0.88em; color: var(--text-muted);
+}
+
+/* --- Responsive --- */
+@media (max-width: 992px) {
+    body { padding-top: 65px; }
+    .container { max-width: 90%; margin: 0 auto 15px auto; padding: 20px;}
+    #auth-section { gap: 10px; }
+    .login-section input[type="text"], .login-section input[type="password"] { min-width: 130px;}
+    .admin-columns { flex-direction: column; gap: 25px; }
+    #seven-segment-display { top: 8px; left: 10px; transform: scale(0.95); }
+}
+@media (max-width: 768px) {
+    body { padding-top: 60px; }
+    .nav-button { padding: 10px 15px; font-size: 0.9em;}
+    .filter-box { flex-direction: column; align-items: stretch; gap: 12px; }
+    .filter-box select, .filter-box input[type="text"] { width: 100%; }
+    .message { max-width: 90%; }
+    .view-title { font-size: 1.4em; margin-bottom: 25px;}
+    .pagination-controls button { padding: 6px 10px; }
+    .pagination-controls span { font-size: 0.9em;}
+    .data-table th:nth-child(3), .data-table td:nth-child(3), /* Catégorie */
+    .data-table th:nth-child(5), .data-table td:nth-child(5)  /* Fabricant */ { display: none; }
+    #log-table th:nth-child(2), #log-table td:nth-child(2) /* Technicien */ { display: none; }
+    th, td { padding: 8px 8px; }
+    #inventory-table td:first-child { padding-left: 25px; }
+    .stock-indicator { width: 10px; height: 10px; left: 8px; }
+    #seven-segment-display { top: 5px; left: 5px; transform: scale(0.9); }
+    #quantity-change-modal { min-width: 300px; padding: 20px 25px; }
+    .adjust-button { width: 35px; height: 35px; font-size: 1.5em; }
+    .change-amount-display { font-size: 1.5em; min-width: 50px;}
+}
+@media (max-width: 480px) {
+    body { padding-top: 0; } /* Plus de padding-top, header pas fixe */
+    .nav-button { font-size: 0.85em; padding: 8px 10px; }
+    th, td { padding: 6px 6px; font-size: 0.85em;}
+    #inventory-table th:nth-child(2), #inventory-table td:nth-child(2), /* Description */
+    #log-table th:nth-child(6), #log-table td:nth-child(6) /* Stock final */ { display: none; }
+    .message.ai button.take-button { font-size: 0.8em; padding: 4px 8px; }
+    .message.ai a.external-link { font-size: 0.80em; padding: 4px 8px; }
+    .user-info { flex-direction: column; gap: 5px;}
+    .user-info button { margin-left: 0;}
+    #seven-segment-display { display: none; /* Caché sur très petits écrans */ }
+    #quantity-change-modal { min-width: 90%; max-width: 280px; padding: 15px 20px; }
+    #quantity-change-modal h3 { font-size: 1.1em; }
+    .adjust-button { width: 30px; height: 30px; font-size: 1.3em;}
+    .change-amount-display { font-size: 1.3em; min-width: 40px;}
+    #quantity-change-modal .modal-actions button { font-size: 0.9em; padding: 8px 18px;}
+    #inventory-table td:first-child { padding-left: 22px; }
+    .stock-indicator { width: 8px; height: 8px; left: 6px; }
+}
+```
+
+### 11.3 `script.js`
+
+```javascript
+// ----- DÉBUT DU FICHIER script.js -----
+// Assure que le code s'exécute après le chargement du DOM
+document.addEventListener('DOMContentLoaded', () => {
+    "use strict"; // Active le mode strict pour détecter plus d'erreurs
+
+    // --- Configuration et Variables Globales ---
+    let currentUser = null;
+    let currentUserCode = null;
+    const ITEMS_PER_PAGE = 15;
+    let isInitialAuthCheckComplete = false;
+    let activeSession = null;
+    let lastDisplayedDrawer = null; // Mémorise le dernier tiroir affiché
+    let categoriesCache = [];
+
+    // --- Configuration Supabase ---
+    const SUPABASE_URL = 'https://tjdergojgghzmopuuley.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqZGVyZ29qZ2doem1vcHV1bGV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4MTU0OTUsImV4cCI6MjA1OTM5MTQ5NX0.XejQYEPYoCrgYOwW4T9g2VcmohCdLLndDdwpSYXAwPA';
+    const FAKE_EMAIL_DOMAIN = '@stockav.local';
+
+    let supabase = null;
+
+    // --- Initialisation des Clients et Vérifications ---
+    try {
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !FAKE_EMAIL_DOMAIN) {
+            throw new Error("Configuration Supabase (URL, Clé Anon, Domaine Factice) manquante ou incomplète dans script.js !");
+        }
+        if (window.supabase && typeof window.supabase.createClient === 'function') {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            console.log("Client Supabase initialisé.");
+        } else {
+            throw new Error("La librairie Supabase (supabase-js@2) n'est pas chargée correctement avant ce script.");
+        }
+        if (typeof Papa === 'undefined') {
+            console.warn("Librairie PapaParse non chargée. L'import CSV ne fonctionnera pas.");
+        }
+    } catch (error) {
+        console.error("Erreur critique lors de l'initialisation:", error);
+        const body = document.querySelector('body');
+        if (body) {
+             body.innerHTML = `<div style="padding: 20px; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: .25rem; font-family: sans-serif;"><h2>Erreur Critique</h2><p>L'application n'a pas pu démarrer correctement.</p><p><strong>Détails :</strong> ${error.message}</p><p>Veuillez vérifier la console du navigateur (F12) pour plus d'informations et vous assurer que les librairies externes sont correctement chargées.</p></div>`;
+        }
+        return;
+    }
+
+    // --- Récupération des Éléments DOM ---
+    const loginArea = document.getElementById('login-area');
+    const loginCodeInput = document.getElementById('login-code');
+    const loginPasswordInput = document.getElementById('login-password');
+    const loginButton = document.getElementById('login-button');
+    const loginError = document.getElementById('login-error');
+    const userInfoArea = document.getElementById('user-info-area');
+    const userDisplay = document.getElementById('user-display');
+    const logoutButton = document.getElementById('logout-button');
+    const mainNavigation = document.getElementById('main-navigation');
+    const searchTabButton = document.getElementById('show-search-view');
+    const inventoryTabButton = document.getElementById('show-inventory-view');
+    const logTabButton = document.getElementById('show-log-view');
+    const adminTabButton = document.getElementById('show-admin-view');
+    const settingsTabButton = document.getElementById('show-settings-view');
+    const searchView = document.getElementById('search-view');
+    const inventoryView = document.getElementById('inventory-view');
+    const logView = document.getElementById('log-view');
+    const adminView = document.getElementById('admin-view');
+    const settingsView = document.getElementById('settings-view');
+    const viewSections = document.querySelectorAll('.view-section');
+    const protectedButtons = document.querySelectorAll('.nav-button.protected');
+    const quantityChangeModal = document.getElementById('quantity-change-modal');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalRefSpan = document.getElementById('modal-component-ref');
+    const modalQtySpan = document.getElementById('modal-current-quantity');
+    const modalDecreaseButton = document.getElementById('modal-decrease-button');
+    const modalIncreaseButton = document.getElementById('modal-increase-button');
+    const modalChangeAmountDisplay = document.getElementById('modal-change-amount');
+    const modalConfirmButton = document.getElementById('modal-confirm-button');
+    const modalCancelButton = document.getElementById('modal-cancel-button');
+    const modalFeedback = document.getElementById('modal-feedback');
+    const sevenSegmentDisplay = document.getElementById('seven-segment-display');
+    const segmentDigits = [
+        sevenSegmentDisplay?.querySelector('.digit-1'), sevenSegmentDisplay?.querySelector('.digit-2'),
+        sevenSegmentDisplay?.querySelector('.digit-3'), sevenSegmentDisplay?.querySelector('.digit-4')
+    ];
+    let modalCurrentRef = null;
+    let modalInitialQuantity = 0;
+    let currentModalChange = 0;
+    let currentInventoryPage = 1;
+    let currentLogPage = 1;
+    let currentInventoryFilters = { category: 'all', search: '' };
+    const inventoryTableBody = document.getElementById('inventory-table-body');
+    const inventoryCategoryFilter = document.getElementById('inventory-category-filter');
+    const inventorySearchFilter = document.getElementById('inventory-search-filter');
+    const applyInventoryFilterButton = document.getElementById('apply-inventory-filter-button');
+    const inventoryPrevPageButton = document.getElementById('inventory-prev-page');
+    const inventoryNextPageButton = document.getElementById('inventory-next-page');
+    const inventoryPageInfo = document.getElementById('inventory-page-info');
+    const inventoryNoResults = document.getElementById('inventory-no-results');
+    const logTableBody = document.getElementById('log-table-body');
+    const logPrevPageButton = document.getElementById('log-prev-page');
+    const logNextPageButton = document.getElementById('log-next-page');
+    const logPageInfo = document.getElementById('log-page-info');
+    const logNoResults = document.getElementById('log-no-results');
+    const categoryList = document.getElementById('category-list');
+    const categoryForm = document.getElementById('category-form');
+    const categoryNameInput = document.getElementById('category-name');
+    const categoryAttributesInput = document.getElementById('category-attributes');
+    const categoryIdEditInput = document.getElementById('category-id-edit');
+    const cancelEditButton = document.getElementById('cancel-edit-button');
+    const categoryFormTitle = document.getElementById('category-form-title');
+    const adminFeedbackDiv = document.getElementById('admin-feedback');
+    const stockForm = document.getElementById('stock-form');
+    const componentRefAdminInput = document.getElementById('component-ref-admin');
+    const checkStockButton = document.getElementById('check-stock-button');
+    const componentInfoDiv = document.getElementById('component-info');
+    const currentQuantitySpan = document.getElementById('current-quantity');
+    const updateQuantityButton = document.getElementById('update-quantity-button');
+    const quantityChangeInput = document.getElementById('quantity-change');
+    const componentCategorySelectAdmin = document.getElementById('component-category-select');
+    const specificAttributesDiv = document.getElementById('category-specific-attributes');
+    const componentDescInput = document.getElementById('component-desc');
+    const componentMfgInput = document.getElementById('component-mfg');
+    const componentDatasheetInput = document.getElementById('component-datasheet');
+    const componentInitialQuantityInput = document.getElementById('component-initial-quantity');
+    const componentDrawerAdminInput = document.getElementById('component-drawer-admin');
+    const componentThresholdInput = document.getElementById('component-threshold');
+    const saveComponentButton = document.getElementById('save-component-button');
+    const searchButtonChat = document.getElementById('search-button');
+    const componentInputChat = document.getElementById('component-input');
+    const responseOutputChat = document.getElementById('response-output');
+    const loadingIndicatorChat = document.getElementById('loading-indicator');
+    const exportInventoryCsvButton = document.getElementById('export-inventory-csv-button');
+    const exportLogTxtButton = document.getElementById('export-log-txt-button');
+    const exportFeedbackDiv = document.getElementById('export-feedback');
+    const importCsvFileInput = document.getElementById('import-csv-file');
+    const importInventoryCsvButton = document.getElementById('import-inventory-csv-button');
+    const importFeedbackDiv = document.getElementById('import-feedback');
+
+    // --- État et Historique du Chat ---
+    let chatHistory = [];
+    let conversationState = {
+        awaitingEquivalentChoice: false,
+        awaitingQuantityConfirmation: false,
+        originalRefChecked: null,
+        potentialEquivalents: [],
+        chosenRefForStockCheck: null,
+        availableQuantity: 0,
+        criticalThreshold: null
+    };
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    // --- Helper: Statut du Stock ---
+    function getStockStatus(quantity, threshold) {
+        if (quantity === undefined || quantity === null || isNaN(quantity)) return 'unknown';
+        quantity = Number(quantity);
+        threshold = (threshold === undefined || threshold === null || isNaN(threshold)) ? -1 : Number(threshold);
+        if (quantity <= 0) return 'critical';
+        if (threshold >= 0 && quantity <= threshold) return 'warning';
+        return 'ok';
+    }
+
+    // --- Helper: Créer le HTML pour l'indicateur de stock (chat) ---
+    function createStockIndicatorHTML(quantity, threshold) {
+        const status = getStockStatus(quantity, threshold);
+        const statusText = status.toUpperCase();
+        const thresholdText = (threshold === undefined || threshold === null || threshold < 0) ? 'N/A' : threshold;
+        const qtyText = (quantity === undefined || quantity === null) ? 'N/A' : quantity;
+        const title = `Stock: ${statusText} (Qté: ${qtyText}, Seuil: ${thresholdText})`;
+        return `<span class="stock-indicator-chat level-${status}" title="${title}"></span>`;
+    }
+
+    // --- Authentification ---
+    async function handleLogin() {
+        if (!supabase) { loginError.textContent = "Erreur: Client Supabase non initialisé."; loginError.style.display = 'block'; return; }
+        const code = loginCodeInput.value.trim().toLowerCase();
+        const password = loginPasswordInput.value.trim();
+        loginError.style.display = 'none';
+        if (!code || !password) { loginError.textContent = "Code et mot de passe requis."; loginError.style.display = 'block'; return; }
+        const email = code + FAKE_EMAIL_DOMAIN;
+        loginButton.disabled = true; loginError.textContent = "Connexion..."; loginError.style.display = 'block'; loginError.style.color = 'var(--text-muted)';
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: password });
+            if (error) {
+                console.error("Erreur connexion Supabase:", error.message);
+                loginError.textContent = (error.message.includes("Invalid login credentials")) ? "Code ou mot de passe incorrect." : "Erreur connexion.";
+                loginError.style.color = 'var(--error-color)'; loginError.style.display = 'block'; loginCodeInput.focus();
+            } else {
+                console.log("Demande de connexion réussie pour:", data.user?.email);
+                loginError.style.display = 'none'; loginCodeInput.value = ''; loginPasswordInput.value = '';
+            }
+        } catch (err) {
+             console.error("Erreur JS connexion:", err);
+             loginError.textContent = "Erreur inattendue lors de la connexion.";
+             loginError.style.color = 'var(--error-color)'; loginError.style.display = 'block';
+        } finally {
+             loginButton.disabled = false;
+        }
+    }
+    async function handleLogout() {
+        if (!supabase) { console.error("Client Supabase non initialisé lors du logout."); alert("Erreur: Client non initialisé."); return; }
+        console.log("Tentative de déconnexion...");
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error("Erreur déconnexion Supabase:", error.message, error);
+            alert(`Erreur déconnexion: ${error.message}. Vérifiez la console.`);
+        } else {
+            console.log("Déconnexion Supabase réussie.");
+             if (searchView?.classList.contains('active-view') && chatHistory.length > 0) {
+                 displayWelcomeMessage();
+             }
+             lastDisplayedDrawer = null;
+             updateSevenSegmentDisplay(null);
+        }
+    }
+
+    // --- Gestionnaire d'état d'authentification ---
+    async function setupAuthListener() {
+        if (!supabase) { console.error("Listener Auth impossible: Supabase non initialisé."); return; }
+        try {
+            console.log("Vérification session initiale (getSession)...");
+            const { data: { session } } = await supabase.auth.getSession();
+            activeSession = session;
+            isInitialAuthCheckComplete = true;
+            if (session) {
+                console.log("Session initiale trouvée (getSession).");
+                handleUserConnected(session.user, true);
+            } else {
+                console.log("Pas de session initiale trouvée (getSession).");
+                handleUserDisconnected(true);
+            }
+        } catch (error) {
+            console.error("Erreur critique getSession initiale:", error);
+            isInitialAuthCheckComplete = true;
+            handleUserDisconnected(true);
+        }
+        supabase.auth.onAuthStateChange((event, session) => {
+            console.log(`Auth Event: ${event}`, session ? `Session pour ${session.user.email}` : "Pas de session");
+            activeSession = session;
+            if (!isInitialAuthCheckComplete) {
+                console.log("Auth event reçu avant fin vérif initiale, attente...");
+                return;
+            }
+            switch (event) {
+                case 'SIGNED_IN':
+                    handleUserConnected(session.user, false);
+                    break;
+                case 'SIGNED_OUT':
+                    handleUserDisconnected(false);
+                    break;
+                case 'TOKEN_REFRESHED':
+                    console.log("Token rafraîchi.");
+                    if (session && currentUser && session.user.id !== currentUser.id) {
+                        handleUserConnected(session.user, false);
+                    } else if (!session && currentUser) {
+                        handleUserDisconnected(false);
+                    }
+                    break;
+                case 'USER_UPDATED':
+                    console.log("Utilisateur mis à jour:", session?.user);
+                    if (session) handleUserConnected(session.user, false);
+                    break;
+                case 'PASSWORD_RECOVERY':
+                    console.log("Événement de récupération de mot de passe.");
+                    break;
+                default:
+                    console.log("Événement Auth non géré ou redondant:", event);
+            }
+        });
+    }
+
+    // --- Mise à jour UI/État pour Authentification ---
+    function handleUserConnected(user, isInitialLoad) {
+        const previousUserId = currentUser?.id;
+        currentUser = user;
+        currentUserCode = currentUser.email.split('@')[0];
+        console.log(`Utilisateur connecté: ${currentUserCode} (ID: ${currentUser.id})`);
+
+        document.body.classList.add('user-logged-in');
+        if(loginArea) loginArea.style.display = 'none';
+        if(userInfoArea) userInfoArea.style.display = 'flex';
+        if(userDisplay) userDisplay.textContent = currentUserCode.toUpperCase();
+        if(loginError) loginError.style.display = 'none';
+        protectedButtons.forEach(btn => { btn.style.display = 'inline-block'; btn.disabled = false; btn.title = ''; });
+
+        if (categoriesCache.length === 0) {
+             getCategories();
+        }
+
+        if (!isInitialLoad && user.id !== previousUserId) {
+            console.log("Nouvelle connexion détectée.");
+            invalidateCategoriesCache();
+            if (searchView?.classList.contains('active-view')) {
+                 displayWelcomeMessage();
+            }
+        } else if (isInitialLoad) {
+            const activeView = document.querySelector('.view-section.active-view');
+             if (activeView?.id === 'inventory-view') { populateInventoryFilters(); displayInventory(); }
+             else if (activeView?.id === 'log-view') { displayLog(); }
+             else if (activeView?.id === 'admin-view') { loadAdminData(); }
+             else if (activeView?.id === 'settings-view') { loadSettingsData(); }
+             else if (searchView?.classList.contains('active-view') && chatHistory.length === 0) {
+                 displayWelcomeMessage();
+             }
+             else if (!activeView) {
+                 setActiveView(searchView, searchTabButton);
+             }
+        }
+        updateSevenSegmentDisplay();
+    }
+    function handleUserDisconnected(isInitialLoad) {
+        console.log("Utilisateur déconnecté ou session absente.");
+        currentUser = null;
+        currentUserCode = null;
+        document.body.classList.remove('user-logged-in');
+        if(userInfoArea) userInfoArea.style.display = 'none';
+        if(loginArea) loginArea.style.display = 'block';
+        protectedButtons.forEach(btn => { btn.style.display = 'none'; btn.disabled = true; btn.title = 'Connexion requise'; });
+
+        hideQuantityModal();
+        lastDisplayedDrawer = null;
+        updateSevenSegmentDisplay(null);
+
+        if (!isInitialLoad) {
+            invalidateCategoriesCache();
+            clearProtectedViewData();
+            if (searchView?.classList.contains('active-view') && chatHistory.length > 0) {
+                displayWelcomeMessage();
+            }
+        }
+
+        const activeView = document.querySelector('.view-section.active-view');
+        if (activeView && (activeView.id === 'log-view' || activeView.id === 'admin-view' || activeView.id === 'settings-view')) {
+            console.log("Redirection vers vue recherche car déconnecté d'une vue protégée.");
+            setActiveView(searchView, searchTabButton);
+        } else if (isInitialLoad && !activeView) {
+             setActiveView(searchView, searchTabButton);
+        }
+    }
+    function clearProtectedViewData() {
+        if(inventoryTableBody) inventoryTableBody.innerHTML = '';
+        if(logTableBody) logTableBody.innerHTML = '';
+        if(inventoryPageInfo) inventoryPageInfo.textContent = 'Page - / -';
+        if(inventoryPrevPageButton) inventoryPrevPageButton.disabled = true;
+        if(inventoryNextPageButton) inventoryNextPageButton.disabled = true;
+        if(logPageInfo) logPageInfo.textContent = 'Page - / -';
+        if(logPrevPageButton) logPrevPageButton.disabled = true;
+        if(logNextPageButton) logNextPageButton.disabled = true;
+        if (categoryList) categoryList.innerHTML = '';
+        resetCategoryForm();
+        resetStockForm();
+        if (componentInfoDiv) componentInfoDiv.style.display = 'none';
+        if (adminFeedbackDiv) { adminFeedbackDiv.style.display = 'none'; adminFeedbackDiv.textContent = '';}
+        if(exportFeedbackDiv) { exportFeedbackDiv.style.display = 'none'; exportFeedbackDiv.textContent = '';}
+        if(importFeedbackDiv) { importFeedbackDiv.style.display = 'none'; importFeedbackDiv.textContent = '';}
+        if(importCsvFileInput) importCsvFileInput.value = '';
+        console.log("Données des vues protégées effacées.");
+    }
+
+    // --- Navigation ---
+    function setActiveView(viewToShow, buttonToActivate){
+        if (!viewToShow) { viewToShow = searchView; buttonToActivate = searchTabButton; console.warn("setActiveView: Vue invalide, retour à la recherche.");}
+        if (viewToShow.classList.contains('active-view')) { console.log(`Vue ${viewToShow.id} déjà active.`); return; }
+
+        const isProtected = viewToShow.id === 'log-view' || viewToShow.id === 'admin-view' || viewToShow.id === 'settings-view';
+        if (isProtected && !currentUser) {
+            console.warn(`Accès refusé: ${viewToShow.id} nécessite connexion.`);
+            if (loginError) {
+                loginError.textContent="Connexion requise pour accéder à cette section.";
+                loginError.style.color = 'var(--error-color)';
+                loginError.style.display='block';
+            }
+            loginCodeInput?.focus();
+            return;
+        }
+
+        viewSections.forEach(section => { section.style.display = 'none'; section.classList.remove('active-view'); });
+        document.querySelectorAll('.nav-button').forEach(button => { button.classList.remove('active'); });
+
+        viewToShow.style.display = 'block';
+        viewToShow.classList.add('active-view');
+        if (buttonToActivate) {
+            buttonToActivate.classList.add('active');
+        } else {
+            const realButtonId = `show-${viewToShow.id}`;
+            const matchingButton = document.getElementById(realButtonId);
+            if (matchingButton) matchingButton.classList.add('active');
+        }
+        console.log(`Activation vue: ${viewToShow.id}`);
+
+        if (viewToShow === searchView && chatHistory.length === 0) { displayWelcomeMessage(); }
+        else if (viewToShow === inventoryView) { populateInventoryFilters(); displayInventory(); }
+        else if (viewToShow === logView && currentUser) { displayLog(); }
+        else if (viewToShow === adminView && currentUser) { loadAdminData(); }
+        else if (viewToShow === settingsView && currentUser) { loadSettingsData(); }
+    }
+
+    // --- LOGIQUE INVENTAIRE ---
+    async function populateInventoryFilters() {
+        if (!inventoryCategoryFilter) return;
+        const currentVal = inventoryCategoryFilter.value;
+        inventoryCategoryFilter.innerHTML = '<option value="all">Toutes</option>';
+        try {
+            const categories = await getCategories();
+            if (categories && categories.length > 0) {
+                categories.forEach(cat => { const option = document.createElement('option'); option.value = cat.id; option.textContent = cat.name; inventoryCategoryFilter.appendChild(option); });
+                if (inventoryCategoryFilter.querySelector(`option[value="${currentVal}"]`)) {
+                    inventoryCategoryFilter.value = currentVal;
+                } else {
+                    inventoryCategoryFilter.value = 'all';
+                }
+            } else {
+                console.warn("Aucune catégorie trouvée pour remplir les filtres.");
+            }
+        } catch (error) {
+            console.error("Erreur lors du remplissage des filtres de catégorie:", error);
+        }
+    }
+    async function displayInventory(page = currentInventoryPage) {
+        currentInventoryPage = page;
+        if (!inventoryTableBody || !supabase) { console.warn("displayInventory: Prérequis manquants (table body ou supabase)"); return; }
+
+        inventoryTableBody.innerHTML = '<tr class="loading-row"><td colspan="7" style="text-align:center; padding: 20px; color: var(--text-muted);"><i>Chargement de l\'inventaire...</i></td></tr>';
+        if(inventoryNoResults) inventoryNoResults.style.display = 'none';
+        if(inventoryPrevPageButton) inventoryPrevPageButton.disabled = true;
+        if(inventoryNextPageButton) inventoryNextPageButton.disabled = true;
+        if(inventoryPageInfo) inventoryPageInfo.textContent = 'Chargement...';
+
+        const itemsPerPage = ITEMS_PER_PAGE;
+        const startIndex = (currentInventoryPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage - 1;
+
+        try {
+            let query = supabase
+                .from('inventory')
+                .select('*, categories ( name ), critical_threshold', { count: 'exact' });
+
+            const searchValue = inventorySearchFilter?.value.trim() || '';
+            const categoryValue = inventoryCategoryFilter?.value || 'all';
+
+            if (searchValue) {
+                const searchColumns = ['ref', 'description', 'manufacturer'];
+                if (currentUser) {
+                    searchColumns.push('drawer');
+                }
+                query = query.or(searchColumns.map(col => `${col}.ilike.%${searchValue}%`).join(','));
+            }
+            if (categoryValue !== 'all') {
+                query = query.eq('category_id', categoryValue);
+            }
+
+            query = query.order('ref', { ascending: true }).range(startIndex, endIndex);
+
+            const { data, error, count } = await query;
+
+            inventoryTableBody.innerHTML = '';
+            if (error) {
+                throw new Error(`Erreur Supabase lors de la lecture de l'inventaire: ${error.message}`);
+            }
+
+            const totalItems = count || 0;
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+            if (totalItems === 0) {
+                if(inventoryNoResults) {
+                    inventoryNoResults.textContent = `Aucun composant trouvé${searchValue || categoryValue !== 'all' ? ' pour ces filtres' : ''}.`;
+                    inventoryNoResults.style.display = 'block';
+                }
+                if(inventoryPageInfo) inventoryPageInfo.textContent = 'Page 0 / 0';
+            } else {
+                if(inventoryNoResults) inventoryNoResults.style.display = 'none';
+                data.forEach(item => {
+                    const row = inventoryTableBody.insertRow();
+                    row.dataset.ref = item.ref;
+                    row.classList.add('inventory-item-row');
+
+                    const refCell = row.insertCell();
+                    const status = getStockStatus(item.quantity, item.critical_threshold);
+                    const indicatorSpan = document.createElement('span');
+                    indicatorSpan.classList.add('stock-indicator', `level-${status}`);
+                    indicatorSpan.title = `Stock: ${status.toUpperCase()} (Qté: ${item.quantity}, Seuil: ${item.critical_threshold ?? 'N/A'})`;
+                    refCell.appendChild(indicatorSpan);
+                    refCell.appendChild(document.createTextNode(item.ref));
+
+                    row.insertCell().textContent = item.description || '-';
+                    row.insertCell().textContent = item.categories?.name ?? 'N/A';
+                    row.insertCell().textContent = item.drawer || '-';
+                    row.insertCell().textContent = item.manufacturer || '-';
+
+                    const qtyCell = row.insertCell();
+                    qtyCell.textContent = item.quantity;
+                    qtyCell.style.textAlign = 'center';
+
+                    const dsCell = row.insertCell();
+                    if (item.datasheet) {
+                        try {
+                            new URL(item.datasheet);
+                            const link = document.createElement('a');
+                            link.href = item.datasheet;
+                            link.textContent = 'Voir';
+                            link.target = '_blank';
+                            link.rel = 'noopener noreferrer';
+                            dsCell.appendChild(link);
+                        } catch (_) {
+                            dsCell.textContent = '-';
+                        }
+                    } else {
+                        dsCell.textContent = '-';
+                    }
+                    dsCell.style.textAlign = 'center';
+                });
+
+                 currentInventoryPage = Math.max(1, Math.min(currentInventoryPage, totalPages || 1));
+                 if(inventoryPageInfo) inventoryPageInfo.textContent = `Page ${currentInventoryPage} / ${totalPages || 1}`;
+                 if(inventoryPrevPageButton) inventoryPrevPageButton.disabled = currentInventoryPage === 1;
+                 if(inventoryNextPageButton) inventoryNextPageButton.disabled = currentInventoryPage >= totalPages;
+            }
+        } catch (err) {
+            console.error("Erreur lors de l'affichage de l'inventaire:", err);
+            inventoryTableBody.innerHTML = `<tr><td colspan="7" class="error-message" style="color: var(--error-color); text-align: center;">Erreur lors du chargement: ${err.message}</td></tr>`;
+            if(inventoryPageInfo) inventoryPageInfo.textContent = 'Erreur';
+        }
+    }
+
+    // --- LOGIQUE HISTORIQUE ---
+    async function displayLog(page = currentLogPage) {
+        if (!currentUser) { console.warn("displayLog: Utilisateur non connecté."); return; }
+        currentLogPage = page;
+        if (!logTableBody || !supabase) { console.warn("displayLog: Prérequis manquants (logTableBody ou supabase)"); return; }
+
+        logTableBody.innerHTML = '<tr class="loading-row"><td colspan="6" style="text-align:center; color: var(--text-muted);"><i>Chargement de l\'historique...</i></td></tr>';
+        if(logNoResults) logNoResults.style.display = 'none';
+        if(logPrevPageButton) logPrevPageButton.disabled = true;
+        if(logNextPageButton) logNextPageButton.disabled = true;
+        if(logPageInfo) logPageInfo.textContent = 'Chargement...';
+
+        const itemsPerPage = ITEMS_PER_PAGE;
+        const startIndex = (currentLogPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage - 1;
+
+        try {
+            const { data, error, count } = await supabase
+                .from('logs')
+                .select('*', { count: 'exact' })
+                .order('created_at', { ascending: false })
+                .range(startIndex, endIndex);
+
+            logTableBody.innerHTML = '';
+            if (error) {
+                throw new Error(`Erreur Supabase lors de la lecture des logs: ${error.message}`);
+            }
+
+            const totalItems = count || 0;
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+            if (totalItems === 0) {
+                if(logNoResults) {
+                    logNoResults.textContent = "L'historique des mouvements est vide.";
+                    logNoResults.style.display = 'block';
+                }
+                if(logPageInfo) logPageInfo.textContent = 'Page 0 / 0';
+            } else {
+                if(logNoResults) logNoResults.style.display = 'none';
+                data.forEach(entry => {
+                    const row = logTableBody.insertRow();
+                    row.insertCell().textContent = formatLogTimestamp(new Date(entry.created_at));
+                    row.insertCell().textContent = entry.user_code || 'N/A';
+                    const actionCell = row.insertCell();
+                    actionCell.textContent = entry.quantity_change > 0 ? 'Ajout' : 'Retrait';
+                    actionCell.classList.add(entry.quantity_change > 0 ? 'positive' : 'negative');
+                    row.insertCell().textContent = entry.component_ref;
+                    const changeCell = row.insertCell();
+                    changeCell.textContent = entry.quantity_change > 0 ? `+${entry.quantity_change}` : `${entry.quantity_change}`;
+                    changeCell.classList.add(entry.quantity_change > 0 ? 'positive' : 'negative');
+                    row.insertCell().textContent = entry.quantity_after;
+                });
+
+                 currentLogPage = Math.max(1, Math.min(currentLogPage, totalPages || 1));
+                 if(logPageInfo) logPageInfo.textContent = `Page ${currentLogPage} / ${totalPages || 1}`;
+                 if(logPrevPageButton) logPrevPageButton.disabled = currentLogPage === 1;
+                 if(logNextPageButton) logNextPageButton.disabled = currentLogPage >= totalPages;
+            }
+        } catch (err) {
+            console.error("Erreur lors de l'affichage de l'historique:", err);
+            logTableBody.innerHTML = `<tr><td colspan="6" class="error-message" style="color: var(--error-color); text-align: center;">Erreur lors du chargement: ${err.message}</td></tr>`;
+            if(logPageInfo) logPageInfo.textContent = 'Erreur';
+        }
+    }
+    function formatLogTimestamp(date) {
+        try {
+            return date.toLocaleString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        } catch(e) { return date.toISOString(); }
+    }
+    async function addLogEntry(itemRef, change, newQuantity) {
+        if (!currentUser || !currentUserCode || !supabase) { console.warn("Enregistrement log annulé: non connecté ou Supabase indispo."); return; }
+        const logData = { user_id: currentUser.id, user_code: currentUserCode.toUpperCase(), component_ref: itemRef, quantity_change: change, quantity_after: newQuantity };
+        console.log("Tentative écriture log Supabase:", logData);
+        try {
+            const { error: logError } = await supabase.from('logs').insert(logData);
+            if (logError) { console.error("Erreur écriture log Supabase:", logError); }
+            else { console.log("Log enregistré."); if (logView?.classList.contains('active-view')) { displayLog(1); } }
+        } catch (err) { console.error("Erreur JS enregistrement log:", err); }
+    }
+
+    // --- VUE ADMIN ---
+    async function getCategories() {
+        if (categoriesCache.length > 0) { return categoriesCache; }
+        if (!supabase) { console.warn("getCategories: Supabase non disponible."); return []; }
+        console.log("Fetching categories from Supabase...");
+        try {
+            const { data, error } = await supabase.from('categories').select('id, name, attributes').order('name', { ascending: true });
+            if (error) { throw new Error(`Erreur DB: ${error.message}`); }
+            categoriesCache = data || [];
+            console.log(`Categories fetched/cached: ${categoriesCache.length} items.`);
+            return categoriesCache;
+        } catch (err) {
+            console.error("Erreur lecture catégories:", err);
+            if (adminView?.classList.contains('active-view')) { showAdminFeedback(`Erreur chargement catégories: ${err.message}`, 'error'); }
+            return [];
+        }
+    }
+    function invalidateCategoriesCache() { categoriesCache = []; console.log("Cache catégories invalidé."); }
+    async function loadAdminData() {
+        if (!currentUser) return;
+        const catManager = document.getElementById('category-manager');
+        const stockManager = document.getElementById('stock-manager');
+        if (catManager) catManager.style.display = 'block';
+        if (stockManager) stockManager.style.display = 'block';
+        if (adminFeedbackDiv) { adminFeedbackDiv.style.display = 'none'; adminFeedbackDiv.textContent = ''; }
+        resetStockForm();
+        try { await loadCategoriesAdmin(); }
+        catch (error) { console.error("Erreur chargement données admin:", error); showAdminFeedback(`Erreur chargement initial: ${error.message}`, 'error'); }
+    }
+    async function loadCategoriesAdmin() {
+        if (categoryList) categoryList.innerHTML = '<li><i>Chargement catégories...</i></li>';
+        if (componentCategorySelectAdmin) componentCategorySelectAdmin.innerHTML = '<option value="">Chargement...</option>';
+        const categories = await getCategories();
+        if (categoryList) categoryList.innerHTML = '';
+        if (componentCategorySelectAdmin) componentCategorySelectAdmin.innerHTML = '<option value="">-- Sélectionner catégorie --</option>';
+        if (categories && categories.length > 0) {
+            categories.forEach(cat => {
+                if (categoryList) {
+                    const li = document.createElement('li'); li.dataset.categoryId = cat.id;
+                    li.innerHTML = `<span>${cat.name}</span><span class="category-actions"><button class="edit-cat" title="Modifier ${cat.name}">Modifier</button> <button class="delete-cat" title="Supprimer ${cat.name}">Suppr.</button></span>`;
+                    categoryList.appendChild(li);
+                }
+                if (componentCategorySelectAdmin) {
+                    const option = document.createElement('option'); option.value = cat.id; option.textContent = cat.name; option.dataset.attributes = cat.attributes || ''; componentCategorySelectAdmin.appendChild(option);
+                }
+            });
+        } else {
+            if (categoryList) categoryList.innerHTML = '<li>Aucune catégorie définie.</li>';
+            if (componentCategorySelectAdmin) componentCategorySelectAdmin.innerHTML = '<option value="">Aucune catégorie</option>';
+        }
+    }
+    function addCategoryEventListeners() {
+        categoryList?.addEventListener('click', async (event) => {
+            const targetButton = event.target.closest('button'); if (!targetButton) return;
+            const listItem = targetButton.closest('li[data-category-id]'); if (!listItem) return;
+            const categoryId = listItem.dataset.categoryId; if (!categoryId || !supabase) return;
+            const category = categoriesCache.find(c => c.id === categoryId); if (!category) { console.error(`Cat ID ${categoryId} non trouvée cache.`); showAdminFeedback('Erreur interne: Cat non trouvée.', 'error'); return; }
+            if (targetButton.classList.contains('edit-cat')) {
+                if(categoryIdEditInput) categoryIdEditInput.value = category.id; if(categoryNameInput) categoryNameInput.value = category.name; if(categoryAttributesInput) categoryAttributesInput.value = category.attributes || ''; if(categoryFormTitle) categoryFormTitle.textContent = `Modifier catégorie: ${category.name}`; if(cancelEditButton) cancelEditButton.style.display = 'inline-block'; categoryNameInput?.focus(); showAdminFeedback(`Modif "${category.name}" en cours...`, 'info');
+            } else if (targetButton.classList.contains('delete-cat')) {
+                if (!confirm(`Supprimer catégorie "${category.name}" ?`)) return;
+                showAdminFeedback(`Suppression "${category.name}"...`, "info"); targetButton.disabled = true; targetButton.closest('.category-actions')?.querySelectorAll('button').forEach(b => b.disabled = true);
+                try {
+                    const { error } = await supabase.from('categories').delete().eq('id', categoryId);
+                    if (error) { if (error.code === '23503') { throw new Error(`Impossible supprimer: Cat "${category.name}" est utilisée par des composants.`); } throw new Error(`DB Error: ${error.message}`); }
+                    showAdminFeedback(`Cat "${category.name}" supprimée.`, 'success'); invalidateCategoriesCache(); await loadCategoriesAdmin(); if (categoryIdEditInput?.value === categoryId) { resetCategoryForm(); } await populateInventoryFilters();
+                } catch (err) { console.error("Erreur suppression catégorie:", err); showAdminFeedback(`Erreur suppression: ${err.message}`, 'error'); const stillExistingLi = categoryList.querySelector(`li[data-category-id="${categoryId}"]`); if (stillExistingLi) { stillExistingLi.querySelectorAll('button').forEach(b => b.disabled = false); } }
+            }
+        });
+        cancelEditButton?.addEventListener('click', resetCategoryForm);
+        categoryForm?.addEventListener('submit', async (event) => {
+            event.preventDefault(); if (!supabase) return;
+            const catName = categoryNameInput?.value.trim(); const catAttributes = categoryAttributesInput?.value.trim(); const editingId = categoryIdEditInput?.value;
+            if (!catName) { showAdminFeedback("Nom catégorie obligatoire.", 'error'); categoryNameInput?.focus(); return; }
+            const categoryData = { name: catName, attributes: catAttributes === '' ? null : catAttributes };
+            showAdminFeedback("Enregistrement catégorie...", "info"); const saveBtn = document.getElementById('save-category-button'); if(saveBtn) saveBtn.disabled = true; if(cancelEditButton) cancelEditButton.disabled = true;
+            try {
+                let response;
+                if (editingId) { response = await supabase.from('categories').update(categoryData).eq('id', editingId).select().single(); }
+                else { response = await supabase.from('categories').insert(categoryData).select().single(); }
+                const { data, error } = response;
+                if (error) { if (error.code === '23505') { showAdminFeedback(`Erreur: Nom catégorie "${catName}" existe déjà.`, 'error'); categoryNameInput?.focus(); } else { throw new Error(`DB Error: ${error.message}`); } }
+                else { showAdminFeedback(`Cat "${data.name}" ${editingId ? 'modifiée' : 'ajoutée'}.`, 'success'); invalidateCategoriesCache(); await loadCategoriesAdmin(); resetCategoryForm(); await populateInventoryFilters(); }
+            } catch (err) { console.error("Erreur enregistrement catégorie:", err); showAdminFeedback(`Erreur: ${err.message}`, 'error'); }
+            finally { if(saveBtn) saveBtn.disabled = false; if(cancelEditButton) cancelEditButton.disabled = false; }
+        });
+    }
+    function resetCategoryForm(){ if(categoryForm) categoryForm.reset(); if(categoryIdEditInput) categoryIdEditInput.value = ''; if(categoryFormTitle) categoryFormTitle.textContent = "Ajouter une Catégorie"; if(cancelEditButton) cancelEditButton.style.display = 'none'; if (adminFeedbackDiv) adminFeedbackDiv.style.display = 'none'; }
+    function addComponentCategorySelectListener() {
+        componentCategorySelectAdmin?.addEventListener('change', () => {
+            if (!specificAttributesDiv) return; specificAttributesDiv.innerHTML = ''; specificAttributesDiv.style.display = 'none';
+            const selectedOption = componentCategorySelectAdmin.options[componentCategorySelectAdmin.selectedIndex]; if (!selectedOption || !selectedOption.value) return;
+            const attributesString = selectedOption.dataset.attributes; const categoryName = selectedOption.textContent;
+            if (attributesString && attributesString.trim() !== "") {
+                specificAttributesDiv.style.display = 'block'; const attributes = attributesString.split(',').map(attr => attr.trim()).filter(attr => attr);
+                if (attributes.length > 0) {
+                    const titleElement = document.createElement('h4'); titleElement.textContent = `Attributs Spécifiques (${categoryName})`; specificAttributesDiv.appendChild(titleElement);
+                    attributes.forEach(attr => {
+                        const formGroup = document.createElement('div'); formGroup.classList.add('form-group'); const inputId = `attr-${attr.toLowerCase().replace(/[^a-z0-9]/g, '-')}`; const label = document.createElement('label'); label.setAttribute('for', inputId); label.textContent = `${attr}:`; const input = document.createElement('input'); input.setAttribute('type', 'text'); input.setAttribute('id', inputId); input.setAttribute('name', `attributes[${attr}]`); input.setAttribute('placeholder', `Valeur pour ${attr}`); input.dataset.attributeName = attr; formGroup.appendChild(label); formGroup.appendChild(input); specificAttributesDiv.appendChild(formGroup);
+                    });
+                }
+            }
+        });
+    }
+    function showAdminFeedback(message, type = 'info'){ if (adminFeedbackDiv) { adminFeedbackDiv.textContent = message; adminFeedbackDiv.className = `feedback-area ${type}`; adminFeedbackDiv.style.display = 'block'; } }
+    function resetStockForm() { if (stockForm) stockForm.reset(); if (componentInfoDiv) componentInfoDiv.style.display = 'none'; if (specificAttributesDiv) { specificAttributesDiv.innerHTML = ''; specificAttributesDiv.style.display = 'none'; } if (componentRefAdminInput) componentRefAdminInput.disabled = false; if (componentInitialQuantityInput) componentInitialQuantityInput.value = 0; if (componentThresholdInput) componentThresholdInput.value = ''; if (adminFeedbackDiv) adminFeedbackDiv.style.display = 'none'; console.log("Formulaire stock réinitialisé."); }
+    function addStockEventListeners() {
+        checkStockButton?.addEventListener('click', async () => {
+            const ref = componentRefAdminInput?.value.trim().toUpperCase(); if (!ref) { showAdminFeedback("Entrez réf.", 'warning'); return; }
+            if(adminFeedbackDiv) adminFeedbackDiv.style.display = 'none'; if(checkStockButton) checkStockButton.disabled = true; checkStockButton.textContent = "Vérif..."; if(componentRefAdminInput) componentRefAdminInput.disabled = true;
+            try {
+                const stockInfo = await getStockInfoFromSupabase(ref);
+                if (stockInfo) {
+                    console.log("Stock info trouvé admin:", stockInfo); if(componentInfoDiv) componentInfoDiv.style.display = 'block'; if(currentQuantitySpan) currentQuantitySpan.textContent = stockInfo.quantity; if(quantityChangeInput) quantityChangeInput.value = 0; if(componentDescInput) componentDescInput.value = stockInfo.description || ""; if(componentMfgInput) componentMfgInput.value = stockInfo.manufacturer || ""; if(componentDatasheetInput) componentDatasheetInput.value = stockInfo.datasheet || ""; if(componentDrawerAdminInput) componentDrawerAdminInput.value = stockInfo.drawer || ""; if(componentInitialQuantityInput) componentInitialQuantityInput.value = stockInfo.quantity; if(componentThresholdInput) componentThresholdInput.value = stockInfo.critical_threshold ?? ''; if(componentCategorySelectAdmin) { componentCategorySelectAdmin.value = stockInfo.category_id || ""; componentCategorySelectAdmin.dispatchEvent(new Event('change')); }
+                    setTimeout(() => { if (stockInfo.attributes && typeof stockInfo.attributes === 'object' && specificAttributesDiv) { Object.entries(stockInfo.attributes).forEach(([key, value]) => { const inputField = specificAttributesDiv.querySelector(`input[data-attribute-name="${key}"]`); if (inputField) { inputField.value = value || ''; } else { console.warn(`Input attr '${key}' non trouvé.`); } }); } }, 50);
+                    showAdminFeedback(`Composant "${ref}" trouvé. Modifiez détails ou qté.`, 'success'); if (currentUser && stockInfo.drawer) { updateSevenSegmentDisplay(stockInfo.drawer); }
+                } else { if(componentInfoDiv) componentInfoDiv.style.display = 'none'; resetStockForm(); if(componentRefAdminInput) componentRefAdminInput.value = ref; showAdminFeedback(`Composant "${ref}" inconnu. Remplissez pour ajouter.`, 'info'); componentDescInput?.focus(); updateSevenSegmentDisplay(null); }
+            } catch (error) { console.error("Erreur checkStock:", error); showAdminFeedback(`Erreur vérif: ${error.message}`, 'error'); resetStockForm(); if(componentRefAdminInput) componentRefAdminInput.value = ref; }
+            finally { if(checkStockButton) checkStockButton.disabled = false; checkStockButton.textContent = "Vérifier Stock"; if(componentRefAdminInput) componentRefAdminInput.disabled = false; }
+        });
+        updateQuantityButton?.addEventListener('click', async () => {
+            const ref = componentRefAdminInput?.value.trim().toUpperCase(); const changeStr = quantityChangeInput?.value; const change = parseInt(changeStr, 10);
+            if (!ref) { showAdminFeedback("Réf manquante.", 'warning'); return; } if (changeStr === '' || isNaN(change)) { showAdminFeedback("Qté invalide.", 'warning'); quantityChangeInput?.focus(); return; } if (change === 0) { showAdminFeedback("Aucun changement.", 'info'); return; } const currentDisplayedQuantity = parseInt(currentQuantitySpan?.textContent, 10); if (!isNaN(currentDisplayedQuantity) && currentDisplayedQuantity + change < 0) { showAdminFeedback(`Stock négatif (${currentDisplayedQuantity + change}).`, 'error'); return; }
+            if(updateQuantityButton) updateQuantityButton.disabled = true; updateQuantityButton.textContent = "MàJ...";
+            try {
+                const newQuantity = await updateStockInSupabase(ref, change);
+                if (newQuantity !== null) { if(currentQuantitySpan) currentQuantitySpan.textContent = newQuantity; if(componentInitialQuantityInput) componentInitialQuantityInput.value = newQuantity; if(quantityChangeInput) quantityChangeInput.value = 0; showAdminFeedback(`Stock "${ref}" MàJ: ${newQuantity}.`, 'success'); if (inventoryView.classList.contains('active-view')) { displayInventory(); } }
+            } catch (error) { console.error("Erreur JS updateQty:", error); showAdminFeedback(error.message.includes("Stock insuffisant") ? "Stock insuffisant." : `Erreur MàJ: ${error.message}`, 'error'); }
+            finally { if(updateQuantityButton) updateQuantityButton.disabled = false; updateQuantityButton.textContent = "Mettre à jour"; }
+        });
+        stockForm?.addEventListener('submit', async (event) => {
+            event.preventDefault(); if (!supabase) return;
+            const ref = componentRefAdminInput?.value.trim().toUpperCase(); const categoryId = componentCategorySelectAdmin?.value || null; const description = componentDescInput?.value.trim() || null; const manufacturer = componentMfgInput?.value.trim() || null; const datasheet = componentDatasheetInput?.value.trim() || null; const drawer = componentDrawerAdminInput?.value.trim().toUpperCase() || null; const quantityStr = componentInitialQuantityInput?.value; const thresholdStr = componentThresholdInput?.value.trim();
+            if (!ref) { showAdminFeedback("Réf obligatoire.", 'error'); componentRefAdminInput?.focus(); return; } const quantity = parseInt(quantityStr, 10); if (quantityStr === '' || isNaN(quantity) || quantity < 0) { showAdminFeedback("Qté invalide.", 'error'); componentInitialQuantityInput?.focus(); return; } let critical_threshold = null; if (thresholdStr !== '') { critical_threshold = parseInt(thresholdStr, 10); if (isNaN(critical_threshold) || critical_threshold < 0) { showAdminFeedback("Seuil invalide.", 'error'); componentThresholdInput?.focus(); return; } } if (datasheet) { try { new URL(datasheet); } catch (_) { showAdminFeedback("URL Datasheet invalide.", 'error'); componentDatasheetInput?.focus(); return; } }
+            const attributes = {}; specificAttributesDiv?.querySelectorAll('input[data-attribute-name]').forEach(input => { const attrName = input.dataset.attributeName; const attrValue = input.value.trim(); if (attrName && attrValue) { attributes[attrName] = attrValue; } });
+            const componentData = { ref, description, manufacturer, quantity, datasheet, drawer, category_id, attributes: Object.keys(attributes).length > 0 ? attributes : null, critical_threshold };
+            console.log("Prépa Upsert:", componentData); showAdminFeedback("Enregistrement...", "info"); if(saveComponentButton) saveComponentButton.disabled = true;
+            try {
+                const { data, error } = await supabase.from('inventory').upsert(componentData, { onConflict: 'ref' }).select().single();
+                if (error) { throw new Error(`DB Error: ${error.message}`); }
+                console.log("Upsert succès:", data); showAdminFeedback(`Composant "${ref}" enregistré/MàJ.`, 'success');
+                if (componentInfoDiv?.style.display === 'block') { if(currentQuantitySpan) currentQuantitySpan.textContent = data.quantity; if(quantityChangeInput) quantityChangeInput.value = 0; }
+                if (inventoryView.classList.contains('active-view')) { displayInventory(); } if (currentUser && data.drawer) { updateSevenSegmentDisplay(data.drawer); }
+            } catch(err) { console.error("Erreur upsert:", err); showAdminFeedback(`Erreur enregistrement: ${err.message}`, 'error'); }
+            finally { if(saveComponentButton) saveComponentButton.disabled = false; }
+        });
+    }
+
+    // --- LOGIQUE VUE RECHERCHE (Chat) ---
+
+    /** Ajoute un message à la boîte de chat et à l'historique. */
+    async function addMessageToChat(sender, messageContent, isHTML = false) {
+        if (!responseOutputChat) return;
+        const messageElement = document.createElement('div'); messageElement.classList.add('message', sender.toLowerCase());
+        responseOutputChat.prepend(messageElement);
+        if (sender === 'AI') {
+            loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = 'StockAV réfléchit...'; messageElement.innerHTML = '...'; await delay(150);
+            if (isHTML) { messageElement.innerHTML = messageContent; }
+            else { messageElement.textContent = ''; for (let i = 0; i < messageContent.length; i++) { messageElement.textContent += messageContent[i]; await delay(5); } }
+            loadingIndicatorChat.style.display = 'none';
+        } else { messageElement.textContent = messageContent; }
+        const role = sender === 'User' ? 'user' : 'assistant'; chatHistory.push({ role: role, content: messageContent }); if (chatHistory.length > 10) { chatHistory.splice(0, chatHistory.length - 10); }
+        responseOutputChat.scrollTop = 0;
+    }
+
+    /** Affiche le message d'accueil initial et réinitialise l'état. */
+    function displayWelcomeMessage() {
+        if (responseOutputChat) responseOutputChat.innerHTML = ''; chatHistory = []; resetConversationState();
+        addMessageToChat('AI', "Bonjour ! Je suis StockAV. Quelle référence de composant cherchez-vous ? (ex: 'cherche LM358N', 'stock 1N4148')");
+        if(componentInputChat) { componentInputChat.value = ''; componentInputChat.focus(); }
+    }
+
+    /** Gère l'entrée utilisateur dans le chat. */
+    async function handleUserInput() {
+        const userInput = componentInputChat?.value.trim();
+        if (!userInput) return;
+
+        addMessageToChat('User', userInput);
+        if (componentInputChat) componentInputChat.value = '';
+
+        try {
+            // 1. Priorité : Attend une confirmation de quantité ?
+            if (conversationState.awaitingQuantityConfirmation) {
+                if (!currentUser) { await promptLoginBeforeAction("confirmer la quantité à prendre"); return; }
+                await handleQuantityResponse(userInput);
+            }
+            // 2. Sinon : Est-ce une nouvelle recherche ?
+            else {
+                const potentialRef = extractReference(userInput);
+                if (potentialRef) {
+                    console.log(`Nouvelle référence ou requête standard: ${potentialRef}. Appel de checkComponentWithAI.`);
+                    resetConversationState();
+                    conversationState.originalRefChecked = potentialRef;
+                    await checkComponentWithAI(potentialRef); // <<=== NOUVELLE LOGIQUE IA
+                } else {
+                    // Aucune référence trouvée.
+                    if (conversationState.awaitingEquivalentChoice) {
+                         await addMessageToChat('AI', "Entrée non reconnue. Cliquez sur 'Prendre' ou entrez une nouvelle référence.");
+                    } else {
+                        await addMessageToChat('AI', "Non compris. Entrez une référence composant ? (Ex: 'stock BC547')");
+                        resetConversationState();
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Erreur majeure dans handleUserInput:", error);
+            await addMessageToChat('AI', "Oups ! Erreur inattendue. Réessayez.");
+            resetConversationState();
+        } finally {
+             if(componentInputChat) componentInputChat.focus();
+        }
+    }
+
+    /** Extrait une référence de composant potentielle du texte utilisateur. */
+    function extractReference(text) {
+        const upperText = text.toUpperCase(); let bestMatch = null;
+        const patterns = [ /\b(PIC\s?[A-Z\d\-F/L]+)\b/, /\b(AT[TINY|MEGA|XMEGA]+\s?\d+[A-Z\d\-]*)\b/, /\b(STM32[A-Z]\d{2,}[A-Z\d]*)\b/, /\b(ESP[ -]?\d{2,}[A-Z\d\-]*)\b/, /\b(IRF[A-Z\d]*)\b/, /\b(LM\s?\d{2,}[A-Z\d\-/]*)\b/, /\b(NE\s?\d{3}[A-Z]*)\b/, /\b(UA\s?\d{3,}[A-Z]*)\b/, /\b(MAX\s?\d{3,}[A-Z\d\-/]*)\b/, /\b(SN\s?74[A-Z\d]*)\b/, /\b(CD\s?4\d{3,}[A-Z]*)\b/, /\b([1-9]N\s?\d{4}[A-Z]*)\b/, /\b([2-9](?:N|P)\s?\d{4}[A-Z]*)\b/, /\b(BC\s?\d{3}[A-Z]*)\b/, /\b(BD\s?\d{3}[A-Z]*)\b/, /\b(TIP\s?\d{2,}[A-Z]*)\b/, /\b(MOC\s?\d{4}[A-Z]*)\b/, /\b(\d+(?:\.\d+)?\s?(?:PF|NF|UF|µF))\b/, /\b(\d+(?:\.\d+)?\s?(?:R|K|M)\s?(?:OHMS?)?)\b/, /\b([A-Z]{2,}\d{2,}[A-Z\d\-/]*)\b/, /\b(\d+[A-Z]{1,}[A-Z\d\-/]*)\b/, ];
+        const ignoreWords = new Set([ 'POUR', 'AVEC', 'COMBIEN', 'STOCK', 'CHERCHE', 'DISPO', 'EQUIV', 'REMPLACE', 'TROUVE', 'QUEL', 'EST', 'QUE', 'SONT', 'LES', 'DU', 'UN', 'UNE', 'OU', 'ET', 'LE', 'LA', 'DE', 'À', 'PLUS', 'MOINS', 'PEUT', 'IL', 'ELLE', 'ON', 'JE', 'TU', 'COMME', 'DANS', 'SUR' ]);
+        for (const pattern of patterns) { const match = upperText.match(pattern); if (match && match[1]) { const cleanedRef = match[1].replace(/\s+/g, ''); if (cleanedRef.length >= 3 && !ignoreWords.has(cleanedRef)) { if (!bestMatch || cleanedRef.length > bestMatch.length) { bestMatch = cleanedRef; } } } }
+        if (!bestMatch) { const words = upperText.split(/[\s,;:!?()]+/); const potentialRefs = words.filter(w => w.length >= 3 && /\d/.test(w) && /[A-Z]/.test(w) && !/^\d+$/.test(w) && !/^[A-Z]+$/.test(w) && !ignoreWords.has(w) ); if (potentialRefs.length > 0) { potentialRefs.sort((a, b) => b.length - a.length); bestMatch = potentialRefs[0]; } }
+        console.log(`Reference extracted from "${text}": ${bestMatch}`); return bestMatch;
+    }
+
+    /** Nouvelle fonction principale: Vérifie stock, appelle IA, affiche résultats. */
+    async function checkComponentWithAI(originalRef) {
+        loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Analyse locale de ${originalRef}...`;
+        let originalStockInfo = null; let equivalents = []; let aiError = null; let responseHTML = "";
+        try {
+            originalStockInfo = await getStockInfoFromSupabase(originalRef); await delay(150); if (currentUser && originalStockInfo?.drawer) { updateSevenSegmentDisplay(originalStockInfo.drawer); }
+            const showDrawer = currentUser && originalStockInfo?.drawer; let originalStatusHTML = "";
+            if (originalStockInfo) { const indicatorHTML = createStockIndicatorHTML(originalStockInfo.quantity, originalStockInfo.critical_threshold); if (originalStockInfo.quantity > 0) { originalStatusHTML = `${indicatorHTML}Original <strong>${originalRef}</strong> : Disponible (Qté: ${originalStockInfo.quantity}${showDrawer ? `, Tiroir: ${originalStockInfo.drawer}` : ''}).`; conversationState.criticalThreshold = originalStockInfo.critical_threshold; } else { originalStatusHTML = `${indicatorHTML}Original <strong>${originalRef}</strong> : En rupture de stock localement.`; } } else { const indicatorHTML = createStockIndicatorHTML(undefined, undefined); originalStatusHTML = `${indicatorHTML}Original <strong>${originalRef}</strong> : Non trouvé dans notre stock local.`; }
+            responseHTML += originalStatusHTML;
+            loadingIndicatorChat.querySelector('i').textContent = `Interrogation IA équivalents ${originalRef}...`; const aiResult = await getAIEquivalents(originalRef); if (aiResult.error) { aiError = aiResult.error; console.error("Erreur getAIEquivalents:", aiError); } else { equivalents = aiResult.equivalents || []; }
+            let equivalentsStockInfo = {}; if (equivalents.length > 0) { loadingIndicatorChat.querySelector('i').textContent = `Vérif stock local équivalents...`; const equivalentRefs = equivalents.map(eq => eq.ref); const stockCheckPromises = equivalentRefs.map(ref => getStockInfoFromSupabase(ref)); const results = await Promise.all(stockCheckPromises); results.forEach((stockInfo, index) => { if (stockInfo) { equivalentsStockInfo[equivalentRefs[index]] = stockInfo; } }); console.log("Stock info équivalents:", equivalentsStockInfo); }
+            if (equivalents.length > 0) { responseHTML += "<br><br><strong>Équivalents suggérés par l'IA :</strong>"; let foundAvailableEquivalent = false; equivalents.forEach(eq => { const eqStock = equivalentsStockInfo[eq.ref]; const eqIndicatorHTML = createStockIndicatorHTML(eqStock?.quantity, eqStock?.critical_threshold); const eqShowDrawer = currentUser && eqStock?.drawer; responseHTML += `<div class="equivalent-item">`; responseHTML += `${eqIndicatorHTML}<strong>${eq.ref}</strong> <small>(${eq.reason || 'Suggestion AI'})</small>`; if (eqStock) { if (eqStock.quantity > 0) { foundAvailableEquivalent = true; responseHTML += ` : Dispo (Qté: ${eqStock.quantity}${eqShowDrawer ? `, Tiroir: ${eqStock.drawer}` : ''})`; if (currentUser) { responseHTML += ` <button class="choice-button take-button" data-ref="${eq.ref}" data-qty="${eqStock.quantity}" data-threshold="${eqStock.critical_threshold ?? ''}" title="Prendre celui-ci">Prendre</button>`; } } else { responseHTML += ` : Rupture local.`; responseHTML += provideExternalLinksHTML(eq.ref, true); } } else { responseHTML += ` : Non trouvé local.`; responseHTML += provideExternalLinksHTML(eq.ref, true); } responseHTML += `</div>`; }); if (foundAvailableEquivalent || (originalStockInfo && originalStockInfo.quantity > 0)) { conversationState.awaitingEquivalentChoice = true; } } else if (!aiError) { responseHTML += "<br><br>L'IA n'a pas trouvé d'équivalents."; }
+            if (originalStockInfo && originalStockInfo.quantity > 0 && currentUser) { responseHTML += `<br><button class="choice-button take-button" data-ref="${originalRef}" data-qty="${originalStockInfo.quantity}" data-threshold="${originalStockInfo.critical_threshold ?? ''}" title="Prendre l'original">Prendre original (${originalRef})</button>`; conversationState.awaitingEquivalentChoice = true; } else if (originalStockInfo && originalStockInfo.quantity > 0 && !currentUser) { responseHTML += `<br><br><i>Original dispo. Connectez-vous pour le prendre.</i>`; }
+            if (!originalStockInfo || originalStockInfo.quantity <= 0) { responseHTML += provideExternalLinksHTML(originalRef, false); }
+            if (aiError) { responseHTML += `<br><br><i style="color: var(--error-color);">Erreur IA équivalents: ${aiError}.</i>`; if (!responseHTML.includes('external-links-block')) { responseHTML += provideExternalLinksHTML(originalRef, false); } }
+            if (!conversationState.awaitingEquivalentChoice) { responseHTML += "<br><br>Que puis-je faire d'autre ?"; resetConversationState(); } else if (!currentUser) { responseHTML += `<br><br><i>Connectez-vous pour choisir et prendre un composant.</i>`; }
+        } catch (error) { console.error("Erreur majeure checkComponentWithAI:", error); responseHTML = `Erreur recherche <strong>${originalRef}</strong>.<br>Détails: ${error.message}`; resetConversationState(); }
+        finally { loadingIndicatorChat.style.display = 'none'; await addMessageToChat('AI', responseHTML, true); }
+    }
+
+    /** Appelle l'Edge Function Supabase pour obtenir les équivalents IA. */
+    async function getAIEquivalents(reference) {
+        if (!supabase) { return { equivalents: null, error: "Client Supabase non initialisé." }; }
+        console.log(`Appel func Edge 'openai-equivalents' pour: ${reference}`);
+        try {
+            const { data, error: invokeError } = await supabase.functions.invoke('openai-equivalents', { body: { reference: reference }, });
+            if (invokeError) { console.error("Erreur invocation func Edge:", invokeError); let message = invokeError.message; if (invokeError.context?.details?.includes("Function not found")) { message = "Service IA non déployé/introuvable."; } else if (invokeError.context?.status === 500) { message = "Erreur interne service IA."; } throw new Error(message); }
+            if (data && data.error) { console.error("Erreur retournée par func Edge:", data.error); return { equivalents: null, error: data.error }; }
+            if (data && Array.isArray(data.equivalents)) { console.log("Équivalents reçus func Edge:", data.equivalents); return { equivalents: data.equivalents, error: null }; }
+            else { console.warn("Structure data inattendue func Edge:", data); return { equivalents: [], error: null }; }
+        } catch (error) { console.error("Erreur générale appel getAIEquivalents:", error); return { equivalents: null, error: error.message || "Échec comm service IA." }; }
+    }
+
+    /** Listener pour les clics DANS la zone de chat (boutons "Prendre celui-ci"). */
+    responseOutputChat?.addEventListener('click', async (event) => {
+        const targetButton = event.target.closest('button.choice-button.take-button');
+        if (targetButton && conversationState.awaitingEquivalentChoice) {
+            const chosenRef = targetButton.dataset.ref; const availableQtyStr = targetButton.dataset.qty; const criticalThresholdStr = targetButton.dataset.threshold;
+            if (!chosenRef || availableQtyStr === undefined) { console.error("Data manquantes bouton choix", targetButton.dataset); await addMessageToChat("AI", "Erreur interne sélection.", false); resetConversationState(); return; }
+            const availableQty = parseInt(availableQtyStr, 10); if (isNaN(availableQty) || availableQty <= 0) { console.error(`Qté invalide (${availableQtyStr}) pour ${chosenRef}`); await addMessageToChat("AI", `Erreur: Qté invalide pour ${chosenRef}.`, false); resetConversationState(); return; }
+            if (!currentUser) { await promptLoginBeforeAction(`prendre ${chosenRef}`); return; }
+            console.log(`Choix confirmé: ${chosenRef}, Qté dispo: ${availableQty}`); conversationState.awaitingEquivalentChoice = false; addMessageToChat('User', `Je prends ${chosenRef}`); await delay(50);
+            conversationState.chosenRefForStockCheck = chosenRef; conversationState.availableQuantity = availableQty; conversationState.criticalThreshold = (criticalThresholdStr && !isNaN(parseInt(criticalThresholdStr, 10))) ? parseInt(criticalThresholdStr, 10) : null; conversationState.awaitingQuantityConfirmation = true;
+            const stockInfo = await getStockInfoFromSupabase(chosenRef); if (currentUser && stockInfo?.drawer) { updateSevenSegmentDisplay(stockInfo.drawer); }
+            await addMessageToChat('AI', `Combien de <strong>${chosenRef}</strong> ? (Stock : ${availableQty}) Entrez nombre ou '0' pour annuler.`);
+        } else if (event.target.tagName === 'A' && (event.target.classList.contains('external-link') || event.target.classList.contains('external-link-inline'))) { console.log(`Lien externe cliqué: ${event.target.href}`); }
+    });
+
+    /** Affiche un message invitant l'utilisateur à se connecter. */
+    async function promptLoginBeforeAction(actionDescription) { await addMessageToChat('AI', `Pour ${actionDescription}, veuillez vous connecter (zone en haut).`); loginCodeInput?.focus(); }
+
+    /** Génère le HTML pour les liens de recherche externe. */
+    function provideExternalLinksHTML(ref, inline = false) {
+        if (!ref) return ''; const encodedRef = encodeURIComponent(ref); const mLink = `https://www.mouser.ca/Search/Refine?Keyword=${encodedRef}`; const dLink = `https://www.digikey.ca/en/products/result?keywords=${encodedRef}`; const aLink = `https://www.aliexpress.com/wholesale?SearchText=${encodedRef}`;
+        if (inline) { return ` <span class="external-links-inline">(Voir sur : <a href="${mLink}" target="_blank" rel="noopener noreferrer" class="external-link-inline" title="Rechercher ${ref} sur Mouser">Mouser</a>, <a href="${dLink}" target="_blank" rel="noopener noreferrer" class="external-link-inline" title="Rechercher ${ref} sur Digi-Key">Digi-Key</a>, <a href="${aLink}" target="_blank" rel="noopener noreferrer" class="external-link-inline aliexpress" title="Rechercher ${ref} sur AliExpress">AliExpress</a>)</span>`; }
+        else { return `<div class="external-links-block">Liens recherche externe pour <strong>${ref}</strong> : <a href="${mLink}" target="_blank" rel="noopener noreferrer" class="external-link">Mouser</a> <a href="${dLink}" target="_blank" rel="noopener noreferrer" class="external-link">Digi-Key</a> <a href="${aLink}" target="_blank" rel="noopener noreferrer" class="external-link aliexpress">AliExpress</a></div>`; }
+    }
+
+    /** Gère la réponse de l'utilisateur à la demande de quantité. */
+    async function handleQuantityResponse(userInput) {
+        const ref = conversationState.chosenRefForStockCheck;
+        if (!ref || !conversationState.awaitingQuantityConfirmation) { console.warn("handleQuantityResponse hors contexte."); const potentialRef = extractReference(userInput); if (potentialRef) { resetConversationState(); conversationState.originalRefChecked = potentialRef; await checkComponentWithAI(potentialRef); } else { await addMessageToChat("AI", "Non compris. Entrez référence ou cliquez 'Prendre'."); conversationState.awaitingQuantityConfirmation = false; } return; }
+        const requestedQty = parseInt(userInput, 10);
+        if (isNaN(requestedQty) || requestedQty < 0) { await addMessageToChat('AI', `Qté invalide. Entrez nombre >= 0 ou '0' pour annuler.`); return; }
+        if (requestedQty === 0) { await addMessageToChat('AI', "Prise stock annulée."); resetConversationState(); await delay(300); await addMessageToChat('AI', "Besoin d'autre chose ?"); return; }
+        if (requestedQty > conversationState.availableQuantity) { await addMessageToChat('AI', `Qté (${requestedQty}) > stock (${conversationState.availableQuantity}). Entrez qté valide ou '0'.`); return; }
+        loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `MàJ stock ${ref}...`; const change = -requestedQty;
+        try {
+            const newQty = await updateStockInSupabase(ref, change); loadingIndicatorChat.style.display = 'none';
+            if (newQty !== null) { const statusIndicatorHTML = createStockIndicatorHTML(newQty, conversationState.criticalThreshold); await addMessageToChat('AI', `${statusIndicatorHTML}Ok ! ${requestedQty} x <strong>${ref}</strong> retiré(s). Stock : ${newQty}.`); if (inventoryView.classList.contains('active-view')) { displayInventory(currentInventoryPage); } }
+        } catch (error) {
+            console.error("Erreur màj stock via chat:", error); loadingIndicatorChat.style.display = 'none'; let errorMessage = `Erreur màj stock <strong>${ref}</strong>.`;
+            if (error.message.includes("Stock insuffisant")) { errorMessage = `Erreur critique : Stock <strong>${ref}</strong> insuffisant (${error.message}).`; const currentStock = await getStockInfoFromSupabase(ref); if(currentStock) { errorMessage += ` Stock actuel: ${currentStock.quantity}. Réessayez qté valide ou '0'.`; conversationState.availableQuantity = currentStock.quantity; conversationState.awaitingQuantityConfirmation = true; await addMessageToChat('AI', errorMessage); return; } }
+            else if (error.message) { errorMessage += ` Détails: ${error.message}`; }
+            await addMessageToChat('AI', errorMessage); resetConversationState();
+        } finally { if (!conversationState.awaitingQuantityConfirmation) { resetConversationState(); await delay(300); await addMessageToChat('AI', "Besoin d'autre chose ?"); } }
+    }
+
+    /** Réinitialise complètement l'état de la conversation du chat. */
+    function resetConversationState() { conversationState = { awaitingEquivalentChoice: false, awaitingQuantityConfirmation: false, originalRefChecked: null, potentialEquivalents: [], chosenRefForStockCheck: null, availableQuantity: 0, criticalThreshold: null }; console.log("État conv chat réinitialisé."); }
+
+    // --- Fonctions d'interaction Supabase ---
+    /** Récupère les informations d'un composant depuis la DB. */
+    async function getStockInfoFromSupabase(ref) {
+        if (!supabase || !ref) return null; const upperRef = ref.toUpperCase(); console.log(`Supabase GET: Tentative récup pour ref: ${upperRef}`);
+        try {
+            const { data, error } = await supabase.from('inventory').select('*, categories(name), critical_threshold').ilike('ref', upperRef).single();
+            if (error) { if (error.code === 'PGRST116') { console.log(`Supabase GET: Réf ${upperRef} non trouvée.`); return null; } console.error(`Supabase GET: Erreur pour ${upperRef}:`, error); return null; } return data;
+        } catch (err) { console.error("Erreur JS getStockInfo:", err); return null; }
+    }
+    /** Met à jour la quantité d'un composant et enregistre un log. */
+    async function updateStockInSupabase(ref, change) {
+        if (!supabase || !ref || change === 0 || !currentUser) { console.warn("updateStock: Prérequis manquants."); throw new Error("Màj annulée: infos manquantes ou non connecté."); }
+        const upperRef = ref.toUpperCase(); console.log(`Supabase UPDATE: Tentative maj ref: ${upperRef}, changement: ${change}`);
+        try {
+            const { data: currentItem, error: readError } = await supabase.from('inventory').select('quantity, drawer, critical_threshold').ilike('ref', upperRef).single();
+            if (readError || !currentItem) { console.error(`Supabase UPDATE: Erreur lecture/composant ${upperRef} non trouvé.`, readError); throw new Error(`Composant "${upperRef}" non trouvé.`); }
+            const currentQuantity = currentItem.quantity; const newQuantity = currentQuantity + change;
+            if (newQuantity < 0) { console.warn(`Supabase UPDATE: Tentative stock négatif pour ${upperRef}`); throw new Error("Stock insuffisant."); }
+            const { data: updateData, error: updateError } = await supabase.from('inventory').update({ quantity: newQuantity }).ilike('ref', upperRef).select('quantity, drawer').single();
+            if (updateError) { console.error(`Supabase UPDATE: Erreur écriture maj ${upperRef}.`, updateError); throw new Error("Erreur enregistrement màj stock."); }
+            console.log(`Supabase UPDATE: Succès ${upperRef}. New Qty: ${updateData.quantity}`); await addLogEntry(upperRef, change, newQuantity); if (currentUser && updateData.drawer) { updateSevenSegmentDisplay(updateData.drawer); } return newQuantity;
+        } catch (err) { console.error("Erreur updateStockInSupabase:", err.message); throw err; }
+    }
+
+    // --- Gestion Modale Quantité (+/-) ---
+    async function handleInventoryRowClick(event) { const row = event.target.closest('tr.inventory-item-row'); if (!row) return; if (!currentUser) { console.log("Clic inventaire bloqué: non connecté."); if(loginError) { loginError.textContent = "Connexion requise."; loginError.style.color = 'var(--error-color)'; loginError.style.display = 'block'; } loginCodeInput?.focus(); return; } const ref = row.dataset.ref; if (!ref) { console.error("Ref manquante sur ligne:", row); return; } console.log(`Clic inventaire réf: ${ref}`); row.style.opacity = '0.7'; try { const item = await getStockInfoFromSupabase(ref); row.style.opacity = '1'; if (item) { if (currentUser && item.drawer) { updateSevenSegmentDisplay(item.drawer); } showQuantityModal(item.ref, item.quantity); } else { console.error(`Détails ${ref} non trouvés après clic.`); alert(`Erreur: Détails ${ref} non trouvés.`); displayInventory(currentInventoryPage); } } catch (error) { row.style.opacity = '1'; console.error("Erreur JS handleInventoryRowClick:", error); alert("Erreur récup détails."); } }
+    function showQuantityModal(ref, quantity) { if (!quantityChangeModal || !modalOverlay) return; modalCurrentRef = ref; modalInitialQuantity = quantity; currentModalChange = 0; if(modalRefSpan) modalRefSpan.textContent = ref; if(modalQtySpan) modalQtySpan.textContent = quantity; if(modalChangeAmountDisplay) modalChangeAmountDisplay.textContent = currentModalChange; if(modalFeedback) {modalFeedback.textContent = ''; modalFeedback.style.display = 'none';} updateModalButtonStates(); quantityChangeModal.classList.add('active'); modalOverlay.classList.add('active'); }
+    function hideQuantityModal() { if (!quantityChangeModal || !modalOverlay) return; quantityChangeModal.classList.remove('active'); modalOverlay.classList.remove('active'); modalCurrentRef = null; modalInitialQuantity = 0; currentModalChange = 0; }
+    function updateModalButtonStates() { if (!modalDecreaseButton || !modalIncreaseButton || !modalConfirmButton || !modalChangeAmountDisplay) return; const resultingQuantity = modalInitialQuantity + currentModalChange; if(modalChangeAmountDisplay) modalChangeAmountDisplay.textContent = currentModalChange > 0 ? `+${currentModalChange}` : currentModalChange; if(modalDecreaseButton) modalDecreaseButton.disabled = (resultingQuantity <= 0); if(modalIncreaseButton) modalIncreaseButton.disabled = false; if(modalConfirmButton) modalConfirmButton.disabled = (currentModalChange === 0); }
+    modalDecreaseButton?.addEventListener('click', () => { if (modalInitialQuantity + currentModalChange > 0) { currentModalChange--; updateModalButtonStates(); } });
+    modalIncreaseButton?.addEventListener('click', () => { currentModalChange++; updateModalButtonStates(); });
+    modalCancelButton?.addEventListener('click', hideQuantityModal);
+    modalOverlay?.addEventListener('click', (event) => { if (event.target === modalOverlay) hideQuantityModal(); });
+    modalConfirmButton?.addEventListener('click', async () => { if(modalFeedback) modalFeedback.style.display = 'none'; if (currentModalChange === 0 || !modalCurrentRef) return; if (modalInitialQuantity + currentModalChange < 0) { if(modalFeedback) { modalFeedback.textContent = "Stock négatif."; modalFeedback.className = 'modal-feedback error'; modalFeedback.style.display = 'block'; } return; } if(modalConfirmButton) modalConfirmButton.disabled = true; if(modalCancelButton) modalCancelButton.disabled = true; if(modalDecreaseButton) modalDecreaseButton.disabled = true; if(modalIncreaseButton) modalIncreaseButton.disabled = true; if(modalFeedback) { modalFeedback.textContent = "MàJ..."; modalFeedback.className = 'modal-feedback info'; modalFeedback.style.display = 'block'; } try { const newQuantity = await updateStockInSupabase(modalCurrentRef, currentModalChange); if (newQuantity !== null) { hideQuantityModal(); displayInventory(currentInventoryPage); } } catch (error) { console.error("Erreur confirm modal:", error); if(modalFeedback) { modalFeedback.textContent = error.message.includes("Stock insuffisant") ? "Stock insuffisant." : `Erreur: ${error.message}`; modalFeedback.className = 'modal-feedback error'; modalFeedback.style.display = 'block';} if (quantityChangeModal?.classList.contains('active')) { if(modalCancelButton) modalCancelButton.disabled = false; updateModalButtonStates(); if(modalConfirmButton) modalConfirmButton.disabled = true; } } });
+
+    // --- Gestion Afficheur 7 Segments ---
+    const segmentMap = { '0':['a','b','c','d','e','f'],'1':['b','c'],'2':['a','b','g','e','d'],'3':['a','b','g','c','d'],'4':['f','g','b','c'],'5':['a','f','g','c','d'],'6':['a','f','e','d','c','g'],'7':['a','b','c'],'8':['a','b','c','d','e','f','g'],'9':['a','b','c','d','f','g'],'A':['a','b','c','e','f','g'],'B':['c','d','e','f','g'],'b':['f','e','d','c','g'],'C':['a','f','e','d'],'c':['g','e','d'],'D':['b','c','d','e','g'],'d':['b','c','d','e','g'],'E':['a','f','e','d','g'],'F':['a','f','e','g'],'G':['a','f','e','d','c'],'H':['f','e','b','c','g'],'h':['f','e','c','g'],'I':['f','e'],'J':['b','c','d','e'],'L':['f','e','d'],'O':['a','b','c','d','e','f'],'o':['c','d','e','g'],'P':['a','b','f','e','g'],'r':['e','g'],'S':['a','f','g','c','d'],'U':['b','c','d','e','f'],'u':['c','d','e'],'-':['g'],' ':[],'_':['d'] };
+    function updateSevenSegmentDisplay(newDrawerValue = undefined) { if (newDrawerValue === null) { lastDisplayedDrawer = null; } else if (newDrawerValue !== undefined) { const trimmedVal = String(newDrawerValue).trim().toUpperCase(); if (trimmedVal !== "") { lastDisplayedDrawer = trimmedVal; } } const drawerToDisplay = lastDisplayedDrawer; if (!sevenSegmentDisplay || !segmentDigits.every(d => d)) return; if (!currentUser || !drawerToDisplay) { sevenSegmentDisplay.classList.add('display-off'); segmentDigits.forEach(digitElement => { digitElement?.querySelectorAll('.segment').forEach(seg => seg.classList.remove('on')); digitElement?.classList.add('off'); }); return; } sevenSegmentDisplay.classList.remove('display-off'); const displayChars = drawerToDisplay.slice(-4).padStart(4, ' '); segmentDigits.forEach((digitElement, index) => { if (!digitElement) return; const charToDisplay = displayChars[index] || ' '; const segmentsOn = segmentMap[charToDisplay] || segmentMap['-']; digitElement.querySelectorAll('.segment').forEach(seg => seg.classList.remove('on')); segmentsOn.forEach(segId => { const segment = digitElement.querySelector(`.segment-${segId}`); segment?.classList.add('on'); }); digitElement.classList.remove('off'); }); }
+
+    // --- Logique pour la vue Paramètres ---
+    function loadSettingsData() { if (!currentUser) return; showSettingsFeedback('export', '', 'none'); showSettingsFeedback('import', '', 'none'); if (importCsvFileInput) importCsvFileInput.value = ''; console.log("Vue Paramètres chargée."); if (categoriesCache.length === 0) { getCategories(); } }
+    function showSettingsFeedback(type, message, level = 'info') { const feedbackDiv = (type === 'export') ? exportFeedbackDiv : importFeedbackDiv; if (feedbackDiv) { feedbackDiv.textContent = message; feedbackDiv.className = `feedback-area ${level}`; feedbackDiv.style.whiteSpace = (level === 'error' && type === 'import') ? 'pre-wrap' : 'normal'; feedbackDiv.style.textAlign = (level === 'error' && type === 'import') ? 'left' : 'center'; feedbackDiv.style.display = (level === 'none' || !message) ? 'none' : 'block'; } }
+    function downloadFile(filename, content, mimeType) { const blob = new Blob([content], { type: mimeType }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); }
+    async function handleExportInventoryCSV() { if (!supabase) return; showSettingsFeedback('export', "Récup inventaire...", 'info'); if(exportInventoryCsvButton) exportInventoryCsvButton.disabled = true; try { const { data, error } = await supabase.from('inventory').select('*, categories(name)').order('ref', { ascending: true }); if (error) throw new Error(`DB: ${error.message}`); if (!data || data.length === 0) { showSettingsFeedback('export', "Inventaire vide.", 'warning'); return; } const csvData = data.map(item => ({ ref: item.ref, description: item.description || '', manufacturer: item.manufacturer || '', quantity: item.quantity, datasheet: item.datasheet || '', drawer: item.drawer || '', category_name: item.categories?.name || '', critical_threshold: item.critical_threshold ?? '', attributes: item.attributes ? JSON.stringify(item.attributes) : '' })); const csvString = Papa.unparse(csvData, { header: true, quotes: true, delimiter: "," }); const timestamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'); downloadFile(`stockav_inventory_${timestamp}.csv`, csvString, 'text/csv;charset=utf-8;'); showSettingsFeedback('export', `Export CSV OK (${data.length} lignes).`, 'success'); } catch (err) { console.error("Erreur export CSV:", err); showSettingsFeedback('export', `Erreur: ${err.message}`, 'error'); } finally { if(exportInventoryCsvButton) exportInventoryCsvButton.disabled = false; } }
+    async function handleExportLogTXT() { if (!supabase) return; showSettingsFeedback('export', "Récup historique...", 'info'); if(exportLogTxtButton) exportLogTxtButton.disabled = true; try { const { data, error } = await supabase.from('logs').select('*').order('created_at', { ascending: true }); if (error) throw new Error(`DB: ${error.message}`); if (!data || data.length === 0) { showSettingsFeedback('export', "Historique vide.", 'warning'); return; } let txtContent = "Historique StockAV\n===================\n\n"; txtContent += "Date & Heure          | Technicien | Action  | Référence        | +/-   | Stock Final\n"; txtContent += "----------------------+------------+---------+------------------+-------+------------\n"; data.forEach(log => { const timestamp = formatLogTimestamp(new Date(log.created_at)).padEnd(21); const user = (log.user_code || 'N/A').padEnd(10); const action = (log.quantity_change > 0 ? 'Ajout' : 'Retrait').padEnd(7); const ref = log.component_ref.padEnd(16); const change = (log.quantity_change > 0 ? `+${log.quantity_change}` : `${log.quantity_change}`).padStart(5); const after = String(log.quantity_after).padStart(11); txtContent += `${timestamp} | ${user} | ${action} | ${ref} | ${change} | ${after}\n`; }); const timestampFile = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'); downloadFile(`stockav_logs_${timestampFile}.txt`, txtContent, 'text/plain;charset=utf-8;'); showSettingsFeedback('export', `Export TXT OK (${data.length} lignes).`, 'success'); } catch (err) { console.error("Erreur export TXT:", err); showSettingsFeedback('export', `Erreur: ${err.message}`, 'error'); } finally { if(exportLogTxtButton) exportLogTxtButton.disabled = false; } }
+    async function handleImportInventoryCSV() { if (!supabase || typeof Papa === 'undefined') { showSettingsFeedback('import', "Erreur: Init.", 'error'); return; } if (!importCsvFileInput?.files?.length) { showSettingsFeedback('import', "Choisir fichier CSV.", 'warning'); return; } const file = importCsvFileInput.files[0]; showSettingsFeedback('import', `Lecture ${file.name}...`, 'info'); if(importInventoryCsvButton) importInventoryCsvButton.disabled = true; if(importCsvFileInput) importCsvFileInput.disabled = true; Papa.parse(file, { header: true, skipEmptyLines: true, dynamicTyping: false, complete: async (results) => { console.log("CSV Parsed:", results); const rows = results.data; const errors = results.errors; const requiredHeaders = ['ref', 'quantity']; if (errors.length > 0) { showSettingsFeedback('import', `Erreur lecture CSV L${errors[0].row + 1}: ${errors[0].message}.`, 'error'); resetImportState(); return; } if (rows.length === 0) { showSettingsFeedback('import', "CSV vide.", 'warning'); resetImportState(); return; } const headers = results.meta.fields; if (!headers || !requiredHeaders.every(h => headers.includes(h))) { showSettingsFeedback('import', `Erreur: En-têtes manquants (${requiredHeaders.join(", ")}).`, 'error'); resetImportState(); return; } showSettingsFeedback('import', `Validation (${rows.length} lignes)...`, 'info'); await delay(100); const itemsToUpsert = []; const validationErrors = []; const categoryMap = new Map(categoriesCache.map(cat => [cat.name.toUpperCase(), cat.id])); for (let i = 0; i < rows.length; i++) { const row = rows[i]; const lineNumber = i + 2; const ref = row.ref?.trim().toUpperCase(); if (!ref) { validationErrors.push(`L${lineNumber}: Réf manquante.`); continue; } const quantityStr = row.quantity?.trim(); const quantity = parseInt(quantityStr, 10); if (quantityStr === '' || isNaN(quantity) || quantity < 0) { validationErrors.push(`L${lineNumber}(Réf: ${ref}): Qté invalide ('${row.quantity || ''}').`); continue; } const description = row.description?.trim() || null; const manufacturer = row.manufacturer?.trim() || null; const datasheet = row.datasheet?.trim() || null; if (datasheet) { try { new URL(datasheet); } catch (_) { validationErrors.push(`L${lineNumber}(Réf: ${ref}): URL Datasheet invalide.`); continue;} } const drawer = row.drawer?.trim().toUpperCase() || null; const thresholdStr = row.critical_threshold?.trim(); let critical_threshold = null; if (thresholdStr && thresholdStr !== '') { critical_threshold = parseInt(thresholdStr, 10); if (isNaN(critical_threshold) || critical_threshold < 0) { validationErrors.push(`L${lineNumber}(Réf: ${ref}): Seuil invalide ('${row.critical_threshold}').`); continue; } } let category_id = null; const categoryName = row.category_name?.trim(); if (categoryName) { const foundId = categoryMap.get(categoryName.toUpperCase()); if (foundId) { category_id = foundId; } else { validationErrors.push(`L${lineNumber}(Réf: ${ref}): Catégorie '${categoryName}' non trouvée.`); continue; } } let attributes = null; const attributesStr = row.attributes?.trim(); if (attributesStr) { try { attributes = JSON.parse(attributesStr); if (typeof attributes !== 'object' || attributes === null || Array.isArray(attributes)) { throw new Error("Objet JSON invalide."); } } catch (e) { validationErrors.push(`L${lineNumber}(Réf: ${ref}): Attributs JSON invalides. ${e.message}`); continue; } } itemsToUpsert.push({ ref, description, manufacturer, quantity, datasheet, drawer, category_id, critical_threshold, attributes }); }
+            if (validationErrors.length > 0) { const errorMsg = `Erreurs validation:\n- ${validationErrors.slice(0, 15).join('\n- ')}${validationErrors.length > 15 ? '\n- ...' : ''}`; showSettingsFeedback('import', errorMsg, 'error'); resetImportState(); return; }
+            if (itemsToUpsert.length > 0) { showSettingsFeedback('import', `Validation OK. Upsert ${itemsToUpsert.length} composants...`, 'info'); try { const { data: upsertData, error: upsertError } = await supabase.from('inventory').upsert(itemsToUpsert, { onConflict: 'ref' }).select('ref'); if (upsertError) { throw new Error(`DB Upsert: ${upsertError.message}`); } showSettingsFeedback('import', `Import OK (${upsertData?.length || 0} ajoutés/MàJ).`, 'success'); if (inventoryView?.classList.contains('active-view')) { displayInventory(1); } } catch (err) { console.error("Erreur upsert CSV:", err); showSettingsFeedback('import', `Erreur écriture DB: ${err.message}`, 'error'); } finally { resetImportState(); } } else { showSettingsFeedback('import', "Aucune ligne valide à importer.", 'warning'); resetImportState(); } }, error: (error) => { console.error("Erreur parsing PapaParse:", error); showSettingsFeedback('import', `Erreur lecture fichier: ${error.message}`, 'error'); resetImportState(); } }); }
+    function resetImportState() { if(importInventoryCsvButton) importInventoryCsvButton.disabled = false; if (importCsvFileInput) { importCsvFileInput.disabled = false; importCsvFileInput.value = ''; } }
+    function addSettingsEventListeners() { exportInventoryCsvButton?.addEventListener('click', handleExportInventoryCSV); exportLogTxtButton?.addEventListener('click', handleExportLogTXT); importInventoryCsvButton?.addEventListener('click', handleImportInventoryCSV); }
+
+    // --- Initialisation Générale de l'Application ---
+    function initializeApp() {
+        console.log("Initialisation de StockAV...");
+        const requiredElements = [ loginArea, searchView, inventoryView, logView, adminView, settingsView, sevenSegmentDisplay, inventoryTableBody, responseOutputChat, componentInputChat, searchTabButton, inventoryTabButton, logTabButton, adminTabButton, settingsTabButton, loginButton, logoutButton, searchButtonChat ];
+        if (requiredElements.some(el => !el)) { console.error("FATAL: Elément DOM essentiel manquant! Vérifiez index.html."); document.body.innerHTML = "<p style='color:red; padding: 20px;'><b>Erreur critique init.</b><br>Vérifiez console (F12) & index.html.</p>"; return; }
+
+        searchTabButton.addEventListener('click', () => setActiveView(searchView, searchTabButton));
+        inventoryTabButton.addEventListener('click', () => setActiveView(inventoryView, inventoryTabButton));
+        logTabButton.addEventListener('click', () => setActiveView(logView, logTabButton));
+        adminTabButton.addEventListener('click', () => setActiveView(adminView, adminTabButton));
+        settingsTabButton.addEventListener('click', () => setActiveView(settingsView, settingsTabButton));
+        loginButton.addEventListener('click', handleLogin);
+        loginPasswordInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
+        loginCodeInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
+        logoutButton.addEventListener('click', handleLogout);
+        searchButtonChat.addEventListener('click', handleUserInput);
+        componentInputChat.addEventListener('keypress', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleUserInput(); } });
+        applyInventoryFilterButton?.addEventListener('click', () => { currentInventoryFilters.category = inventoryCategoryFilter.value; currentInventoryFilters.search = inventorySearchFilter.value; displayInventory(1); });
+        inventorySearchFilter?.addEventListener('keypress', (e) => { if (e.key === 'Enter') { applyInventoryFilterButton?.click(); } });
+        inventoryPrevPageButton?.addEventListener('click', () => { if (currentInventoryPage > 1) { displayInventory(currentInventoryPage - 1); } });
+        inventoryNextPageButton?.addEventListener('click', () => { if (!inventoryNextPageButton?.disabled) { displayInventory(currentInventoryPage + 1); } });
+        logPrevPageButton?.addEventListener('click', () => { if (currentLogPage > 1) { displayLog(currentLogPage - 1); } });
+        logNextPageButton?.addEventListener('click', () => { if (!logNextPageButton?.disabled) { displayLog(currentLogPage + 1); } });
+        inventoryTableBody.addEventListener('click', handleInventoryRowClick);
+        addCategoryEventListeners();
+        addComponentCategorySelectListener();
+        addStockEventListeners();
+        addSettingsEventListeners();
+
+        setupAuthListener();
+        updateSevenSegmentDisplay(null);
+        console.log("StockAV initialisé et prêt.");
+    }
+
+    // --- Lancer l'application ---
+    initializeApp();
+
+}); // ----- FIN DU FICHIER script.js -----
+```
+
+### 11.4 `supabase/functions/_shared/cors.ts`
+
+```typescript
+// supabase/functions/_shared/cors.ts
+
+export const corsHeaders = {
+  // ATTENTION: '*' est permissif. Pour la production, remplacez par l'URL
+  // exacte de votre application déployée (ex: 'https://zine76.github.io')
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS', // Uniquement POST et OPTIONS nécessaires ici
+};
+```
+
+### 11.5 `supabase/functions/openai-equivalents/index.ts`
+
+```typescript
+// supabase/functions/openai-equivalents/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Importe les en-têtes CORS depuis le fichier partagé
+import { corsHeaders } from '../_shared/cors.ts'; // Assure-toi que ce fichier existe et est correct
+
+// --- Configuration ---
+// Modèle OpenRouter gratuit spécifié
+const AI_MODEL = "mistralai/mistral-7b-instruct:free";
+// Maximum d'équivalents à retourner
+const MAX_EQUIVALENTS = 5;
+
+console.log("Edge Function 'openai-equivalents' initializing...");
+
+serve(async (req: Request) => {
+  console.log(`Request received: ${req.method} ${req.url}`);
+
+  // --- Gestion CORS Pré-vol (OPTIONS) ---
+  if (req.method === 'OPTIONS') {
+    console.log("Handling OPTIONS request (CORS preflight)");
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  // --- Récupération des Secrets ---
+  // Ces secrets DOIVENT être définis dans les paramètres Supabase du projet
+  const openRouterApiKey = Deno.env.get("OPENROUTER_API_KEY");
+  const appUrlReferer = Deno.env.get("APP_URL_REFERER"); // Requis par OpenRouter
+
+  if (!openRouterApiKey) {
+    console.error("CRITICAL: OPENROUTER_API_KEY secret is not set!");
+    return new Response(JSON.stringify({ error: "Config serveur: Clé API manquante." }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+    });
+  }
+  if (!appUrlReferer) {
+    console.error("CRITICAL: APP_URL_REFERER secret is not set!");
+    return new Response(JSON.stringify({ error: "Config serveur: URL Referer manquante." }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+    });
+  }
+
+  // --- Traitement de la Requête POST ---
+  try {
+    // Récupérer les données envoyées par le frontend (script.js)
+    const body = await req.json();
+    const componentRef = body.reference;
+    // const chatHistoryContext = body.history || []; // Optionnel pour plus tard
+
+    if (!componentRef || typeof componentRef !== 'string' || componentRef.trim() === '') {
+      console.warn("Requête invalide: 'reference' manquante ou vide.");
+      return new Response(JSON.stringify({ error: "Référence composant requise." }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400, // Bad Request
+      });
+    }
+
+    const trimmedRef = componentRef.trim().toUpperCase();
+    console.log(`Traitement requête pour référence: ${trimmedRef}`);
+
+    // --- Construction du Prompt pour l'IA (Version Simplifiée avec +) ---
+    const userPrompt = 'Trouve jusqu\'à ' + MAX_EQUIVALENTS + ' équivalents techniques directs pour le composant électronique "' + trimmedRef + '".\n' +
+        'Concentres-toi sur les remplacements courants et fonctionnels.\n' +
+        'Pour chaque équivalent, fournis uniquement sa référence et une très courte justification (ex: \'Pin-compatible\', \'Specs similaires\', \'Version CMOS\', \'NPN générique\').\n' +
+        'Formate la réponse STRICTEMENT comme un tableau JSON d\'objets, comme ceci :\n' +
+        '[\n' +
+        '  { "ref": "REFERENCE_EQUIV_1", "reason": "Justification courte 1" },\n' +
+        '  { "ref": "REFERENCE_EQUIV_2", "reason": "Justification courte 2" }\n' +
+        ']\n' +
+        'Si aucun équivalent fiable n\'est trouvé, retourne un tableau JSON vide : []';
+
+    console.log("Prompt envoyé à l'IA:", userPrompt); // Pour débogage
+
+    // --- Appel à l'API OpenRouter ---
+    console.log(`Appel API OpenRouter (Modèle: ${AI_MODEL}) pour: ${trimmedRef}`);
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openRouterApiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": appUrlReferer, // Requis
+        "X-Title": "StockAV" // Optionnel
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [ { role: "user", content: userPrompt } ],
+        max_tokens: 200,
+        temperature: 0.2,
+      }),
+    });
+
+    // --- Gestion de la Réponse OpenRouter ---
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`Erreur API OpenRouter (${response.status}): ${errorBody}`);
+      throw new Error(`Erreur API OpenRouter: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log("Réponse brute reçue d'OpenRouter:", JSON.stringify(data));
+
+    // --- Extraction et Validation des Équivalents ---
+    let equivalents = [];
+    if (data.choices && data.choices.length > 0) {
+      const rawContent = data.choices[0].message?.content;
+      if (rawContent) {
+        console.log("Contenu brut de l'IA:", rawContent);
+        try {
+          // Essayer d'extraire le JSON, même s'il y a du texte autour
+          const jsonMatch = rawContent.match(/(\[[\s\S]*\])/); // Cherche [...]
+          if (jsonMatch && jsonMatch[1]) {
+              const parsedContent = JSON.parse(jsonMatch[1]);
+              if (Array.isArray(parsedContent)) {
+                equivalents = parsedContent
+                  .filter(item => item && typeof item.ref === 'string' && item.ref.trim() !== '')
+                  .map(item => ({
+                    ref: item.ref.trim().toUpperCase(),
+                    reason: typeof item.reason === 'string' ? item.reason.trim() : 'Suggestion AI'
+                  }))
+                  .slice(0, MAX_EQUIVALENTS);
+                  console.log(`${equivalents.length} équivalents parsés.`);
+              } else {
+                console.warn("Réponse JSON IA n'est pas un tableau:", parsedContent);
+              }
+          } else {
+              console.warn("Aucun tableau JSON valide trouvé dans la réponse IA.");
+          }
+        } catch (parseError) {
+          console.error("Échec parsing réponse JSON IA.", parseError, "Contenu brut:", rawContent);
+          equivalents = []; // Retourner vide en cas d'échec de parsing
+        }
+      } else { console.log("Pas de contenu dans la réponse IA."); }
+    } else { console.log("Pas de choix dans la réponse IA."); }
+
+    // --- Retourner la Réponse au Frontend ---
+    console.log(`Retourne ${equivalents.length} équivalents pour ${trimmedRef}.`);
+    return new Response(JSON.stringify({ equivalents }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200, // OK
+    });
+
+  } catch (error) {
+    // --- Gestion Générale des Erreurs ---
+    console.error("Erreur traitement requête dans Edge Function:", error);
+    return new Response(JSON.stringify({ error: error.message || "Erreur interne serveur." }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500, // Internal Server Error
+    });
+  }
+}); // Fin de la fonction serve
+
+console.log("Edge Function 'openai-equivalents' listener started.");
+```
+
+## 12. Améliorations Possibles
+
+*   **Activer et Configurer RLS :** Priorité absolue pour la sécurité en production.
+*   **Améliorer l'Extraction de Référence (`extractReference`) :** Utiliser des techniques plus robustes, peut-être même un petit appel LLM dédié si nécessaire pour les cas complexes.
+*   **Contexte Conversationnel IA :** Envoyer l'historique (`chatHistory`) à la fonction Edge pour permettre à l'IA de mieux comprendre les questions de suivi (ex: "prends le deuxième").
+*   **Recherche d'Équivalents Améliorée :**
+    *   Demander à l'IA de chercher des équivalents basés sur des caractéristiques clés si la référence exacte est inconnue mais que l'utilisateur décrit le composant.
+    *   Permettre à l'IA d'utiliser des outils de recherche web (si supporté par le modèle OpenRouter choisi et configuré).
+*   **Gestion d'Erreurs Plus Fine :** Messages d'erreur plus spécifiques à l'utilisateur dans le chat. Meilleure gestion des erreurs réseau/API.
+*   **Interface Utilisateur :**
+    *   Indicateur de chargement plus visuel pendant les appels IA.
+    *   Possibilité de copier facilement les références/informations.
+    *   Améliorations responsives.
+*   **Tests Automatisés :** Ajouter des tests unitaires et d'intégration.
+*   **Optimisation :** Mise en cache plus agressive des données Supabase si nécessaire. Optimisation des requêtes.
+*   **Gestion Utilisateurs/Permissions :** Interface pour gérer les comptes techniciens (si RLS est basé sur des rôles plus fins).
+
+---
