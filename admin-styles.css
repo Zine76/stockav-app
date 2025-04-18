@@ -1,0 +1,33 @@
+/* --- DÉBUT admin-styles.css --- */
+
+/* Styles spécifiques pour la vue Administration */
+
+/* AJOUT TEMPORAIRE POUR DEBUG:
+   Ajoute une bordure rouge visible à la zone des attributs
+   SI ce fichier CSS est bien chargé ET que le JS ajoute les éléments dedans
+   et lui met display: block. */
+#category-specific-attributes.specific-attributes-section { /* Cible plus spécifique ajoutée dans style.css, utiliser celle-ci */
+    border: 2px solid red !important; /* Temporaire pour voir si le conteneur est rendu et stylé */
+    padding: 20px 25px; /* Conserve le padding défini dans style.css */
+    margin-top: 25px; /* Conserve la marge définie dans style.css */
+    background-color: #fff8f8; /* Léger fond rose pour renforcer la visibilité du debug */
+}
+
+#category-specific-attributes h4 {
+    margin-top: 0;
+    color: var(--primary-color-dark); /* Utiliser une couleur définie */
+    margin-bottom: 15px;
+    padding-bottom: 5px;
+    border-bottom: 1px dashed var(--border-color);
+}
+
+#category-specific-attributes .form-group {
+    margin-bottom: 10px; /* Espacement réduit entre les attributs */
+}
+
+#category-specific-attributes label {
+    font-weight: 500; /* Moins gras que les labels principaux */
+    font-size: 0.88em; /* Taille cohérente avec style.css */
+}
+
+/* --- FIN admin-styles.css --- */

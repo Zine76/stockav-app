@@ -1,203 +1,191 @@
 // supabase/functions/ai-component-info/index.ts
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-// Ajustement du chemin relatif pour l'import CORS
-import { corsHeaders } from '../_shared/cors.ts';
+
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { corsHeaders } from '../_shared/cors.ts'; // Import des headers
 
 // --- Configuration ---
-const AI_MODEL = "meta-llama/llama-3.1-70b-instruct:free"; // ou "mistralai/mistral-7b-instruct:free"
+const AI_MODEL = "mistralai/mistral-7b-instruct:free"; // Utilisation de Mistral 7B Instruct (gratuit)
 const MAX_EQUIVALENTS = 5;
-const MAX_TOKENS_DEFAULT = 300; // Augmenté pour descriptions/comparaisons
-const MAX_TOKENS_EQUIVALENTS = 150; // Peut être plus court pour juste les équivalents
+const MAX_TOKENS_EQUIVALENTS = 250; // Un peu plus de tokens pour la sortie JSON
 
-console.log("Edge Function 'ai-component-info' initializing...");
+console.log(`[ai-component-info] Initializing function... Model: ${AI_MODEL}`);
 
+// --- Helper: extractJsonArray ---
+// Extrait le premier bloc JSON ```json ... ``` ou un tableau JSON standard
+function extractJsonArray(text: string): any[] | null {
+    console.log("[extractJsonArray] Trying to extract JSON from text:", text.substring(0, 200) + (text.length > 200 ? '...' : ''));
+    // Essayer d'abord avec les blocs de code Markdown ```json ... ```
+    const codeBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+        try {
+            const parsed = JSON.parse(codeBlockMatch[1]);
+            if (Array.isArray(parsed)) {
+                console.log("[extractJsonArray] Extracted JSON array from code block.");
+                return parsed;
+            }
+        } catch (e) {
+            console.warn("[extractJsonArray] Failed to parse JSON from code block:", e.message);
+        }
+    }
+
+    // Essayer de trouver un tableau JSON directement
+    const startIndex = text.indexOf('[');
+    const endIndex = text.lastIndexOf(']');
+    if (startIndex !== -1 && endIndex > startIndex) {
+         const potentialJson = text.substring(startIndex, endIndex + 1);
+         try {
+             const parsed = JSON.parse(potentialJson);
+             if (Array.isArray(parsed)) {
+                 console.log("[extractJsonArray] Extracted JSON array directly.");
+                 return parsed;
+             }
+         } catch (e) {
+             // Loguer l'erreur seulement si le bloc de code n'a pas fonctionné avant
+             if (!codeBlockMatch) {
+                 console.warn("[extractJsonArray] Failed to parse JSON directly:", e.message, "Text snippet:", potentialJson.substring(0, 100));
+             }
+         }
+    }
+
+    console.warn("[extractJsonArray] No valid JSON array found in text.");
+    return null; // Retourner null si aucun tableau JSON valide n'est trouvé
+}
+
+
+// --- Serve Function ---
 serve(async (req: Request) => {
-  console.log(`Request received: ${req.method} ${req.url}`);
+  const requestStartTime = Date.now();
+  console.log(`[ai-component-info] Request received: ${req.method} ${req.url}`);
 
-  // --- Gestion CORS Pré-vol (OPTIONS) ---
+  // --- Handle CORS Preflight (OPTIONS) ---
   if (req.method === 'OPTIONS') {
-    console.log("Handling OPTIONS request (CORS preflight)");
+    console.log("[ai-component-info] Handling OPTIONS request");
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // --- Récupération des Secrets ---
+  // --- Retrieve Secrets ---
   const openRouterApiKey = Deno.env.get("OPENROUTER_API_KEY");
   const appUrlReferer = Deno.env.get("APP_URL_REFERER"); // Requis par OpenRouter
 
-  if (!openRouterApiKey || !appUrlReferer) {
-    const missingKey = !openRouterApiKey ? "OPENROUTER_API_KEY" : "APP_URL_REFERER";
-    console.error(`CRITICAL: ${missingKey} secret is not set!`);
+  if (!openRouterApiKey) {
+    console.error(`[ai-component-info] CRITICAL: OPENROUTER_API_KEY secret is not set!`);
     return new Response(JSON.stringify({
-        response_type: "error",
-        content: `Configuration serveur: Secret '${missingKey}' manquant.`
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500,
-    });
+        equivalents: [], error: `Config serveur: Secret 'OPENROUTER_API_KEY' manquant.`
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 });
+  }
+  if (!appUrlReferer) {
+     console.error(`[ai-component-info] CRITICAL: APP_URL_REFERER secret is not set! OpenRouter requires it.`);
+     return new Response(JSON.stringify({
+        equivalents: [], error: `Config serveur: Secret 'APP_URL_REFERER' manquant.`
+     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 });
   }
 
-  // --- Traitement de la Requête POST ---
-  let requestType: string = 'unknown';
-  let ref1: string | null = null;
-  let ref2: string | null = null;
-
+  // --- Process POST Request ---
+  let reference: string | null = null;
   try {
+     // Vérification méthode POST
+    if (req.method !== 'POST') {
+        throw new Error("Méthode non autorisée. Seul POST est accepté.");
+    }
+
     const body = await req.json();
-    requestType = body.request_type?.toLowerCase() || 'unknown';
-    ref1 = body.reference1?.trim().toUpperCase() || null;
-    ref2 = body.reference2?.trim().toUpperCase() || null; // Pour comparaison
+    reference = body.reference?.trim().toUpperCase() || null;
+    console.log(`[ai-component-info] Processing request for equivalents: Ref='${reference}'`);
 
-    console.log(`Processing request: Type='${requestType}', Ref1='${ref1}', Ref2='${ref2}'`);
-
-    // --- Validation des entrées ---
-    if (!ref1) {
-      throw new Error("Référence principale (reference1) manquante.");
-    }
-    if (requestType === 'compare' && !ref2) {
-      throw new Error("Deux références sont nécessaires pour la comparaison.");
-    }
-    if (!['equivalents', 'describe', 'pinout', 'compare'].includes(requestType)) {
-        throw new Error(`Type de requête invalide: '${requestType}'.`);
+    if (!reference) {
+      throw new Error("Référence composant (clé 'reference') manquante dans le corps JSON.");
     }
 
-    // --- Construction du Prompt Spécifique ---
-    let userPrompt = "";
-    let maxTokens = MAX_TOKENS_DEFAULT;
+    // Prompt amélioré pour Mistral, insistant sur le format JSON strict
+    const userPrompt = `Analyze the electronic component reference "${reference}". Identify up to ${MAX_EQUIVALENTS} direct technical equivalents. Focus on common, functional replacements. For each equivalent, provide ONLY its reference (key "ref") and a very brief justification (key "reason", e.g., 'Pin-compatible', 'Similar specs', 'CMOS version', 'Generic NPN'). Format the entire response STRICTLY as a valid JSON array of objects, like this example: [{"ref": "EQUIV1", "reason": "Justification 1"}, {"ref": "EQUIV2", "reason": "Justification 2"}]. Do not include any text before or after the JSON array. If no reliable equivalents are found, return an empty JSON array: []`;
 
-    switch (requestType) {
-        case 'equivalents':
-            maxTokens = MAX_TOKENS_EQUIVALENTS;
-            userPrompt = `Trouve jusqu'à ${MAX_EQUIVALENTS} équivalents techniques directs pour le composant électronique "${ref1}". Concentre-toi sur les remplacements courants et fonctionnels. Pour chaque équivalent, fournis uniquement sa référence et une très courte justification (ex: 'Pin-compatible', 'Specs similaires', 'Version CMOS', 'NPN générique'). Formate la réponse STRICTEMENT comme un tableau JSON d'objets, comme ceci : [{"ref": "REF_1", "reason": "Raison 1"}, {"ref": "REF_2", "reason": "Raison 2"}]. Si aucun équivalent fiable n'est trouvé, retourne un tableau JSON vide : []`;
-            break;
-        case 'describe':
-            userPrompt = `Décris brièvement (2-3 phrases maximum) la fonction principale et le type du composant électronique "${ref1}". Sois concis et technique. Ne fournis que la description textuelle.`;
-            break;
-        case 'pinout':
-            userPrompt = `Fournis le brochage (pinout) standard pour le composant "${ref1}". Liste chaque numéro de broche suivi de son nom ou de sa fonction principale (ex: "1: VCC, 2: GND, 3: Output"). Si plusieurs boîtiers existent, privilégie le plus courant (ex: DIP ou SOIC). Si le brochage est complexe ou varie grandement, indique-le. Réponds uniquement avec la liste du brochage.`;
-            break;
-        case 'compare':
-            userPrompt = `Compare brièvement les composants électroniques "${ref1}" et "${ref2}". Liste les principales similitudes fonctionnelles et les différences clés (ex: tension, courant, vitesse, type de package, fonctionnalités spéciales). Vise 2-3 points pour chaque section (similitudes, différences). Formate la réponse STRICTEMENT comme un objet JSON avec deux clés: "similarities" (tableau de strings) et "differences" (tableau de strings). Si la comparaison est non pertinente (composants trop différents), explique brièvement pourquoi dans une clé "notes" (string). Exemple JSON attendu : {"similarities": ["Point commun 1", "Point commun 2"], "differences": ["Différence 1", "Différence 2"], "notes": "Comparaison pertinente..."}`;
-            break;
-    }
-
-    console.log(`Prompt pour '${requestType}' (${ref1}${ref2 ? ' vs ' + ref2 : ''}):\n${userPrompt}`);
-
-    // --- Appel à l'API OpenRouter ---
-    console.log(`Appel API OpenRouter (Modèle: ${AI_MODEL}) pour requête type '${requestType}'`);
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openRouterApiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": appUrlReferer,
-        "X-Title": "StockAV" // Nom de l'application pour OpenRouter
-      },
-      body: JSON.stringify({
+    const requestPayload = {
         model: AI_MODEL,
-        messages: [ { role: "user", content: userPrompt } ],
-        max_tokens: maxTokens,
-        temperature: 0.3, // Un peu plus créatif pour description/comparaison
-        // Pourrait ajouter 'response_format: { "type": "json_object" }' pour les types json, mais dépend du modèle
-      }),
-    });
+        messages: [{ role: "user", content: userPrompt }],
+        max_tokens: MAX_TOKENS_EQUIVALENTS,
+        temperature: 0.1, // Très basse température pour forcer le format JSON
+        // response_format: { "type": "json_object" }, // Peut aider mais pas tous les modèles le supportent
+    };
 
-    // --- Gestion de la Réponse OpenRouter ---
+    console.log("[ai-component-info] Calling OpenRouter API...");
+    const apiStartTime = Date.now();
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${openRouterApiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": appUrlReferer,
+            // "X-Title": "StockAV-Equivalents", // Optionnel
+        },
+        body: JSON.stringify(requestPayload),
+    });
+    const apiEndTime = Date.now();
+    console.log(`[ai-component-info] API call duration: ${apiEndTime - apiStartTime} ms. Status: ${response.status}`);
+
     if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`Erreur API OpenRouter (${response.status}): ${errorBody}`);
-      throw new Error(`Erreur communication API IA: ${response.status} ${response.statusText}`);
+      const errorBodyText = await response.text();
+      console.error(`[ai-component-info] OpenRouter API Error: Status ${response.status}, Body: ${errorBodyText}`);
+      throw new Error(`Erreur API OpenRouter (${response.status}): ${errorBodyText.substring(0, 150)}${errorBodyText.length > 150 ? '...' : ''}`);
     }
 
     const data = await response.json();
-    console.log("Réponse brute reçue d'OpenRouter:", JSON.stringify(data));
+    let equivalentList: { ref: string, reason: string }[] = [];
 
-    // --- Extraction et Formatage de la Réponse ---
-    let responseContent: any = null; // Peut être string, array ou object
+    if (data && data.choices && Array.isArray(data.choices) && data.choices.length > 0 &&
+        data.choices[0].message && typeof data.choices[0].message.content === 'string') {
 
-    if (data.choices && data.choices.length > 0 && data.choices[0].message?.content) {
         const rawContent = data.choices[0].message.content.trim();
-        console.log(`Contenu brut reçu de l'IA pour '${requestType}':\n${rawContent}`);
+        // Log Raw Content (utile si extractJsonArray échoue)
+        // console.log("[ai-component-info] Raw content from AI:", rawContent);
+        const parsedArray = extractJsonArray(rawContent);
 
-        try {
-            if (requestType === 'equivalents') {
-                // Essayer d'extraire un tableau JSON
-                const jsonMatch = rawContent.match(/(\[[\s\S]*?\])/);
-                if (jsonMatch && jsonMatch[1]) {
-                    const parsedArray = JSON.parse(jsonMatch[1]);
-                    if (Array.isArray(parsedArray)) {
-                        responseContent = parsedArray
-                            .filter(item => item && typeof item.ref === 'string' && item.ref.trim() !== '')
-                            .map(item => ({
-                                ref: item.ref.trim().toUpperCase(),
-                                reason: typeof item.reason === 'string' ? item.reason.trim() : 'Suggestion AI'
-                            }))
-                            .slice(0, MAX_EQUIVALENTS);
-                        console.log(`${responseContent.length} équivalents parsés.`);
-                    } else { throw new Error("Contenu IA n'est pas un tableau JSON."); }
-                } else { throw new Error("Aucun tableau JSON trouvé dans la réponse IA pour équivalents."); }
+        if (parsedArray !== null) {
+            equivalentList = parsedArray
+                .filter((item): item is { ref: string, reason: string } => // Type guard
+                    typeof item === 'object' && item !== null &&
+                    typeof item.ref === 'string' && item.ref.trim() !== '' &&
+                    typeof item.reason === 'string' // raison peut être vide
+                )
+                .map(item => ({
+                    ref: item.ref.trim().toUpperCase(), // Nettoyer et mettre en majuscule
+                    reason: item.reason.trim()
+                }))
+                .slice(0, MAX_EQUIVALENTS);
 
-            } else if (requestType === 'compare') {
-                // Essayer d'extraire un objet JSON pour la comparaison
-                 const jsonMatch = rawContent.match(/(\{[\s\S]*?\})/);
-                 if (jsonMatch && jsonMatch[1]) {
-                    const parsedObject = JSON.parse(jsonMatch[1]);
-                    // Valider la structure minimale attendue
-                    if (typeof parsedObject === 'object' && parsedObject !== null && (Array.isArray(parsedObject.similarities) || Array.isArray(parsedObject.differences))) {
-                         responseContent = {
-                             similarities: Array.isArray(parsedObject.similarities) ? parsedObject.similarities.map(String) : [],
-                             differences: Array.isArray(parsedObject.differences) ? parsedObject.differences.map(String) : [],
-                             notes: typeof parsedObject.notes === 'string' ? parsedObject.notes : null
-                         };
-                         console.log("Objet de comparaison parsé.");
-                    } else { throw new Error("Objet JSON de comparaison invalide."); }
-                 } else {
-                    console.warn("Aucun objet JSON trouvé pour comparaison, retourne texte brut.");
-                    responseContent = rawContent; // Fallback vers texte brut si JSON échoue
-                 }
-            } else {
-                // Pour 'describe' et 'pinout', prendre le texte brut
-                responseContent = rawContent;
-                console.log(`Contenu textuel extrait pour '${requestType}'.`);
-            }
-        } catch (parseError) {
-            console.error(`Échec parsing/formatage réponse IA pour '${requestType}'. Erreur:`, parseError, "Contenu brut:", rawContent);
-            // Si le parsing échoue pour équivalents/comparaison, on retourne une erreur spécifique
-            if (requestType === 'equivalents' || requestType === 'compare') {
-                throw new Error("L'IA a fourni une réponse mal formatée.");
-            } else {
-                // Pour describe/pinout, on peut quand même retourner le texte brut même si erreur
-                responseContent = rawContent || "Impossible d'extraire la réponse de l'IA.";
-            }
+            console.log(`[ai-component-info] Parsed and filtered equivalents: ${equivalentList.length} items.`);
+        } else {
+             console.warn("[ai-component-info] Could not extract a valid JSON array from AI response. Raw content logged above.");
+             equivalentList = [];
         }
     } else {
-        console.log("Aucun contenu ou choix valide reçu de l'IA.");
-        responseContent = "L'IA n'a pas fourni de réponse.";
-        // Pour équivalents, un tableau vide est une réponse valide
-        if (requestType === 'equivalents') responseContent = [];
-        // Pour les autres, on garde le message texte
+        console.warn("[ai-component-info] Invalid response structure received from OpenRouter:", data);
+        equivalentList = [];
     }
 
+    // --- Return Structured Response to Frontend ---
+    const finalResponse = { equivalents: equivalentList, error: null };
+    const requestEndTime = Date.now();
+    console.log(`[ai-component-info] Returning successful response. Found ${equivalentList.length} equivalents. Duration: ${requestEndTime - requestStartTime} ms.`);
 
-    // --- Retourner la Réponse Structurée au Frontend ---
-    const finalResponse = {
-        response_type: requestType, // Utilise le type demandé initialement
-        content: responseContent
-    };
-
-    console.log(`Retourne réponse structurée pour '${requestType}':`, JSON.stringify(finalResponse));
     return new Response(JSON.stringify(finalResponse), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
     });
 
   } catch (error) {
-    // --- Gestion Générale des Erreurs ---
-    console.error(`Erreur traitement requête Edge Function (Type: ${requestType}, Ref1: ${ref1}):`, error);
+    // --- General Error Handling ---
+    const requestEndTime = Date.now();
+    console.error(`[ai-component-info] !!! TOP LEVEL ERROR (Ref: ${reference || 'N/A'}, Duration: ${requestEndTime - requestStartTime} ms):`, error instanceof Error ? error.message : String(error));
+
     return new Response(JSON.stringify({
-        response_type: "error", // Type spécifique pour l'erreur
-        content: error.message || "Erreur interne du serveur."
+        equivalents: [], // Toujours retourner un tableau vide en cas d'erreur
+        error: `Erreur Edge Function: ${error instanceof Error ? error.message : "Erreur interne inconnue."}`
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
     });
   }
 });
 
-console.log("Edge Function 'ai-component-info' listener démarré.");
+console.log("[ai-component-info] Edge Function listener started.");

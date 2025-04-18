@@ -1,757 +1,818 @@
-// ----- DÉBUT DU FICHIER script.js -----
-// Assure que le code s'exécute après le chargement du DOM
-document.addEventListener('DOMContentLoaded', () => {
-    "use strict"; // Active le mode strict pour détecter plus d'erreurs
+/* ----- DÉBUT DU FICHIER style.css ----- */
 
-    // --- Configuration et Variables Globales ---
-    let currentUser = null;
-    let currentUserCode = null;
-    const ITEMS_PER_PAGE = 15;
-    let isInitialAuthCheckComplete = false;
-    let activeSession = null;
-    let lastDisplayedDrawer = null;
-    let categoriesCache = [];
+/* --- Polices et Variables Globales --- */
+:root {
+    --primary-color: #0056b3; /* Bleu principal */
+    --primary-color-dark: #004085;
+    --secondary-color: #6c757d; /* Gris secondaire */
+    --light-gray: #f8f9fa;
+    --border-color: #dee2e6;
+    --text-color: #212529;
+    --text-muted: #6c757d;
+    --success-color: #155724; /* Vert succès */
+    --success-bg: #d4edda;
+    --error-color: #721c24; /* Rouge erreur */
+    --error-bg: #f8d7da;
+    --warning-color: #856404; /* Orange/Jaune pour Avertissement */
+    --warning-bg: #fff3cd;
+    --info-color: #004085; /* Bleu info */
+    --info-bg: #cce5ff;
+    --link-color: #0069d9;
+    --font-family-base: 'Inter', sans-serif;
+    --border-radius: 0.3rem;
+    --box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    /* --- Couleurs 7 Segments --- */
+    --segment-bg-color: #1a1a1a;
+    --segment-off-color: #330000; /* Rouge très sombre pour OFF */
+    --segment-default-on-color: #ff0000; /* Rouge vif par défaut (pourrait être utilisé pour ERREUR) */
+    --segment-ok-on-color: #33ff33; /* Vert vif */
+    --segment-warning-on-color: #ffff33; /* Jaune vif */
+    --segment-critical-on-color: #ff3333; /* Rouge/Orange vif */
+    --segment-unknown-on-color: #d3d3d3; /* Gris clair pour inconnu */
+    /* Couleurs indicateur stock */
+    --stock-ok-color: #28a745;
+    --stock-warning-color: #ffc107;
+    --stock-critical-color: #dc3545;
+    --stock-unknown-color: #adb5bd;
+    /* Couleurs Highlight Ligne */
+    --highlight-success-bg: rgba(212, 237, 218, 0.6);
+    --highlight-error-bg: rgba(248, 215, 218, 0.6);
+    /* === Couleurs Bordures Onglets === */
+    --tab-recherche-border: #90cfff;    /* Bleu clair */
+    --tab-inventaire-border: #87e8ae;   /* Vert clair */
+    --tab-historique-border: #ffd666;   /* Jaune clair */
+    --tab-audit-border: #ffadd2;      /* Rose clair */
+    --tab-admin-border: #b8b8b8;      /* Gris moyen */
+    --tab-parametres-border: #d3adf7; /* Violet clair */
+    --tab-bom-border: #ff7875; /* Rouge/Corail clair (Utilisé pour Kit Actuel) */
+    /* --- NOUVEAU: Couleur pour Ligne Sélectionnée --- */
+    --kit-selected-bg: #e6f7ff; /* Bleu très léger */
+    --input-error-border: #dc3545; /* Rouge pour inputs invalides */
+}
 
-    // --- Configuration Supabase ---
-    const SUPABASE_URL = 'https://tjdergojgghzmopuuley.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqZGVyZ29qZ2doem1vcHV1bGV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4MTU0OTUsImV4cCI6MjA1OTM5MTQ5NX0.XejQYEPYoCrgYOwW4T9g2VcmohCdLLndDdwpSYXAwPA';
-    const FAKE_EMAIL_DOMAIN = '@stockav.local';
-    // Nom de la fonction Edge (MODIFIÉ ÉTAPE 4)
-    const AI_FUNCTION_NAME = 'ai-component-info';
+body {
+    font-family: var(--font-family-base);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    /* Ajouter espace en haut pour 7-segment fixe */
+    padding-top: 65px; /* Ajuster si hauteur 7-seg change */
+    background-color: #eef2f7; /* Fond gris très clair pour le body */
+    color: var(--text-color);
+    position: relative;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
 
-    let supabase = null;
+*, *:before, *:after {
+  box-sizing: inherit;
+}
 
-    // --- Initialisation des Clients et Vérifications ---
-    try {
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !FAKE_EMAIL_DOMAIN) {
-            throw new Error("Configuration Supabase (URL, Clé Anon, Domaine Factice) manquante ou incomplète dans script.js !");
-        }
-        if (window.supabase && typeof window.supabase.createClient === 'function') {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            console.log("Client Supabase initialisé.");
-        } else {
-            throw new Error("La librairie Supabase (supabase-js@2) n'est pas chargée correctement avant ce script.");
-        }
-        if (typeof Papa === 'undefined') {
-            console.warn("Librairie PapaParse non chargée. L'import CSV ne fonctionnera pas.");
-        }
-    } catch (error) {
-        console.error("Erreur critique lors de l'initialisation:", error);
-        const body = document.querySelector('body');
-        if (body) {
-             body.innerHTML = `<div style="padding: 20px; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: .25rem; font-family: sans-serif;"><h2>Erreur Critique</h2><p>L'application n'a pas pu démarrer correctement.</p><p><strong>Détails :</strong> ${error.message}</p><p>Veuillez vérifier la console du navigateur (F12) pour plus d'informations et vous assurer que les librairies externes sont correctement chargées.</p></div>`;
-        }
-        return;
+
+/* --- Conteneur Principal --- */
+.container {
+    max-width: 1200px; /* Légèrement plus large */
+    margin: 0 auto 25px auto;
+    padding: 30px 35px;
+    background-color: #ffffff; /* Fond blanc pour le contenu principal */
+    border-radius: var(--border-radius);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    position: relative;
+    z-index: 1;
+}
+
+/* --- En-tête --- */
+.app-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 20px;
+    margin-bottom: 25px;
+    text-align: center;
+}
+.app-header h1 {
+    color: var(--primary-color);
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.8em;
+}
+.app-subtitle {
+    font-size: 1em;
+    color: var(--text-muted);
+    margin-top: 5px;
+    margin-bottom: 20px;
+    font-weight: 400;
+}
+#auth-section {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 15px; /* Espacement vertical et horizontal */
+    margin-top: 0;
+}
+
+/* --- Zone Connexion / Infos Utilisateur --- */
+.login-section {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 10px; /* Espacement réduit */
+}
+.login-section label {
+    font-weight: 500;
+    font-size: 0.9em;
+    margin-right: 3px;
+}
+.login-section input[type="text"],
+.login-section input[type="password"] {
+    padding: 7px 10px;
+    border: 1px solid #ced4da;
+    border-radius: var(--border-radius);
+    min-width: 130px; /* Largeur minimum */
+    font-size: 0.9em;
+    vertical-align: middle;
+}
+.login-section button {
+    padding: 7px 15px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.9em;
+    transition: background-color 0.2s ease;
+    vertical-align: middle;
+}
+.login-section button:hover:not(:disabled) { background-color: var(--primary-color-dark); }
+.login-section button:disabled { background-color: var(--secondary-color); opacity: 0.7; cursor: not-allowed;}
+
+/* Feedback area specific for login */
+#login-error.feedback-area.error {
+    color: var(--error-color);
+    background-color: transparent; /* Pas de fond pour login error */
+    border: none;
+    font-size: 0.85em;
+    padding: 0;
+    margin-top: 5px;
+    text-align: center;
+    width: 100%; /* Prend toute la largeur */
+    display: block;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9em;
+    color: var(--text-muted);
+    gap: 10px;
+}
+.user-info strong { color: var(--primary-color); font-weight: 600; }
+.user-info button {
+    padding: 4px 8px;
+    font-size: 0.8em;
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.user-info button:hover { background-color: #5a6268; }
+
+/* --- Navigation Principale (Onglets) --- */
+.view-navigation {
+    margin-top: 0;
+    margin-bottom: 30px;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-left: 5px; /* Petit espace à gauche */
+}
+.nav-button {
+    padding: 12px 22px;
+    cursor: pointer;
+    border: 1px solid transparent; /* Bordures latérales transparentes par défaut */
+    border-top-width: 4px; /* Épaisseur bordure couleur */
+    border-top-style: solid; /* Style bordure couleur */
+    border-bottom: none;
+    background-color: var(--light-gray); /* Fond léger par défaut pour inactifs */
+    margin: 0 3px -1px 3px; /* Marge et décalage pour superposition */
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    font-size: 1em;
+    font-weight: 500;
+    color: var(--text-muted); /* Texte grisé pour inactifs */
+    position: relative;
+    bottom: -1px; /* Aligner avec la bordure du bas de la nav */
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+/* Couleurs spécifiques par onglet (bordure haute) */
+.nav-button.tab-recherche { border-top-color: var(--tab-recherche-border); }
+.nav-button.tab-inventaire { border-top-color: var(--tab-inventaire-border); }
+.nav-button.tab-historique { border-top-color: var(--tab-historique-border); }
+.nav-button.tab-audit { border-top-color: var(--tab-audit-border); }
+.nav-button.tab-admin { border-top-color: var(--tab-admin-border); }
+.nav-button.tab-parametres { border-top-color: var(--tab-parametres-border); }
+.nav-button.tab-bom { border-top-color: var(--tab-bom-border); } /* Utilisé pour Kit Actuel */
+
+/* Effet Hover pour les onglets INACTIFS (non désactivés) */
+.nav-button:not(.active):hover:not(:disabled) {
+    color: var(--primary-color); /* Texte devient bleu */
+    background-color: #e9ecef; /* Fond légèrement plus foncé */
+}
+
+/* Style pour l'onglet ACTIF */
+.nav-button.active {
+    background-color: #ffffff; /* Fond blanc */
+    border-left-color: var(--border-color); /* Bordure latérale visible */
+    border-right-color: var(--border-color);/* Bordure latérale visible */
+    border-bottom: 1px solid #ffffff; /* Cache la ligne du bas de la nav */
+    font-weight: 600; /* Texte en gras */
+    color: var(--primary-color-dark); /* Texte plus foncé pour l'actif */
+    z-index: 2; /* Passe au-dessus de la bordure nav */
+}
+
+/* Onglets protégés et désactivés */
+.nav-button.protected:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    color: var(--text-muted);
+    background-color: #f8f9fa; /* Garder fond clair */
+}
+.nav-button.protected:disabled:hover {
+     background-color: #f8f9fa; /* Pas de changement de fond au hover si désactivé */
+}
+
+
+/* --- Styles Communs Sections/Vues --- */
+main.view-section { padding: 10px 5px 15px 5px; display: none; }
+main.view-section.active-view { display: block; }
+.view-title { text-align: center; margin-top: 0; margin-bottom: 35px; color: var(--text-color); font-size: 1.6em; font-weight: 600; }
+.section-subtitle { margin-bottom: 15px; color: var(--text-color); font-size: 1.2em; font-weight: 600; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+
+/* --- Styles Vue Recherche (Chat) --- */
+.search-section { margin-top: 25px; }
+.search-box { display: flex; align-items: center; box-shadow: var(--box-shadow); border-radius: var(--border-radius); }
+#component-input { flex-grow: 1; padding: 12px 15px; border: 1px solid var(--border-color); border-right: none; border-radius: var(--border-radius) 0 0 var(--border-radius); font-size: 1em; outline: none; transition: border-color 0.2s ease; height: auto; box-sizing: border-box; position: relative; z-index: 1; }
+#component-input:focus { border-color: var(--primary-color); z-index: 2; }
+#search-button { padding: 12px 25px; border: 1px solid var(--primary-color); background-color: var(--primary-color); color: white; border-radius: 0 var(--border-radius) var(--border-radius) 0; cursor: pointer; font-size: 1em; font-weight: 500; transition: all 0.2s ease; height: auto; box-sizing: border-box; margin-left: -1px; /* Chevauche légèrement l'input */ position: relative; z-index: 1; outline: none; }
+#search-button:hover:not(:disabled) { background-color: var(--primary-color-dark); border-color: var(--primary-color-dark); z-index: 2;}
+#search-button:disabled { background-color: var(--secondary-color); border-color: var(--secondary-color); cursor: not-allowed;}
+.response-section { margin-top: 0; }
+.chat-box { background-color: var(--light-gray); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 20px; overflow-y: auto; display: flex; flex-direction: column-reverse; /* Messages récents en bas */ gap: 15px; height: 450px; }
+.message { padding: 10px 16px; border-radius: 18px; max-width: 85%; line-height: 1.5; box-shadow: var(--box-shadow); word-wrap: break-word; font-size: 0.95em; }
+.message.user { background: linear-gradient(to right, #0062cc, #0056b3); color: white; border-radius: 18px 18px 5px 18px; /* Arrondi différent */ align-self: flex-end; margin-left: auto; }
+.message.ai { background-color: #ffffff; color: var(--text-color); border: 1px solid #e9ecef; border-radius: 18px 18px 18px 5px; /* Arrondi différent */ align-self: flex-start; margin-right: auto; }
+.message.ai a { color: var(--link-color); font-weight: 500; text-decoration: underline;}
+.message.ai a:hover { color: var(--primary-color-dark); }
+.message.ai strong, .message.ai b { font-weight: 600; color: var(--primary-color-dark);} /* Markdown bold */
+.message.ai em, .message.ai i { font-style: italic; color: var(--text-muted);} /* Markdown italic */
+.message.ai ul { padding-left: 20px; margin-top: 5px; margin-bottom: 5px; }
+.message.ai li { margin-bottom: 3px; }
+.typing-indicator { text-align: left; margin-top: 10px; /* Apparaît en bas avant ajout message AI */ height: 20px; padding-left: 10px; order: 1; /* Assure qu'il est en dernier */ }
+.typing-indicator i { color: var(--text-muted); font-style: italic; font-size: 0.9em; }
+.message .thinking-dots { font-style: italic; color: var(--text-muted); }
+/* Liens externes dans le chat */
+.external-links-inline { font-size: 0.9em; white-space: nowrap; margin-left: 5px; }
+a.external-link-inline { margin: 0 3px; padding: 1px 3px; text-decoration: none; border-bottom: 1px dotted var(--link-color); transition: background-color 0.2s ease; border-radius: 2px; color: var(--link-color); }
+a.external-link-inline:hover { background-color: #e9ecef; border-bottom-style: solid; }
+a.external-link-inline.mouser { border-bottom-color: #ff6600; color: #ff6600;}
+a.external-link-inline.digikey { border-bottom-color: #cc0000; color: #cc0000;}
+a.external-link-inline.lcsc { border-bottom-color: #00a0e9; color: #00a0e9;}
+a.external-link-inline.aliexpress { border-bottom-color: #ff4747; color: #ff4747; }
+a.external-link-inline:hover { background-color: #eee; } /* Fond neutre au hover */
+.external-links-block { margin-top: 15px; padding-top: 10px; border-top: 1px dashed #eee; font-size: 0.9em;}
+.external-links-block strong { margin-right: 5px;}
+a.external-link { display: inline-block; margin: 5px 8px 5px 0; padding: 5px 10px; text-decoration: none; border-radius: var(--border-radius); font-size: 0.9em; font-weight: 500; transition: all 0.2s ease; border: 1px solid transparent; }
+a.external-link.mouser { background-color: #ff6600; color: white; border-color: #e65c00;}
+a.external-link.digikey { background-color: #cc0000; color: white; border-color: #b30000;}
+a.external-link.lcsc { background-color: #00a0e9; color: white; border-color: #008fcf;}
+a.external-link.aliexpress { background-color: #e44236; color: white; border-color: #c73025;}
+a.external-link:hover { opacity: 0.85; box-shadow: var(--box-shadow); }
+
+/* Indicateurs de stock dans le chat */
+.stock-indicator-chat { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background-color: var(--stock-unknown-color); margin-right: 6px; vertical-align: middle; box-shadow: 0 0 2px rgba(0,0,0,0.15); flex-shrink: 0;}
+.stock-indicator-chat.level-ok { background-color: var(--stock-ok-color); }
+.stock-indicator-chat.level-warning { background-color: var(--stock-warning-color); }
+.stock-indicator-chat.level-critical { background-color: var(--stock-critical-color); }
+
+
+/* --- Styles Vues Inventaire, Log, Audit (Tableaux) --- */
+.filter-box { display: flex; gap: 15px; align-items: flex-end; /* Align items + button */ margin-bottom: 25px; padding: 20px; background-color: var(--light-gray); border-radius: var(--border-radius); flex-wrap: wrap; border: 1px solid var(--border-color); }
+.filter-box .form-group { margin-bottom: 0; flex-grow: 1; flex-basis: 180px; /* Base pour filtres */ }
+.filter-box .filter-search-group { flex-basis: 250px; /* Plus large pour recherche texte */ }
+.filter-box label { margin-bottom: 6px; display: block; font-size: 0.9em; font-weight: 500; color: var(--text-muted);}
+.filter-box select, .filter-box input[type="text"] { padding: 9px 12px; width: 100%; border: 1px solid #ced4da; border-radius: var(--border-radius); font-size: 0.9em; }
+.filter-box button#apply-inventory-filter-button,
+.filter-box button#apply-audit-filter-button {
+    padding: 9px 18px; background-color: var(--primary-color); color: white; border: none; border-radius: var(--border-radius); cursor: pointer; height: 38px; /* Match input height */ font-weight: 500; transition: background-color 0.2s ease; flex-shrink: 0; align-self: flex-end; /* S'assure qu'il s'aligne en bas */ margin-left: auto; /* Pousse à droite si espace */
+}
+.filter-box button#apply-inventory-filter-button:hover:not(:disabled),
+.filter-box button#apply-audit-filter-button:hover:not(:disabled) { background-color: var(--primary-color-dark); }
+.filter-box button:disabled { background-color: var(--secondary-color); opacity: 0.7; cursor: not-allowed;}
+/* Conteneur pour filtres attributs */
+.attribute-filters-container { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 15px 20px; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color); min-height: 30px; /* Hauteur min pour message */ align-items: flex-start; }
+.attribute-filters-container .form-group { flex-grow: 1; min-width: 150px; flex-basis: calc(25% - 20px); /* 4 par ligne sur grand écran */ margin-bottom: 0; }
+.attribute-filters-container label { margin-bottom: 4px; font-size: 0.85em; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.attribute-filters-container select { padding: 8px 10px; font-size: 0.88em; width: 100%; border: 1px solid #ced4da; border-radius: var(--border-radius); }
+.attribute-filters-container i { width: 100%; text-align: center; color: var(--text-muted); font-size: 0.9em; padding: 10px 0; }
+
+/* Styles communs aux tableaux de données */
+.data-display-box { margin-top: 25px; overflow-x: auto; border: 1px solid var(--border-color); border-radius: var(--border-radius); }
+.data-table { width: 100%; border-collapse: collapse; margin: 0; font-size: 0.9em; }
+.data-table th, .data-table td { border: none; border-bottom: 1px solid var(--border-color); padding: 10px 14px; text-align: left; vertical-align: middle; transition: background-color 0.3s ease; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table thead { background-color: #e9ecef; border-bottom: 2px solid var(--border-color); }
+.data-table th { font-weight: 600; white-space: nowrap; color: var(--text-muted); text-transform: uppercase; font-size: 0.85em; }
+.data-table tbody tr:nth-child(even) { background-color: var(--light-gray); }
+.data-table tbody tr:hover:not(.kit-selected):not(.row-highlighted-error):not(.row-highlighted-success):not(.drawer-collected-in-bom) { background-color: #e2e6ea; } /* Modifié pour ne pas appliquer sur drawer-collected */
+.data-table td a { color: var(--link-color); text-decoration: none; font-weight: 500;}
+.data-table td a:hover { text-decoration: underline; }
+
+/* Largeurs colonnes Inventaire (8 colonnes visibles) */
+#inventory-table th.col-select, #inventory-table td.col-select { width: 5%; text-align: center; padding-left: 8px; padding-right: 8px; vertical-align: middle; }
+#inventory-table th:nth-child(2), #inventory-table td:nth-child(2) { width: 17%; position: relative; padding-left: 30px; font-weight: 500; vertical-align: middle; } /* Ref */
+#inventory-table th:nth-child(3), #inventory-table td:nth-child(3) { width: 28%; vertical-align: middle; } /* Description */
+#inventory-table th:nth-child(4), #inventory-table td:nth-child(4) { width: 13%; vertical-align: middle; } /* Catégorie */
+#inventory-table th:nth-child(5), #inventory-table td:nth-child(5) { width: 13%; vertical-align: middle; } /* Type */
+#inventory-table th:nth-child(6), #inventory-table td:nth-child(6) { width: 8%; text-align: center; font-weight: 500; vertical-align: middle; } /* Tiroir */
+#inventory-table th:nth-child(7), #inventory-table td:nth-child(7) { width: 8%; text-align: center; font-weight: 600; vertical-align: middle; } /* Quantité */
+#inventory-table th:nth-child(8), #inventory-table td:nth-child(8) { width: 8%; text-align: center; vertical-align: middle; } /* Datasheet */
+
+/* Styles Checkbox et Ligne Sélectionnée Inventaire */
+#inventory-table td.col-select input[type="checkbox"].kit-select-checkbox { cursor: pointer; width: 18px; height: 18px; vertical-align: middle; accent-color: var(--primary-color); }
+#inventory-table tbody tr.kit-selected { background-color: var(--kit-selected-bg) !important; font-weight: 500; }
+#inventory-table tbody tr.kit-selected:hover { background-color: #d0eaff !important; /* Plus foncé au hover si sélectionné */ }
+/* Curseur pour clic modale (toute la ligne sauf checkbox et liens) */
+.data-table tbody tr.inventory-item-row { cursor: default; }
+.data-table tbody tr.inventory-item-row td:not(.col-select) { cursor: pointer; } /* Curseur main sur les cellules cliquables */
+.data-table tbody tr.inventory-item-row td a { cursor: pointer; } /* Restaurer curseur pour liens */
+
+/* Masquer Tiroir si non connecté */
+#inventory-table th:nth-child(6), #inventory-table td:nth-child(6) { display: table-cell; } /* Afficher par défaut */
+body:not(.user-logged-in) #inventory-table th:nth-child(6), body:not(.user-logged-in) #inventory-table td:nth-child(6) { display: none; }
+
+/* Log Table Specifics */
+#log-table td:nth-child(1) { white-space: nowrap; font-size: 0.9em; color: var(--text-muted); } /* Date */
+#log-table td:nth-child(5) { text-align: center; font-weight: 600; } /* +/- */
+#log-table td:nth-child(6) { text-align: center; font-weight: 600; } /* Stock Final */
+#log-table td.positive { color: #198754; } /* Vert pour positif */
+#log-table td.negative { color: #dc3545; } /* Rouge pour négatif */
+#log-table td:nth-child(3) { font-weight: 500;} /* Action */
+
+/* Message si pas de résultats */
+.no-results-message { text-align: center; margin: 30px 0; color: var(--text-muted); font-style: italic; }
+/* Affichage dans le tableau si vide */
+.data-table tbody tr td[colspan] { text-align: center; padding: 30px 0; color: var(--text-muted); font-style: italic; background-color: #fff !important; }
+
+/* Indicateurs de stock dans tableau */
+.stock-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--stock-unknown-color);
+    position: absolute;
+    left: 10px; /* Espace depuis gauche cellule Ref */
+    top: 50%;
+    transform: translateY(-50%);
+    box-shadow: 0 0 3px rgba(0,0,0,0.2);
+    z-index: 1;
+}
+.stock-indicator.level-ok { background-color: var(--stock-ok-color); }
+.stock-indicator.level-warning { background-color: var(--stock-warning-color); }
+.stock-indicator.level-critical { background-color: var(--stock-critical-color); }
+
+
+/* Pagination */
+.pagination-controls {
+    margin-top: 30px;
+    text-align: center;
+    display: flex; /* Utiliser Flexbox pour alignement */
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap; /* Permettre retour à la ligne sur petits écrans */
+    gap: 10px 15px; /* Espacement entre éléments */
+}
+.pagination-controls button {
+    padding: 7px 14px;
+    /* margin: 0 6px; Supprimé car gap gère l'espacement */
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+    font-size: 0.9em;
+}
+.pagination-controls button:hover:not(:disabled) { background-color: #5a6268; }
+.pagination-controls button:disabled { background-color: #adb5bd; cursor: not-allowed; opacity: 0.7; }
+.pagination-controls span#inventory-page-info,
+.pagination-controls span#log-page-info {
+    display: inline-block;
+    /* margin: 0 12px; Supprimé car gap gère l'espacement */
+    font-size: 0.95em;
+    color: var(--text-color);
+    font-weight: 500;
+    padding: 0 10px; /* Ajouter un peu d'espace autour du texte */
+}
+
+/* --- Styles Vue Admin & Paramètres --- */
+.admin-section { border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 30px; background-color: #ffffff; margin-bottom: 30px; box-shadow: var(--box-shadow); }
+.admin-section h3 { margin-top: 0; color: var(--primary-color-dark); border-bottom: 1px solid #eee; padding-bottom: 12px; margin-bottom: 25px; font-size: 1.4em; font-weight: 600; }
+.admin-section h4 { color: var(--text-color); margin-bottom: 18px; font-size: 1.15em; font-weight: 600; }
+.admin-subsection { border: 1px solid #eee; padding: 15px 20px; margin-bottom: 20px; background-color: #fdfdfd; border-radius: var(--border-radius); }
+.admin-subsection h4 { margin-top: 0; margin-bottom: 18px; color: var(--text-muted); font-size: 1.1em; font-weight: 600; border-bottom: 1px dashed #eee; padding-bottom: 8px; }
+.admin-columns { display: flex; gap: 35px; flex-wrap: wrap; }
+.category-list-section, .category-form-section { flex: 1; min-width: 320px; }
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-muted); font-size: 0.9em; }
+/* Inputs génériques */
+.form-group input[type="text"], .form-group input[type="number"], .form-group input[type="url"], .form-group input[type="file"], .form-group select, .form-group textarea { width: 100%; padding: 10px 14px; border: 1px solid #ced4da; border-radius: var(--border-radius); box-sizing: border-box; font-size: 0.95em; transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out; }
+/* Focus style */
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--primary-color); outline: 0; box-shadow: 0 0 0 0.2rem rgba(0, 86, 179, 0.25); }
+/* Inputs spécifiques */
+.form-group input[type="file"] { padding: 8px; background-color: var(--light-gray); }
+.form-group textarea { resize: vertical; min-height: 70px; }
+.form-group small { display: block; margin-top: 6px; font-size: 0.8em; color: var(--text-muted); line-height: 1.4; }
+/* Input invalide */
+.form-group input.input-error, .form-group select.input-error, .form-group textarea.input-error {
+    border-color: var(--input-error-border);
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+/* Form Actions */
+.form-actions { margin-top: 30px; text-align: right; }
+.form-actions button { margin-left: 10px;}
+/* Section Stock Form spécifique */
+#stock-form .form-group label + input + button#check-stock-button { margin-left: 10px; padding: 10px 15px; font-size: 0.9em; vertical-align: bottom; }
+#stock-form .inline-group { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 15px; }
+#stock-form .inline-group label { margin-bottom: 0; flex-shrink: 0;}
+#stock-form .inline-group input[type="number"] { width: 80px; flex-grow: 0;}
+#stock-form .inline-group button { flex-shrink: 0; }
+#stock-form #current-quantity { font-weight: bold; font-size: 1.1em; margin-right: 15px;}
+/* Boutons Actions génériques (.action-button) */
+button.action-button { padding: 10px 16px; border: none; border-radius: var(--border-radius); cursor: pointer; font-size: 0.9em; font-weight: 500; transition: background-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease; }
+button.action-button.primary { background-color: var(--primary-color); color: white; }
+button.action-button.primary:hover:not(:disabled) { background-color: var(--primary-color-dark); box-shadow: var(--box-shadow); }
+button.action-button.secondary { background-color: var(--secondary-color); color: white; }
+button.action-button.secondary:hover:not(:disabled) { background-color: #5a6268; box-shadow: var(--box-shadow); }
+button.action-button.success { background-color: var(--success-color); color: white; }
+button.action-button.success:hover:not(:disabled) { background-color: #126522; box-shadow: var(--box-shadow); }
+button.action-button.danger { background-color: var(--error-color); color: white; }
+button.action-button.danger:hover:not(:disabled) { background-color: #a01821; box-shadow: var(--box-shadow); }
+button.action-button.info { background-color: var(--info-color); color: white; }
+button.action-button.info:hover:not(:disabled) { background-color: #003063; box-shadow: var(--box-shadow); }
+button.action-button:disabled { background-color: #adb5bd !important; border-color: #adb5bd !important; color: #f8f9fa !important; cursor: not-allowed !important; opacity: 0.65 !important; box-shadow: none !important; }
+/* Petits boutons actions (Edit/Delete Cat) */
+button.edit-cat, button.delete-cat { padding: 5px 10px; font-size: 0.8em; }
+
+/* Liste des catégories */
+#category-list { list-style: none; padding: 0; max-height: 350px; overflow-y: auto; border: 1px solid var(--border-color); padding: 15px; background: #ffffff; margin:0; border-radius: var(--border-radius); }
+#category-list li { padding: 10px 8px; border-bottom: 1px dashed #eee; display: flex; justify-content: space-between; align-items: center; font-size:0.95em; }
+#category-list li:last-child { border-bottom: none; }
+#category-list li button { margin-left: 10px; flex-shrink: 0; }
+#category-list li span:first-child { font-weight: 500; color: var(--text-color); word-break: break-word; padding-right: 10px;}
+#category-list li span.category-actions { flex-shrink: 0; white-space: nowrap;}
+/* Feedback Area générique */
+.feedback-area { margin-top: 20px; padding: 15px; border-radius: var(--border-radius); display: none; font-size: 0.95em; border: 1px solid transparent; font-weight: 500; white-space: pre-wrap; /* Garde les retours à la ligne */ text-align: left; }
+.feedback-area.success { background-color: var(--success-bg); color: var(--success-color); border-color: #badbcc; display: block; text-align: center;}
+.feedback-area.error { background-color: var(--error-bg); color: var(--error-color); border-color: #f5c2c7; display: block; }
+.feedback-area.warning { background-color: var(--warning-bg); color: var(--warning-color); border-color: #ffeeba; display: block; text-align: center;}
+.feedback-area.info { background-color: var(--info-bg); color: var(--info-color); border-color: #b8daff; display: block; text-align: center;}
+
+/* Sections spécifiques Admin Stock */
+#component-actions { margin-top: 15px; margin-bottom: 20px; }
+#component-details { margin-top: 20px; }
+#category-specific-attributes.specific-attributes-section { /* Style pour la section attributs dans Admin Stock */
+    border: 1px dashed #c0c0c0;
+    background-color: #f8f8f8;
+    padding: 20px 25px;
+    margin-top: 25px;
+    border-radius: var(--border-radius);
+}
+#category-specific-attributes h4 { margin-top: 0; color:#495057; margin-bottom: 18px; font-size: 1.05em; font-weight: 600; border-bottom: none; padding-bottom: 0; }
+#category-specific-attributes .form-group { margin-bottom: 15px; }
+#category-specific-attributes label { font-weight: 500; font-size: 0.88em; }
+hr { border: 0; height: 1px; background-color: #e9ecef; margin: 30px 0; }
+
+/* Import Settings */
+.import-mode-choice label { font-weight: normal; margin-bottom: 8px; }
+.radio-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 5px; }
+.radio-group label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-weight: normal; font-size: 0.95em; margin-bottom: 0; }
+.radio-group input[type="radio"] { width: auto; accent-color: var(--primary-color); cursor: pointer; margin-top: 3px; flex-shrink: 0;}
+.radio-group small { font-size: 0.85em; color: var(--text-muted); margin-left: 0; line-height: 1.3;}
+.radio-group label[for="import-mode-overwrite"] small { color: var(--error-color); font-weight: bold; }
+.radio-group input[type="radio"]:disabled + small { color: var(--text-muted); font-weight: normal; }
+
+
+/* --- MODALE DE QUANTITÉ (+/-) --- */
+#modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s ease-in-out; }
+#modal-overlay.active { display: block; opacity: 1; }
+#quantity-change-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border-radius: var(--border-radius); padding: 30px 35px 40px 35px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 1001; min-width: 350px; max-width: 500px; width: 90%; display: none; opacity: 0; transition: opacity 0.3s ease-in-out, top 0.3s ease-in-out; }
+#quantity-change-modal.active { display: block; opacity: 1; }
+#quantity-change-modal h3 { margin-top: 0; margin-bottom: 20px; color: var(--primary-color-dark); font-size: 1.3em; text-align: center; }
+#quantity-change-modal p { margin-bottom: 15px; font-size: 0.95em; text-align: center; }
+#quantity-change-modal p strong { font-weight: 600; }
+.quantity-adjuster { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 25px 0; }
+/* Boutons +/- */
+.adjust-button { padding: 0; width: 40px; height: 40px; font-size: 1.8em; font-weight: bold; line-height: 1; border: 1px solid var(--border-color); border-radius: 50%; background-color: var(--light-gray); color: var(--text-color); cursor: pointer; transition: background-color 0.2s ease, box-shadow 0.2s ease; display: flex; align-items: center; justify-content: center; user-select: none; /* Empêcher sélection texte */ }
+.adjust-button:hover:not(:disabled) { background-color: #e2e6ea; box-shadow: var(--box-shadow); }
+.adjust-button:active:not(:disabled) { background-color: #d6dbe0; }
+.adjust-button:disabled { background-color: #e9ecef !important; color: #adb5bd !important; cursor: not-allowed !important; opacity: 0.7 !important; }
+/* Affichage changement */
+.change-amount-display { font-size: 1.8em; font-weight: 600; color: var(--primary-color); min-width: 60px; text-align: center; padding: 5px 10px; background-color: #ffffff; border-radius: var(--border-radius); border: 1px solid var(--border-color); }
+/* Actions modale */
+#quantity-change-modal .modal-actions { margin-top: 25px; text-align: center; display: flex; justify-content: center; gap: 15px;}
+#quantity-change-modal .modal-actions button { font-size: 1em; } /* Utiliser classe .action-button */
+/* Feedback dans modale */
+.modal-feedback { margin-top: 20px; padding: 10px; border-radius: var(--border-radius); font-size: 0.9em; text-align: center; display: none; border: 1px solid transparent; }
+.modal-feedback.success { background-color: var(--success-bg); color: var(--success-color); border-color: #badbcc; display: block; }
+.modal-feedback.error { background-color: var(--error-bg); color: var(--error-color); border-color: #f5c2c7; display: block; }
+.modal-feedback.info { background-color: var(--info-bg); color: var(--info-color); border-color: #b8daff; display: block; }
+/* Affichage attributs dans modale */
+#modal-current-attributes { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 15px; }
+#modal-current-attributes h4 { text-align: center; margin-bottom: 10px; color: var(--text-muted); font-size: 0.9em; font-weight: 600; border-bottom: none; padding-bottom: 0;}
+#modal-attributes-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 5px 0; max-height: 100px; overflow-y: auto; }
+/* Badges attributs */
+.attribute-badge { display: inline-block; padding: 5px 10px; border-radius: 12px; font-weight: 500; font-size: 0.9em; line-height: 1.4; white-space: nowrap; border: 1px solid transparent; }
+.attribute-badge.badge-color-default { background-color: #e9ecef; color: #495057; border-color: #ced4da; }
+.attribute-badge.badge-color-red { background-color: var(--error-bg); color: var(--error-color); border-color: #f5c6cb; }
+.attribute-badge.badge-color-gray { background-color: #e9ecef; color: var(--secondary-color); border-color: #ced4da; }
+.attribute-badge.badge-color-blue { background-color: var(--info-bg); color: var(--info-color); border-color: #b8daff; }
+.attribute-badge.badge-color-green { background-color: var(--success-bg); color: var(--success-color); border-color: #c3e6cb; }
+.attribute-badge.badge-color-yellow { background-color: var(--warning-bg); color: var(--warning-color); border-color: #ffeeba; }
+
+
+/* --- AFFICHEUR 7 SEGMENTS --- */
+#seven-segment-display { position: fixed; top: 0; left: 15px; /* Décalé du bord */ background-color: var(--segment-bg-color); padding: 8px 12px; border-radius: 0 0 5px 5px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3); display: flex; gap: 6px; z-index: 1050; transition: opacity 0.3s ease, background-color 0.3s ease; opacity: 1; border: 1px solid #444; border-top: none; }
+#seven-segment-display.display-off { opacity: 0.6; }
+/* Transition pour l'allumage/extinction */
+#seven-segment-display .segment { transition: background-color 0.2s ease, box-shadow 0.2s ease; background-color: var(--segment-off-color); position: absolute; border-radius: 1px; }
+/* Style ON générique (sera surchargé par statut) */
+#seven-segment-display .segment.on { background-color: var(--segment-default-on-color); box-shadow: 0 0 4px var(--segment-default-on-color); }
+/* Surcharge par statut */
+#seven-segment-display.status-ok .segment.on { background-color: var(--segment-ok-on-color); box-shadow: 0 0 5px var(--segment-ok-on-color); }
+#seven-segment-display.status-warning .segment.on { background-color: var(--segment-warning-on-color); box-shadow: 0 0 5px var(--segment-warning-on-color); }
+#seven-segment-display.status-critical .segment.on { background-color: var(--segment-critical-on-color); box-shadow: 0 0 5px var(--segment-critical-on-color); }
+#seven-segment-display.status-unknown .segment.on { background-color: var(--segment-unknown-on-color); box-shadow: 0 0 4px var(--segment-unknown-on-color); }
+/* Digit dimensions */
+.digit { width: 20px; height: 38px; position: relative; }
+/* Segment positions */
+.segment-a{top:0;left:2px;width:16px;height:3px}.segment-b{top:2px;right:0;width:3px;height:17px}.segment-c{top:19px;right:0;width:3px;height:17px}.segment-d{bottom:0;left:2px;width:16px;height:3px}.segment-e{top:19px;left:0;width:3px;height:17px}.segment-f{top:2px;left:0;width:3px;height:17px}.segment-g{top:17.5px;left:2px;width:16px;height:3px}
+
+
+/* --- Styles Vue Audit Stock --- */
+/* Largeurs et alignements spécifiques Audit */
+#audit-table th:nth-child(4), #audit-table td:nth-child(4) { width: 10%; text-align: center; } /* Qté Sys */
+#audit-table th:nth-child(5), #audit-table td:nth-child(5) { width: 12%; text-align: center; } /* Qté Phy */
+#audit-table th:nth-child(6), #audit-table td:nth-child(6) { width: 10%; text-align: center; } /* Diff */
+#audit-table th:nth-child(7), #audit-table td:nth-child(7) { width: 13%; text-align: center; } /* Action */
+/* Input quantité physique */
+#audit-table input[type="number"].physical-qty-input { width: 80px; padding: 6px 8px; font-size: 0.95em; text-align: center; border: 1px solid var(--border-color); border-radius: var(--border-radius); box-shadow: inset 0 1px 2px rgba(0,0,0,0.075); }
+#audit-table input[type="number"].physical-qty-input.input-error { border-color: var(--input-error-border); }
+/* Cellule différence */
+#audit-table td:nth-child(6).difference { font-weight: bold; font-size: 1.05em; }
+#audit-table td:nth-child(6).difference.positive { color: var(--success-color); }
+#audit-table td:nth-child(6).difference.negative { color: var(--error-color); }
+#audit-table td:nth-child(6).difference.error-state { color: var(--error-color); font-style: italic; }
+/* Bouton Ajuster */
+#audit-table button.adjust-button { padding: 6px 12px; font-size: 0.9em; } /* Utilise .action-button.primary */
+#audit-table button.adjust-button.adjusted { background-color: var(--success-color) !important; cursor: default !important; opacity: 0.8 !important; }
+/* Highlight lignes Audit */
+@keyframes highlight-success { from { background-color: var(--highlight-success-bg); } to { background-color: transparent; } }
+@keyframes highlight-error { from { background-color: var(--highlight-error-bg); } to { background-color: transparent; } }
+.data-table tbody tr.row-highlighted-success { animation: highlight-success 2.5s ease-out forwards; }
+.data-table tbody tr.row-highlighted-error { animation: highlight-error 3.5s ease-out forwards; }
+
+
+/* ----- STYLES POUR VUE KIT ACTUEL (index.html) ----- */
+#bom-view .section-subtitle { /* Titre "Tiroirs à Visiter" */
+    margin-bottom: 20px;
+    text-align: center;
+    border-bottom: none;
+    color: var(--primary-color-dark);
+}
+/* Conteneur des boutons tiroirs */
+.drawer-buttons-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px; /* Espacement entre boutons */
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--light-gray);
+    min-height: 100px; /* Hauteur minimale pour voir message initial */
+    align-content: flex-start; /* Aligner lignes en haut */
+    justify-content: center; /* Centrer les boutons horizontalement */
+}
+.drawer-buttons-container p { width: 100%; } /* Message initial prend toute largeur */
+/* Boutons Tiroirs (dans index.html) */
+/* Note: Ces boutons n'ont pas la coche et ne sont pas interactifs comme dans bom.html */
+button.drawer-button {
+    padding: 12px 18px;
+    border: 2px solid transparent;
+    border-radius: var(--border-radius);
+    cursor: default; /* Pas de curseur pointeur ici */
+    font-size: 1.1em;
+    font-weight: 600;
+    color: white; /* Texte blanc par défaut */
+    min-width: 80px;
+    text-align: center;
+    transition: all 0.3s ease;
+    box-shadow: var(--box-shadow);
+    position: relative;
+    user-select: none;
+}
+/* Couleurs basées sur statut */
+button.drawer-button.status-ok { background-color: var(--stock-ok-color); border-color: #1c7430; }
+button.drawer-button.status-warning { background-color: var(--stock-warning-color); border-color: #cc9a06; color: #333; } /* Texte sombre sur jaune */
+button.drawer-button.status-critical { background-color: var(--stock-critical-color); border-color: #a71d2a; }
+button.drawer-button.status-unknown { background-color: var(--stock-unknown-color); border-color: #868e96; color: #fff; }
+/* Style pour le bouton 'collected' dans index.html (juste visuel) */
+button.drawer-button.collected {
+    background-color: var(--secondary-color);
+    border-color: #495057;
+    color: #e9ecef;
+    opacity: 0.75;
+    text-decoration: line-through;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+}
+/* Bouton Vider Kit */
+#clear-kit-button { /* Utilise .action-button.secondary */
+    padding: 10px 20px;
+    font-size: 1em;
+}
+/* ----- FIN STYLES KIT ACTUEL (index.html) ----- */
+
+/* --- Styles Footer --- */
+.app-footer { text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid var(--border-color); font-size: 0.88em; color: var(--text-muted); }
+
+/* --- Styles pour items-per-page --- */
+.items-per-page-selector {
+    display: inline-block; /* Pour le mettre sur la même ligne que les boutons */
+    margin-left: 25px; /* Espacement par rapport aux boutons de pagination */
+    vertical-align: middle; /* Alignement vertical avec les boutons */
+}
+
+.items-per-page-selector label {
+    margin-right: 6px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.items-per-page-selector select {
+    padding: 6px 8px; /* Taille similaire aux boutons */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 0.9em;
+    vertical-align: middle;
+    cursor: pointer;
+    background-color: #fff; /* Fond blanc */
+}
+
+.items-per-page-selector select:focus {
+    border-color: var(--primary-color);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 86, 179, 0.25);
+}
+
+.items-per-page-selector span {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin-left: 6px;
+}
+
+/* --- Responsive --- */
+@media (max-width: 992px) {
+    body { padding-top: 60px; }
+    .container { max-width: 95%; margin: 0 auto 15px auto; padding: 20px;}
+    #auth-section { gap: 10px; }
+    .login-section input[type="text"], .login-section input[type="password"] { min-width: 120px;}
+    .admin-columns { flex-direction: column; gap: 25px; }
+    #seven-segment-display { transform: scale(0.95); transform-origin: top left; left: 10px; }
+    .attribute-filters-container .form-group { flex-basis: calc(33.33% - 15px); }
+    button.drawer-button { font-size: 1em; padding: 10px 15px; }
+}
+@media (max-width: 768px) {
+    body { padding-top: 55px; }
+    .nav-button { padding: 10px 15px; font-size: 0.9em;}
+    .filter-box { flex-direction: column; align-items: stretch; gap: 12px; }
+    .filter-box select, .filter-box input[type="text"] { width: 100%; }
+    .filter-box button#apply-inventory-filter-button, .filter-box button#apply-audit-filter-button { margin-left: 0; width: 100%;}
+    .attribute-filters-container .form-group { flex-basis: calc(50% - 10px); }
+    .message { max-width: 90%; }
+    .view-title { font-size: 1.4em; margin-bottom: 25px;}
+    /* Ajustement pagination pour petits écrans */
+    .pagination-controls {
+        gap: 10px 15px; /* Espacement cohérent */
     }
-
-    // --- Récupération des Éléments DOM ---
-    // (Identique aux étapes précédentes)...
-    const loginArea = document.getElementById('login-area');
-    const loginCodeInput = document.getElementById('login-code');
-    const loginPasswordInput = document.getElementById('login-password');
-    const loginButton = document.getElementById('login-button');
-    const loginError = document.getElementById('login-error');
-    const userInfoArea = document.getElementById('user-info-area');
-    const userDisplay = document.getElementById('user-display');
-    const logoutButton = document.getElementById('logout-button');
-    const mainNavigation = document.getElementById('main-navigation');
-    const searchTabButton = document.getElementById('show-search-view');
-    const inventoryTabButton = document.getElementById('show-inventory-view');
-    const logTabButton = document.getElementById('show-log-view');
-    const adminTabButton = document.getElementById('show-admin-view');
-    const settingsTabButton = document.getElementById('show-settings-view');
-    const searchView = document.getElementById('search-view');
-    const inventoryView = document.getElementById('inventory-view');
-    const logView = document.getElementById('log-view');
-    const adminView = document.getElementById('admin-view');
-    const settingsView = document.getElementById('settings-view');
-    const viewSections = document.querySelectorAll('.view-section');
-    const protectedButtons = document.querySelectorAll('.nav-button.protected');
-    const quantityChangeModal = document.getElementById('quantity-change-modal');
-    const modalOverlay = document.getElementById('modal-overlay');
-    const modalRefSpan = document.getElementById('modal-component-ref');
-    const modalQtySpan = document.getElementById('modal-current-quantity');
-    const modalDecreaseButton = document.getElementById('modal-decrease-button');
-    const modalIncreaseButton = document.getElementById('modal-increase-button');
-    const modalChangeAmountDisplay = document.getElementById('modal-change-amount');
-    const modalConfirmButton = document.getElementById('modal-confirm-button');
-    const modalCancelButton = document.getElementById('modal-cancel-button');
-    const modalFeedback = document.getElementById('modal-feedback');
-    const modalAttributesSection = document.querySelector('.modal-attributes-section');
-    const modalAttributesList = document.getElementById('modal-component-attributes');
-    const sevenSegmentDisplay = document.getElementById('seven-segment-display');
-    const segmentDigits = [
-        sevenSegmentDisplay?.querySelector('.digit-1'), sevenSegmentDisplay?.querySelector('.digit-2'),
-        sevenSegmentDisplay?.querySelector('.digit-3'), sevenSegmentDisplay?.querySelector('.digit-4')
-    ];
-    let modalCurrentRef = null;
-    let modalInitialQuantity = 0;
-    let currentModalChange = 0;
-    let currentInventoryPage = 1;
-    let currentLogPage = 1;
-    let currentInventoryFilters = { category: 'all', search: '' };
-    const inventoryTableBody = document.getElementById('inventory-table-body');
-    const inventoryCategoryFilter = document.getElementById('inventory-category-filter');
-    const inventorySearchFilter = document.getElementById('inventory-search-filter');
-    const applyInventoryFilterButton = document.getElementById('apply-inventory-filter-button');
-    const inventoryPrevPageButton = document.getElementById('inventory-prev-page');
-    const inventoryNextPageButton = document.getElementById('inventory-next-page');
-    const inventoryPageInfo = document.getElementById('inventory-page-info');
-    const inventoryNoResults = document.getElementById('inventory-no-results');
-    const logTableBody = document.getElementById('log-table-body');
-    const logPrevPageButton = document.getElementById('log-prev-page');
-    const logNextPageButton = document.getElementById('log-next-page');
-    const logPageInfo = document.getElementById('log-page-info');
-    const logNoResults = document.getElementById('log-no-results');
-    const logFeedbackDiv = document.getElementById('log-feedback');
-    const categoryList = document.getElementById('category-list');
-    const categoryForm = document.getElementById('category-form');
-    const categoryNameInput = document.getElementById('category-name');
-    const categoryAttributesInput = document.getElementById('category-attributes');
-    const categoryIdEditInput = document.getElementById('category-id-edit');
-    const cancelEditButton = document.getElementById('cancel-edit-button');
-    const categoryFormTitle = document.getElementById('category-form-title');
-    const adminFeedbackDiv = document.getElementById('admin-feedback');
-    const stockForm = document.getElementById('stock-form');
-    const componentRefAdminInput = document.getElementById('component-ref-admin');
-    const checkStockButton = document.getElementById('check-stock-button');
-    const componentInfoDiv = document.getElementById('component-info');
-    const currentQuantitySpan = document.getElementById('current-quantity');
-    const updateQuantityButton = document.getElementById('update-quantity-button');
-    const quantityChangeInput = document.getElementById('quantity-change');
-    const componentCategorySelectAdmin = document.getElementById('component-category-select');
-    const specificAttributesDiv = document.getElementById('category-specific-attributes');
-    const componentDescInput = document.getElementById('component-desc');
-    const componentMfgInput = document.getElementById('component-mfg');
-    const componentDatasheetInput = document.getElementById('component-datasheet');
-    const componentInitialQuantityInput = document.getElementById('component-initial-quantity');
-    const componentDrawerAdminInput = document.getElementById('component-drawer-admin');
-    const componentThresholdInput = document.getElementById('component-threshold');
-    const saveComponentButton = document.getElementById('save-component-button');
-    const searchButtonChat = document.getElementById('search-button');
-    const componentInputChat = document.getElementById('component-input');
-    const responseOutputChat = document.getElementById('response-output');
-    const loadingIndicatorChat = document.getElementById('loading-indicator');
-    const exportInventoryCsvButton = document.getElementById('export-inventory-csv-button');
-    const exportLogTxtButton = document.getElementById('export-log-txt-button');
-    const exportFeedbackDiv = document.getElementById('export-feedback');
-    const importCsvFileInput = document.getElementById('import-csv-file');
-    const importInventoryCsvButton = document.getElementById('import-inventory-csv-button');
-    const importFeedbackDiv = document.getElementById('import-feedback');
-    const importModeRadios = document.querySelectorAll('input[name="import-mode"]');
-
-    // --- État et Historique du Chat ---
-    let chatHistory = [];
-    let conversationState = {
-        awaitingEquivalentChoice: false,
-        awaitingQuantityConfirmation: false,
-        originalRefChecked: null,
-        potentialEquivalents: [],
-        chosenRefForStockCheck: null,
-        availableQuantity: 0,
-        criticalThreshold: null
-    };
-    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-    // --- Helper: Statut du Stock ---
-    function getStockStatus(quantity, threshold) { /* ... Identique ... */ }
-    function createStockIndicatorHTML(quantity, threshold) { /* ... Identique ... */ }
-    // --- Authentification ---
-    async function handleLogin() { /* ... Identique ... */ }
-    async function handleLogout() { /* ... Identique ... */ }
-    async function setupAuthListener() { /* ... Identique ... */ }
-    function handleUserConnected(user, isInitialLoad) { /* ... Identique ... */ }
-    function handleUserDisconnected(isInitialLoad) { /* ... Identique ... */ }
-    function clearProtectedViewData() { /* ... Identique ... */ }
-    // --- Navigation ---
-    function setActiveView(viewToShow, buttonToActivate){ /* ... Identique ... */ }
-    // --- LOGIQUE INVENTAIRE ---
-    async function populateInventoryFilters() { /* ... Identique ... */ }
-    async function displayInventory(page = currentInventoryPage) { /* ... Identique ... */ }
-    // --- LOGIQUE HISTORIQUE ---
-    async function displayLog(page = currentLogPage) { /* ... Identique ... */ }
-    function formatLogTimestamp(date) { /* ... Identique ... */ }
-    async function addLogEntry(itemRef, change, newQuantity) { /* ... Identique ... */ }
-    function showLogFeedback(message, type = 'info') { /* ... Identique ... */ }
-    async function handleDeleteSingleLog(event) { /* ... Identique ... */ }
-    async function handleDeleteAllLogs() { /* ... Identique ... */ }
-    // --- VUE ADMIN ---
-    async function getCategories() { /* ... Identique ... */ }
-    function invalidateCategoriesCache() { /* ... Identique ... */ }
-    async function loadAdminData() { /* ... Identique ... */ }
-    async function loadCategoriesAdmin() { /* ... Identique ... */ }
-    function addCategoryEventListeners() { /* ... Identique ... */ }
-    function resetCategoryForm(){ /* ... Identique ... */ }
-    function addComponentCategorySelectListener() { /* ... Identique ... */ }
-    function showAdminFeedback(message, type = 'info'){ /* ... Identique ... */ }
-    function resetStockForm() { /* ... Identique ... */ }
-    function addStockEventListeners() { /* ... Identique ... */ }
-
-    // --- LOGIQUE VUE RECHERCHE (Chat - MODIFIÉE POUR ÉTAPE 4) ---
-
-    async function addMessageToChat(sender, messageContent, isHTML = false) {
-        if (!responseOutputChat) return;
-        const messageElement = document.createElement('div');
-        messageElement.classList.add('message', sender.toLowerCase());
-        responseOutputChat.prepend(messageElement); // Ajoute en haut
-
-        if (sender === 'AI') {
-            loadingIndicatorChat.style.display = 'block';
-            loadingIndicatorChat.querySelector('i').textContent = 'StockAV réfléchit...';
-            messageElement.innerHTML = '...';
-            await delay(150); // Court délai pour afficher '...'
-            if (isHTML) {
-                messageElement.innerHTML = messageContent; // Injecte directement le HTML
-            } else {
-                // Effet de frappe (si pas HTML)
-                messageElement.textContent = '';
-                for (let i = 0; i < messageContent.length; i++) {
-                    messageElement.textContent += messageContent[i];
-                    // Optionnel: ajuster la vitesse de l'effet de frappe
-                    if (messageContent[i] !== ' ') await delay(5);
-                }
-            }
-            loadingIndicatorChat.style.display = 'none';
-        } else {
-            messageElement.textContent = messageContent;
-        }
-
-        // Gérer l'historique du chat (limité)
-        const role = sender === 'User' ? 'user' : 'assistant';
-        chatHistory.push({ role: role, content: messageContent });
-        if (chatHistory.length > 10) { // Garder les 10 derniers messages
-            chatHistory.splice(0, chatHistory.length - 10);
-        }
-
-        responseOutputChat.scrollTop = 0; // Scroll en haut après ajout
+    .items-per-page-selector {
+        margin-left: 0; /* Pas de marge gauche spécifique */
+        flex-basis: 100%; /* Prend toute la largeur si nécessaire */
+        text-align: center; /* Centrer sur sa ligne */
+        margin-top: 10px; /* Espacer si sur nouvelle ligne */
     }
+    /* Masquer colonnes moins prioritaires sur tablettes */
+    #inventory-table th:nth-child(5), #inventory-table td:nth-child(5)  /* Type */
+    { display: none; }
+    #log-table th:nth-child(2), #log-table td:nth-child(2) { display: none; } /* Technicien */
+    #audit-table th:nth-child(2), #audit-table td:nth-child(2) { display: none; } /* Description */
 
-    function displayWelcomeMessage() {
-        if (responseOutputChat) responseOutputChat.innerHTML = '';
-        chatHistory = [];
-        resetConversationState();
-        addMessageToChat('AI', "Bonjour ! Je suis StockAV. Posez-moi une question sur un composant (dispo, équivalents, description, pinout, comparaison) ou entrez une référence.");
-        if(componentInputChat) {
-            componentInputChat.value = '';
-            componentInputChat.focus();
-        }
-    }
+    th, td { padding: 8px 8px; }
+    #inventory-table td.col-select { width: 10%; }
+    #inventory-table td:nth-child(2) { padding-left: 25px; } /* Ref */
+    .stock-indicator { width: 10px; height: 10px; left: 8px; }
+    #seven-segment-display { transform: scale(0.9); transform-origin: top left; left: 5px; }
+    #quantity-change-modal { min-width: 300px; padding: 20px 25px 30px 25px; }
+    .adjust-button { width: 35px; height: 35px; font-size: 1.5em; }
+    .change-amount-display { font-size: 1.5em; min-width: 50px;}
+    #modal-attributes-list { font-size: 0.85em; gap: 6px;}
+    .attribute-badge { padding: 4px 8px; }
+    .drawer-buttons-container { padding: 15px; gap: 10px; }
+    button.drawer-button { font-size: 0.9em; padding: 8px 12px; min-width: 70px; }
+}
+@media (max-width: 480px) {
+    body { padding-top: 0; /* Plus de place pour 7-seg */ }
+    #seven-segment-display { display: none; /* Cacher sur très petits écrans */ }
+    .container { padding: 15px; margin-bottom: 10px;}
+    .nav-button { font-size: 0.8em; padding: 8px 8px; margin: 0 1px -1px 1px;}
+    th, td { padding: 6px 6px; font-size: 0.85em;}
+    /* Masquer plus de colonnes sur mobile */
+    #inventory-table th:nth-child(3), #inventory-table td:nth-child(3), /* Description */
+    #inventory-table th:nth-child(4), #inventory-table td:nth-child(4), /* Catégorie */
+    #inventory-table th:nth-child(8), #inventory-table td:nth-child(8)  /* Datasheet */
+    { display: none; }
+    #log-table th:nth-child(6), #log-table td:nth-child(6) { display: none; } /* Stock Final */
+    #audit-table th:nth-child(3), #audit-table td:nth-child(3) { display: none; } /* Tiroir */
+    #audit-table th:nth-child(4), #audit-table td:nth-child(4) { display: none; } /* Qté Sys */
 
-    // Fonction principale pour gérer l'entrée utilisateur dans le chat (MODIFIÉE ÉTAPE 4)
-    async function handleUserInput() {
-        const userInput = componentInputChat?.value.trim();
-        if (!userInput) return;
+    .attribute-filters-container { display: none; /* Cacher filtres attributs */ }
+    .message.ai button.choice-button { font-size: 0.85em; padding: 5px 10px;}
+    .message.ai a.external-link, .message.ai a.external-link-inline { font-size: 0.80em; padding: 4px 8px; margin-right: 6px;}
+    .user-info { flex-direction: column; gap: 5px;}
+    .user-info button { margin-left: 0;}
+    #quantity-change-modal { min-width: 90%; max-width: 280px; padding: 15px 20px 25px 20px; }
+    #quantity-change-modal h3 { font-size: 1.1em; }
+    .adjust-button { width: 30px; height: 30px; font-size: 1.3em;}
+    .change-amount-display { font-size: 1.3em; min-width: 40px;}
+    #quantity-change-modal .modal-actions button { font-size: 0.9em; padding: 8px 18px;}
+    #inventory-table td.col-select { width: 15%; }
+    #inventory-table td:nth-child(2) { padding-left: 22px; } /* Ref */
+    .stock-indicator { width: 8px; height: 8px; left: 6px; }
+    #modal-attributes-list { font-size: 0.8em; gap: 5px;}
+    .attribute-badge { padding: 3px 7px; }
+    .drawer-buttons-container { padding: 10px; gap: 8px; }
+    button.drawer-button { font-size: 0.85em; padding: 6px 10px; min-width: 60px; }
+    #clear-kit-button { font-size: 0.9em; padding: 8px 15px;}
+    .app-header { padding-bottom: 15px; margin-bottom: 15px; }
+    .app-header h1 { font-size: 1.5em; }
+    .app-subtitle { font-size: 0.9em; margin-bottom: 15px;}
+    .filter-box { padding: 15px; }
+    .admin-section { padding: 20px; }
+    .admin-section h3 { font-size: 1.2em; margin-bottom: 20px; }
+    .admin-section h4 { font-size: 1em; margin-bottom: 15px; }
+}
 
-        addMessageToChat('User', userInput);
-        if (componentInputChat) componentInputChat.value = '';
-        resetConversationState(); // Réinitialise l'état avant chaque nouvelle requête utilisateur
+/* --- AJOUTÉ: Styles pour Ligne Inventaire avec Tiroir Collecté --- */
+.data-table tbody tr.drawer-collected-in-bom {
+    background-color: #f0f0f0 !important; /* Fond gris léger, !important pour surcharger nth-child et hover */
+    opacity: 0.75; /* Légèrement estompé */
+}
 
-        try {
-            // 1. Essayer d'extraire une référence directe
-            const potentialRef = extractReference(userInput);
+.data-table tbody tr.drawer-collected-in-bom td {
+    /* Optionnel: Barrer le texte */
+    /* text-decoration: line-through; */
+    /* text-decoration-color: #999; */
+    color: #555; /* Assombrir légèrement le texte */
+}
 
-            if (potentialRef) {
-                // Si une réf est trouvée, demander les équivalents (comportement par défaut)
-                console.log(`Référence détectée: ${potentialRef}. Recherche d'équivalents.`);
-                await handleAIChatRequest('equivalents', potentialRef);
-            } else {
-                // 2. Si pas de référence, essayer de parser une intention conversationnelle
-                const intentInfo = parseIntentAndRefs(userInput);
-                if (intentInfo.intent !== 'unknown') {
-                    console.log(`Intention détectée: ${intentInfo.intent}`, intentInfo.refs);
-                    if (intentInfo.refs.length > 0) {
-                        await handleAIChatRequest(intentInfo.intent, intentInfo.refs[0], intentInfo.refs[1] || null);
-                    } else {
-                        await addMessageToChat('AI', `Pour ${intentInfo.intent}, veuillez spécifier la (les) référence(s) du composant.`);
-                    }
-                } else {
-                    // 3. Si ni référence ni intention claire
-                    console.log("Ni référence ni intention claire détectée.");
-                    await addMessageToChat('AI', "Désolé, je n'ai pas bien compris. Pouvez-vous reformuler ? Essayez d'entrer une référence (ex: 'LM358'), ou demandez 'décris LM358', 'pinout 74HC595', 'compare LM358 vs TL072'.");
-                }
-            }
-        } catch (error) {
-            console.error("Erreur majeure dans handleUserInput:", error);
-            await addMessageToChat('AI', "Oups ! Une erreur interne s'est produite. Veuillez réessayer.");
-            resetConversationState();
-        } finally {
-            if(componentInputChat) componentInputChat.focus();
-        }
-    }
+/* Style spécifique pour la cellule du tiroir quand collecté */
+.data-table tbody tr.drawer-collected-in-bom td:nth-child(6) { /* Index 6 = Tiroir */
+    font-style: italic;
+    font-weight: normal;
+    color: var(--text-muted);
+}
 
-    // Fonction pour parser l'intention et les références (NOUVEAU ÉTAPE 4)
-    function parseIntentAndRefs(text) {
-        const upperText = text.toUpperCase();
-        let intent = 'unknown';
-        let refs = [];
+/* Empêcher le hover normal sur les lignes collectées */
+.data-table tbody tr.drawer-collected-in-bom:hover {
+    background-color: #e8e8e8 !important; /* Garder un fond gris au hover, légèrement différent */
+    cursor: default; /* Ne pas montrer le curseur main pour la modale */
+}
 
-        // Regex pour extraire les références (similaire à extractReference mais peut capturer plusieurs)
-        const refPattern = /\b(?:PIC|AT[TINYMEGAXMEGA]+|STM32[A-Z]|ESP-?|IRF|LM|NE|UA|MAX|SN74|CD4|BC|BD|TIP|MOC)[\s\-]?\d+[A-Z\d\-/]*\b|\b[1-9]N\s?\d{4}[A-Z]*\b|\b[2-9][NP]\s?\d{4}[A-Z]*\b|\b[A-Z]{2,}\d{2,}[A-Z\d\-/]*\b/g;
-        let match;
-        while ((match = refPattern.exec(upperText)) !== null) {
-            refs.push(match[0].replace(/\s+/g, ''));
-        }
-        // Prioriser les refs les plus longues si plusieurs sont extraites (heuristique simple)
-        refs.sort((a, b) => b.length - a.length);
-        refs = [...new Set(refs)]; // Garder uniques
-
-        // Détection d'intention (priorité à la comparaison)
-        if (/\b(COMPARE|COMPARER|VS|CONTRE)\b/.test(upperText)) {
-            intent = 'compare';
-            if (refs.length < 2) intent = 'unknown'; // Besoin de 2 refs pour comparer
-        } else if (/\b(PINOUT|BROCHAGE|PATTES|PIN-OUT)\b/.test(upperText)) {
-            intent = 'pinout';
-            if (refs.length === 0) intent = 'unknown';
-        } else if (/\b(D[EÉ]CRIS|DESCRIPTION|INFO|CARACT[EÉ]RISTIQUES?|DETAILS?|QU'EST-CE)\b/.test(upperText)) {
-            intent = 'describe';
-             if (refs.length === 0) intent = 'unknown';
-        } else if (/\b(EQUIVALENTS?|REMPLACANTS?|SIMILAIRES?|ALTERNATIVES?)\b/.test(upperText)) {
-             intent = 'equivalents';
-             if (refs.length === 0) intent = 'unknown';
-        }
-         // Si l'intention est trouvée mais qu'il manque les refs, on renvoie l'intention quand même
-         // pour pouvoir demander les refs à l'utilisateur.
-
-        return { intent: intent, refs: refs.slice(0, 2) }; // Prend max 2 refs
-    }
-
-
-    // Fonction pour appeler la fonction Edge et gérer la réponse (NOUVEAU/MODIFIÉ ÉTAPE 4)
-    async function handleAIChatRequest(requestType, ref1, ref2 = null) {
-        if (!ref1) {
-            await addMessageToChat('AI', `Il me manque la référence du composant pour effectuer l'action "${requestType}".`);
-            return;
-        }
-        if (requestType === 'compare' && !ref2) {
-             await addMessageToChat('AI', `Pour comparer, j'ai besoin de deux références de composants.`);
-             return;
-        }
-
-        loadingIndicatorChat.style.display = 'block';
-        let loadingMessage = `Recherche ${requestType} pour ${ref1}...`;
-        if (requestType === 'compare') loadingMessage = `Comparaison entre ${ref1} et ${ref2}...`;
-        else if (requestType === 'equivalents') loadingMessage = `Recherche stock et équivalents pour ${ref1}...`;
-
-        loadingIndicatorChat.querySelector('i').textContent = loadingMessage;
-        resetConversationState(); // Assure qu'on ne reste pas en attente d'une action précédente
-
-        const payload = {
-            request_type: requestType,
-            reference1: ref1.toUpperCase(),
-            reference2: ref2 ? ref2.toUpperCase() : null
-        };
-
-        console.log(`Appel func Edge '${AI_FUNCTION_NAME}' avec payload:`, payload);
-
-        try {
-            const { data: result, error: invokeError } = await supabase.functions.invoke(AI_FUNCTION_NAME, {
-                body: payload
-            });
-
-            loadingIndicatorChat.style.display = 'none';
-
-            if (invokeError) {
-                throw new Error(`Erreur communication service IA: ${invokeError.message}`);
-            }
-
-            if (!result || result.response_type === 'error') {
-                throw new Error(result?.content || "Réponse invalide ou erreur du service IA.");
-            }
-
-            console.log("Réponse reçue de la fonction Edge:", result);
-
-            // Traiter la réponse en fonction du type
-            switch (result.response_type) {
-                case 'equivalents':
-                    // Réutiliser checkComponentWithAI pour l'affichage et la vérif stock local
-                    // On passe les équivalents reçus et la réf originale
-                    await displayEquivalentsResult(ref1, result.content);
-                    break;
-                case 'describe':
-                case 'pinout':
-                    // Afficher directement le contenu textuel
-                    await addMessageToChat('AI', `Voici ${result.response_type === 'describe' ? 'la description' : 'le brochage'} pour <strong>${ref1}</strong>:\n\n${result.content}`);
-                     await delay(300);
-                     await addMessageToChat('AI', "Autre chose ?");
-                    break;
-                case 'comparison':
-                    // Formater la comparaison pour l'affichage
-                    let comparisonHTML = `Comparaison entre <strong>${ref1}</strong> et <strong>${ref2}</strong>:<br><br>`;
-                    if (result.content && typeof result.content === 'object') {
-                        if (result.content.similarities && result.content.similarities.length > 0) {
-                            comparisonHTML += "<strong>Similitudes :</strong><ul>";
-                            result.content.similarities.forEach(s => comparisonHTML += `<li>${s}</li>`);
-                            comparisonHTML += "</ul>";
-                        }
-                        if (result.content.differences && result.content.differences.length > 0) {
-                            comparisonHTML += "<br><strong>Différences :</strong><ul>";
-                            result.content.differences.forEach(d => comparisonHTML += `<li>${d}</li>`);
-                            comparisonHTML += "</ul>";
-                        }
-                        if (result.content.notes) { // Si l'IA ajoute des notes
-                             comparisonHTML += `<br><i>Note IA: ${result.content.notes}</i>`;
-                        }
-                        if (!comparisonHTML.includes('<li>')) { // Si aucun point n'a été listé
-                           comparisonHTML += "L'IA n'a pas fourni de points de comparaison spécifiques.";
-                        }
-                    } else if (typeof result.content === 'string') {
-                        // Si la réponse est juste du texte
-                        comparisonHTML += result.content.replace(/\n/g, '<br>'); // Simple formatage
-                    } else {
-                        comparisonHTML += "Impossible de formater la réponse de comparaison.";
-                    }
-                    await addMessageToChat('AI', comparisonHTML, true);
-                    await delay(300);
-                    await addMessageToChat('AI', "Puis-je aider avec autre chose ?");
-                    break;
-                default:
-                    console.warn("Type de réponse IA non géré:", result.response_type);
-                    await addMessageToChat('AI', "J'ai reçu une réponse de l'IA, mais je ne sais pas comment l'afficher.");
-            }
-
-        } catch (error) {
-            console.error(`Erreur dans handleAIChatRequest pour ${requestType}:`, error);
-            loadingIndicatorChat.style.display = 'none';
-            await addMessageToChat('AI', `Désolé, une erreur s'est produite: ${error.message}`);
-            resetConversationState();
-        }
-    }
-
-    // Fonction spécifique pour traiter et afficher les résultats des équivalents (MODIFIÉE ÉTAPE 4)
-    async function displayEquivalentsResult(originalRef, equivalents = []) {
-        let originalStockInfo = null;
-        let responseHTML = "";
-        conversationState.originalRefChecked = originalRef; // Mémoriser la réf originale demandée
-
-        try {
-            // 1. Vérifier le stock de l'original
-            loadingIndicatorChat.querySelector('i').textContent = `Vérification stock local ${originalRef}...`;
-            originalStockInfo = await getStockInfoFromSupabase(originalRef);
-            await delay(150);
-            if (currentUser && originalStockInfo?.drawer) {
-                updateSevenSegmentDisplay(originalStockInfo.drawer);
-            }
-
-            const showDrawer = currentUser && originalStockInfo?.drawer;
-            let originalStatusHTML = "";
-            if (originalStockInfo) {
-                const indicatorHTML = createStockIndicatorHTML(originalStockInfo.quantity, originalStockInfo.critical_threshold);
-                originalStatusHTML = (originalStockInfo.quantity > 0)
-                    ? `${indicatorHTML}Original <strong>${originalRef}</strong> : Disponible (Qté: ${originalStockInfo.quantity}${showDrawer ? `, Tiroir: ${originalStockInfo.drawer}` : ''}).`
-                    : `${indicatorHTML}Original <strong>${originalRef}</strong> : En rupture localement.`;
-                if (originalStockInfo.quantity > 0) {
-                    conversationState.criticalThreshold = originalStockInfo.critical_threshold; // Pour la demande de quantité
-                }
-            } else {
-                originalStatusHTML = `${createStockIndicatorHTML(undefined, undefined)}Original <strong>${originalRef}</strong> : Non trouvé localement.`;
-            }
-            responseHTML += originalStatusHTML;
-
-            // 2. Vérifier le stock des équivalents reçus
-            let equivalentsStockInfo = {};
-            if (equivalents && equivalents.length > 0) {
-                loadingIndicatorChat.querySelector('i').textContent = `Vérification stock local des équivalents...`;
-                const equivalentRefs = equivalents.map(eq => eq.ref);
-                // Utiliser Promise.all pour paralléliser les vérifications de stock
-                const stockCheckPromises = equivalentRefs.map(ref => getStockInfoFromSupabase(ref));
-                const results = await Promise.all(stockCheckPromises);
-                results.forEach((stockInfo, index) => {
-                    if (stockInfo) {
-                        equivalentsStockInfo[equivalentRefs[index]] = stockInfo;
-                    }
-                });
-                console.log("Stock info pour équivalents:", equivalentsStockInfo);
-
-                // 3. Construire le HTML pour les équivalents
-                responseHTML += "<br><br><strong>Équivalents suggérés :</strong>";
-                let foundAvailableEquivalent = false;
-                equivalents.forEach(eq => {
-                    const eqStock = equivalentsStockInfo[eq.ref];
-                    const eqIndicatorHTML = createStockIndicatorHTML(eqStock?.quantity, eqStock?.critical_threshold);
-                    const eqShowDrawer = currentUser && eqStock?.drawer;
-                    responseHTML += `<div class="equivalent-item">`;
-                    responseHTML += `${eqIndicatorHTML}<strong>${eq.ref}</strong> <small>(${eq.reason || 'Suggestion AI'})</small>`;
-                    if (eqStock) {
-                        if (eqStock.quantity > 0) {
-                            foundAvailableEquivalent = true;
-                            responseHTML += ` : Dispo (Qté: ${eqStock.quantity}${eqShowDrawer ? `, Tiroir: ${eqStock.drawer}` : ''})`;
-                            if (currentUser) {
-                                // Bouton "Prendre" pour l'équivalent
-                                responseHTML += ` <button class="choice-button take-button" data-ref="${eq.ref}" data-qty="${eqStock.quantity}" data-threshold="${eqStock.critical_threshold ?? ''}">Prendre</button>`;
-                            }
-                        } else {
-                            responseHTML += ` : Rupture local.`;
-                            responseHTML += provideExternalLinksHTML(eq.ref, true); // Liens externes si en rupture
-                        }
-                    } else {
-                        responseHTML += ` : Non trouvé local.`;
-                        responseHTML += provideExternalLinksHTML(eq.ref, true); // Liens externes si non trouvé
-                    }
-                    responseHTML += `</div>`;
-                });
-                // Activer l'état d'attente si un équivalent ou l'original est dispo
-                 if (foundAvailableEquivalent || (originalStockInfo && originalStockInfo.quantity > 0)) {
-                    conversationState.awaitingEquivalentChoice = true;
-                }
-            } else {
-                responseHTML += "<br><br>Aucun équivalent suggéré.";
-            }
-
-            // 4. Ajouter bouton "Prendre original" si dispo et connecté
-            if (originalStockInfo && originalStockInfo.quantity > 0 && currentUser) {
-                responseHTML += `<br><button class="choice-button take-button" data-ref="${originalRef}" data-qty="${originalStockInfo.quantity}" data-threshold="${originalStockInfo.critical_threshold ?? ''}">Prendre l'original (${originalRef})</button>`;
-                conversationState.awaitingEquivalentChoice = true;
-            } else if (originalStockInfo && originalStockInfo.quantity > 0 && !currentUser) {
-                responseHTML += `<br><br><i>L'original est disponible. Connectez-vous pour pouvoir le prendre.</i>`;
-            }
-
-            // 5. Ajouter liens externes pour l'original si non dispo ou non trouvé
-            if (!originalStockInfo || originalStockInfo.quantity <= 0) {
-                responseHTML += provideExternalLinksHTML(originalRef, false);
-            }
-
-             // 6. Gérer la suite de la conversation
-             if (!conversationState.awaitingEquivalentChoice && !conversationState.awaitingQuantityConfirmation) {
-                 responseHTML += "<br><br>Puis-je vous aider avec autre chose ?";
-                 resetConversationState(); // Pas d'action possible, on reset
-             } else if (!currentUser && conversationState.awaitingEquivalentChoice) {
-                 // Si des actions sont possibles mais user non connecté
-                 responseHTML += `<br><br><i>Connectez-vous pour choisir ou prendre un composant.</i>`;
-             }
-
-            await addMessageToChat('AI', responseHTML, true);
-
-        } catch (error) {
-            console.error("Erreur lors de l'affichage des résultats d'équivalents:", error);
-            await addMessageToChat('AI', `Une erreur s'est produite lors de la vérification du stock pour ${originalRef} et ses équivalents: ${error.message}`);
-            resetConversationState();
-        } finally {
-             loadingIndicatorChat.style.display = 'none';
-        }
-    }
+/* Rendre la checkbox moins proéminente */
+.data-table tbody tr.drawer-collected-in-bom td.col-select input[type="checkbox"] {
+    opacity: 0.6;
+    cursor: default; /* Pas de curseur pointeur spécifique */
+}
+/* --- FIN AJOUTÉ --- */
 
 
-    // --- Ancienne fonction getAIEquivalents (supprimée ou commentée car remplacée par handleAIChatRequest) ---
-    /* async function getAIEquivalents(reference) { ... } */
-
-    // Gestionnaire de clic dans la zone de chat (MODIFIÉ ÉTAPE 4)
-    responseOutputChat?.addEventListener('click', async (event) => {
-        const targetButton = event.target.closest('button.choice-button.take-button');
-
-        // Gérer clic sur bouton "Prendre"
-        if (targetButton && conversationState.awaitingEquivalentChoice) {
-            const chosenRef = targetButton.dataset.ref;
-            const availableQtyStr = targetButton.dataset.qty;
-            const criticalThresholdStr = targetButton.dataset.threshold;
-
-            if (!chosenRef || availableQtyStr === undefined) {
-                console.warn("Bouton 'Prendre' cliqué sans data-ref ou data-qty."); return;
-            }
-            const availableQty = parseInt(availableQtyStr, 10);
-            if (isNaN(availableQty) || availableQty <= 0) {
-                console.warn(`Quantité invalide (${availableQtyStr}) sur bouton 'Prendre' pour ${chosenRef}.`); return;
-            }
-
-            if (!currentUser) {
-                await promptLoginBeforeAction(`prendre ${chosenRef}`);
-                return;
-            }
-
-            console.log(`Action 'Prendre' choisie pour: ${chosenRef}, Qté dispo: ${availableQty}`);
-            conversationState.awaitingEquivalentChoice = false; // On a fait un choix
-            addMessageToChat('User', `Je choisis de prendre ${chosenRef}`); // Message utilisateur implicite
-            await delay(50);
-
-            // Mémoriser les infos pour la demande de quantité
-            conversationState.chosenRefForStockCheck = chosenRef;
-            conversationState.availableQuantity = availableQty;
-            conversationState.criticalThreshold = (criticalThresholdStr && !isNaN(parseInt(criticalThresholdStr, 10))) ? parseInt(criticalThresholdStr, 10) : null;
-            conversationState.awaitingQuantityConfirmation = true; // On attend la quantité
-
-            // Mettre à jour 7-seg si tiroir connu
-            const stockInfo = await getStockInfoFromSupabase(chosenRef);
-            if (currentUser && stockInfo?.drawer) {
-                updateSevenSegmentDisplay(stockInfo.drawer);
-            }
-
-            // Demander la quantité
-            await addMessageToChat('AI', `Combien de <strong>${chosenRef}</strong> souhaitez-vous prendre ? (Stock actuel: ${availableQty}) Entrez un nombre ou '0' pour annuler.`);
-
-        } else if (event.target.tagName === 'A' && (event.target.classList.contains('external-link') || event.target.classList.contains('external-link-inline'))) {
-            // Simple log si clic sur lien externe
-            console.log(`Lien externe cliqué: ${event.target.href}`);
-            // Le comportement par défaut (ouvrir lien) se produira
-        }
-    });
-
-    async function promptLoginBeforeAction(actionDescription) { await addMessageToChat('AI', `Pour ${actionDescription}, veuillez d'abord vous connecter en utilisant la zone en haut de la page.`); loginCodeInput?.focus(); }
-    function provideExternalLinksHTML(ref, inline = false) { /* ... Identique ... */ }
-
-    // Gérer la réponse de quantité (MODIFIÉ ÉTAPE 4 - principalement les messages)
-    async function handleQuantityResponse(userInput) {
-        const ref = conversationState.chosenRefForStockCheck;
-        // Sécurité: vérifier si on est bien en attente d'une quantité
-        if (!ref || !conversationState.awaitingQuantityConfirmation) {
-             console.warn("handleQuantityResponse appelé alors qu'on n'attendait pas de quantité.");
-             // Tenter de relancer une recherche si l'utilisateur a entré autre chose
-             resetConversationState();
-             await handleUserInput(); // Ré-évaluer l'entrée comme une nouvelle requête
-             return;
-        }
-
-        const requestedQty = parseInt(userInput, 10);
-
-        if (isNaN(requestedQty) || requestedQty < 0) {
-            await addMessageToChat('AI', `Quantité invalide. Veuillez entrer un nombre positif (ex: 5) ou '0' pour annuler.`);
-            // On reste en attente de la quantité
-            return;
-        }
-
-        if (requestedQty === 0) {
-            await addMessageToChat('AI', "Opération annulée.");
-            resetConversationState();
-            await delay(300);
-            await addMessageToChat('AI', "Comment puis-je vous aider maintenant ?");
-            return;
-        }
-
-        if (requestedQty > conversationState.availableQuantity) {
-            await addMessageToChat('AI', `Quantité demandée (${requestedQty}) supérieure au stock disponible (${conversationState.availableQuantity}). Veuillez entrer une quantité valide ou '0' pour annuler.`);
-            // On reste en attente de la quantité
-            return;
-        }
-
-        loadingIndicatorChat.style.display = 'block';
-        loadingIndicatorChat.querySelector('i').textContent = `Mise à jour du stock pour ${ref}...`;
-        const change = -requestedQty;
-
-        try {
-            const newQty = await updateStockInSupabase(ref, change); // Met à jour DB et log l'entrée
-            loadingIndicatorChat.style.display = 'none';
-
-            if (newQty !== null) {
-                const statusIndicatorHTML = createStockIndicatorHTML(newQty, conversationState.criticalThreshold);
-                await addMessageToChat('AI', `${statusIndicatorHTML}Ok ! ${requestedQty} unité(s) de <strong>${ref}</strong> retirée(s) du stock. Nouveau stock : ${newQty}.`);
-                // Rafraîchir la vue inventaire si elle est active
-                if (inventoryView.classList.contains('active-view')) {
-                    displayInventory(currentInventoryPage);
-                }
-                resetConversationState(); // Opération réussie, on reset l'état
-                await delay(300);
-                await addMessageToChat('AI', "Puis-je faire autre chose pour vous ?");
-            }
-             // Si newQty est null, updateStockInSupabase a déjà levé une erreur gérée dans le catch
-        } catch (error) {
-            console.error("Erreur màj stock via chat:", error);
-            loadingIndicatorChat.style.display = 'none';
-            let errorMessage = `Erreur lors de la mise à jour du stock pour <strong>${ref}</strong>.`;
-
-            if (error.message.includes("Stock insuffisant")) {
-                 errorMessage = `Erreur : Le stock de <strong>${ref}</strong> est insuffisant (${error.message}).`;
-                 // Essayer de récupérer le stock actuel réel pour informer l'utilisateur
-                 const currentStock = await getStockInfoFromSupabase(ref);
-                 if(currentStock) {
-                     errorMessage += ` Le stock actuel réel est: ${currentStock.quantity}. Veuillez réessayer avec une quantité valide ou '0'.`;
-                     conversationState.availableQuantity = currentStock.quantity; // Mettre à jour la quantité connue
-                     conversationState.awaitingQuantityConfirmation = true; // Rester en attente
-                     await addMessageToChat('AI', errorMessage);
-                     return; // Ne pas réinitialiser l'état, attendre nouvelle quantité
-                 }
-            } else if (error.message) {
-                 errorMessage += ` Détails: ${error.message}`;
-            }
-
-            // Si erreur non gérée spécifiquement (ou si getStockInfo échoue), on abandonne et reset
-            resetConversationState();
-            await addMessageToChat('AI', errorMessage);
-            await delay(300);
-            await addMessageToChat('AI', "Que souhaitez-vous faire maintenant ?");
-        }
-    }
-
-    function resetConversationState() { conversationState = { awaitingEquivalentChoice: false, awaitingQuantityConfirmation: false, originalRefChecked: null, potentialEquivalents: [], chosenRefForStockCheck: null, availableQuantity: 0, criticalThreshold: null }; console.log("État conversationnel du chat réinitialisé."); }
-    function extractReference(text) { /* ... Identique ... */ }
-
-    // --- Fonctions d'interaction Supabase ---
-    async function getStockInfoFromSupabase(ref) { /* ... Identique (assure que 'attributes' est sélectionné) ... */ }
-    async function updateStockInSupabase(ref, change) { /* ... Identique ... */ }
-    // --- Gestion Modale Quantité (+/-) ---
-    async function handleInventoryRowClick(event) { /* ... Identique (passe item à showQuantityModal) ... */ }
-    function showQuantityModal(item) { /* ... Identique (gère l'affichage des attributs) ... */ }
-    function hideQuantityModal() { /* ... Identique ... */ }
-    function updateModalButtonStates() { /* ... Identique ... */ }
-    // (Listeners de la modale identiques)
-    modalDecreaseButton?.addEventListener('click', () => { /* ... */ });
-    modalIncreaseButton?.addEventListener('click', () => { /* ... */ });
-    modalCancelButton?.addEventListener('click', hideQuantityModal);
-    modalOverlay?.addEventListener('click', (event) => { /* ... */ });
-    modalConfirmButton?.addEventListener('click', async () => { /* ... Identique ... */ });
-
-    // --- Gestion Afficheur 7 Segments ---
-    const segmentMap = { /* ... Identique ... */ };
-    function updateSevenSegmentDisplay(newDrawerValue = undefined) { /* ... Identique ... */ }
-    // --- Logique pour la vue Paramètres ---
-    function loadSettingsData() { /* ... Identique ... */ }
-    function showSettingsFeedback(type, message, level = 'info') { /* ... Identique ... */ }
-    function downloadFile(filename, content, mimeType) { /* ... Identique ... */ }
-    async function handleExportInventoryCSV() { /* ... Identique ... */ }
-    async function handleExportLogTXT() { /* ... Identique ... */ }
-    async function handleImportInventoryCSV() { /* ... Identique (gère mode overwrite/upsert) ... */ }
-    function resetImportState() { /* ... Identique ... */ }
-    function addSettingsEventListeners() { /* ... Identique ... */ }
-
-    // --- Initialisation Générale de l'Application ---
-    function initializeApp() {
-        console.log("Initialisation de StockAV...");
-        // Vérifier tous les IDs nécessaires
-        const requiredIds = ['login-area','search-view','inventory-view','log-view','admin-view','settings-view','seven-segment-display','inventory-table-body','response-output','component-input','show-search-view','show-inventory-view','show-log-view','show-admin-view','show-settings-view','login-button','logout-button','search-button','category-list','stock-form','component-category-select','save-component-button','export-inventory-csv-button','import-inventory-csv-button','log-table-body','log-feedback','import-csv-file','import-mode-upsert','import-mode-overwrite', 'modal-component-attributes', 'quantity-change-modal', 'loading-indicator']; // Ajout loading-indicator
-        if (requiredIds.some(id => !document.getElementById(id))) { console.error("FATAL: Elément DOM essentiel manquant! Vérifiez index.html."); document.body.innerHTML = "<p style='color:red; padding:20px;'><b>Erreur init.</b> Vérifiez console (F12) & index.html.</p>"; return; }
-
-        // --- Ajout des Écouteurs d'Événements ---
-        // Navigation & Auth
-        searchTabButton.addEventListener('click', () => setActiveView(searchView, searchTabButton));
-        inventoryTabButton.addEventListener('click', () => setActiveView(inventoryView, inventoryTabButton));
-        logTabButton.addEventListener('click', () => setActiveView(logView, logTabButton));
-        adminTabButton.addEventListener('click', () => setActiveView(adminView, adminTabButton));
-        settingsTabButton.addEventListener('click', () => setActiveView(settingsView, settingsTabButton));
-        loginButton.addEventListener('click', handleLogin);
-        loginPasswordInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
-        loginCodeInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
-        logoutButton.addEventListener('click', handleLogout);
-        // Chat
-        searchButtonChat.addEventListener('click', handleUserInput);
-        componentInputChat.addEventListener('keypress', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleUserInput(); } });
-        responseOutputChat?.addEventListener('click', async (event) => { /* Gestion clic bouton 'Prendre' */ }); // Listener modifié en Étape 4
-        // Inventaire
-        applyInventoryFilterButton?.addEventListener('click', () => { currentInventoryFilters.category = inventoryCategoryFilter.value; currentInventoryFilters.search = inventorySearchFilter.value; displayInventory(1); });
-        inventorySearchFilter?.addEventListener('keypress', (e) => { if (e.key === 'Enter') { applyInventoryFilterButton?.click(); } });
-        inventoryPrevPageButton?.addEventListener('click', () => { if (currentInventoryPage > 1) { displayInventory(currentInventoryPage - 1); } });
-        inventoryNextPageButton?.addEventListener('click', () => { if (!inventoryNextPageButton?.disabled) { displayInventory(currentInventoryPage + 1); } });
-        inventoryTableBody.addEventListener('click', handleInventoryRowClick); // Gère modale
-        // Log
-        logPrevPageButton?.addEventListener('click', () => { if (currentLogPage > 1) { displayLog(currentLogPage - 1); } });
-        logNextPageButton?.addEventListener('click', () => { if (!logNextPageButton?.disabled) { displayLog(currentLogPage + 1); } });
-        logTableBody?.addEventListener('click', handleDeleteSingleLog); // Listener délégué pour Suppr.
-        // (Listener pour Purger Tout est ajouté dynamiquement dans displayLog)
-        // Admin & Settings
-        addCategoryEventListeners();
-        addComponentCategorySelectListener();
-        addStockEventListeners();
-        addSettingsEventListeners();
-        // Modale
-        modalDecreaseButton?.addEventListener('click', () => { /* ... */ });
-        modalIncreaseButton?.addEventListener('click', () => { /* ... */ });
-        modalCancelButton?.addEventListener('click', hideQuantityModal);
-        modalOverlay?.addEventListener('click', (event) => { /* ... */ });
-        modalConfirmButton?.addEventListener('click', async () => { /* ... */ });
-
-        // --- Initialisation finale ---
-        setupAuthListener();
-        updateSevenSegmentDisplay(null);
-        console.log("StockAV initialisé et prêt.");
-    } // Fin initializeApp
-
-    // --- Lancer l'application ---
-    initializeApp();
-
-}); // ----- FIN DU FICHIER script.js -----
+/* ----- FIN DU FICHIER style.css ----- */

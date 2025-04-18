@@ -5,52 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StockAV</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="admin-styles.css"> <!-- Gardé pour la vue Admin -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Librairie Supabase JS v2 -->
+    <!-- Supabase Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Librairie PapaParse pour CSV -->
+    <!-- PapaParse for CSV Import/Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha512-dfX5uYVXzyU8+KHqj8bjo7UkOdg18PaOtpa48djpNbZHwExddghZ+ZmzWT06R5v6NSk3ZUfsH6FNEDepLx9hPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- Optional: FileSaver.js for more robust downloads -->
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js" integrity="sha512-Qlv6VSKh1gDKGoJbovnlckEzUfPIFMfXaIzQWGM3LsaAEbkfsHxSXVfMGzMscFqFwfGDrBcsKUmzdvHGCF0yYg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script> -->
 </head>
-<body> <!-- La classe user-logged-in sera ajoutée/retirée ici par JS -->
-    <!-- Afficheur 7 Segments -->
+<body>
+
+    <!-- ===================== 7-SEGMENT DISPLAY ===================== -->
     <div id="seven-segment-display" class="display-off">
-        <div class="digit digit-1">
-            <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
-            <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
-            <div class="segment segment-g"></div>
-        </div>
-        <div class="digit digit-2">
-             <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
-             <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
-             <div class="segment segment-g"></div>
-        </div>
-        <div class="digit digit-3">
-             <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
-             <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
-             <div class="segment segment-g"></div>
-        </div>
-        <div class="digit digit-4">
-             <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
-             <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
-             <div class="segment segment-g"></div>
-        </div>
+        <div class="digit digit-1"><div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div><div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div><div class="segment segment-g"></div></div>
+        <div class="digit digit-2"><div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div><div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div><div class="segment segment-g"></div></div>
+        <div class="digit digit-3"><div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div><div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div><div class="segment segment-g"></div></div>
+        <div class="digit digit-4"><div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div><div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div><div class="segment segment-g"></div></div>
     </div>
 
     <div class="container">
+        <!-- ===================== HEADER ===================== -->
         <header class="app-header">
             <h1>StockAV</h1>
-            <p class="app-subtitle">Gestion de stock des pièces éléctroniques</p>
-            <!-- Zone de Connexion / Infos Utilisateur -->
+            <p class="app-subtitle">Gestion de stock de composants électroniques</p>
             <div id="auth-section">
                 <div id="login-area" class="login-section">
-                    <label for="login-code">Code Technicien:</label>
-                    <input type="text" id="login-code" placeholder="Votre code unique">
-                    <label for="login-password">Mot de passe:</label>
-                    <input type="password" id="login-password" placeholder="Votre mot de passe">
+                    <label for="login-code">Code:</label>
+                    <input type="text" id="login-code" placeholder="Votre code" autocomplete="username">
+                    <label for="login-password">MdP:</label>
+                    <input type="password" id="login-password" placeholder="********" autocomplete="current-password">
                     <button id="login-button">Connexion</button>
-                    <p id="login-error" class="error-message" style="display: none;"></p>
+                    <p id="login-error" class="feedback-area error" style="display: none; width: 100%; text-align: center; margin-top: 8px;"></p>
                 </div>
                 <div id="user-info-area" class="user-info" style="display: none;">
                     Connecté: <strong id="user-display"></strong>
@@ -59,89 +47,120 @@
             </div>
         </header>
 
-        <!-- Navigation Principale -->
+        <!-- ===================== MAIN NAVIGATION ===================== -->
         <nav id="main-navigation" class="view-navigation">
-            <button id="show-search-view" class="nav-button active">Recherche Composant</button>
-            <button id="show-inventory-view" class="nav-button">Stock Actuel</button>
-            <button id="show-log-view" class="nav-button protected" style="display: none;" disabled title="Connexion requise">Historique (LOG)</button>
-            <button id="show-admin-view" class="nav-button protected" style="display: none;" disabled title="Connexion requise">Administration</button>
-            <button id="show-settings-view" class="nav-button protected" style="display: none;" disabled title="Connexion requise">Paramètres</button>
+            <button id="show-search-view" class="nav-button tab-recherche active" title="Rechercher des composants">Recherche</button>
+            <button id="show-inventory-view" class="nav-button tab-inventaire" title="Voir tout le stock">Inventaire</button>
+            <button id="show-bom-view" class="nav-button tab-bom protected" style="display: none;" disabled title="Connexion requise">Kit Actuel</button>
+            <button id="show-log-view" class="nav-button tab-historique protected" style="display: none;" disabled title="Connexion requise">Historique</button>
+            <button id="show-audit-view" class="nav-button tab-audit protected" style="display: none;" disabled title="Connexion requise">Audit Stock</button>
+            <button id="show-admin-view" class="nav-button tab-admin protected" style="display: none;" disabled title="Connexion requise">Admin</button>
+            <button id="show-settings-view" class="nav-button tab-parametres protected" style="display: none;" disabled title="Accès réservé à l'administrateur">Paramètres</button>
         </nav>
 
-        <!-- ================== VUE RECHERCHE UTILISATEUR (CHAT) ================== -->
+        <!-- ================== SEARCH VIEW (CHAT) ================== -->
         <main id="search-view" class="view-section active-view">
              <h2 class="view-title">Recherche de Composants</h2>
-
-             <!-- *** MODIFICATION : Ordre inversé ici *** -->
-
-             <!-- 1. Zone d'affichage des messages (maintenant en premier) -->
              <div class="response-section">
                  <h3 class="section-subtitle">Conversation avec StockAV</h3>
                  <div id="response-output" class="output-box chat-box">
-                     <!-- Messages ajoutés dynamiquement par JS -->
+                    <!-- Messages will be prepended here by JS -->
                  </div>
                  <div id="loading-indicator" class="loading typing-indicator" style="display: none;">
                      <i>StockAV réfléchit...</i>
                  </div>
              </div>
-
-             <!-- 2. Zone de saisie (maintenant en dernier) -->
              <div class="search-section">
                  <div class="search-box">
-                     <input type="text" id="component-input" placeholder="Demandez à StockAV (ex: 'LM358N dispo ?')">
+                     <input type="text" id="component-input" placeholder="Demandez à StockAV (ex: 'LM358N dispo ?', 'Résistance 10k', ...)">
                      <button id="search-button" title="Envoyer la requête">Envoyer</button>
                  </div>
              </div>
-             <!-- *** FIN MODIFICATION *** -->
-
         </main>
 
-        <!-- ===================== VUE INVENTAIRE ===================== -->
+        <!-- ===================== INVENTORY VIEW ===================== -->
         <main id="inventory-view" class="view-section" style="display: none;">
             <h2 class="view-title">Stock Actuel</h2>
             <div class="inventory-filters filter-box">
                 <div class="form-group">
                     <label for="inventory-category-filter">Catégorie:</label>
-                    <select id="inventory-category-filter">
-                        <option value="all">Toutes</option>
-                        <!-- JS -->
-                    </select>
+                    <select id="inventory-category-filter"><option value="all">Toutes</option></select>
                 </div>
                 <div class="form-group filter-search-group">
-                    <label for="inventory-search-filter">Recherche:</label>
-                    <input type="text" id="inventory-search-filter" placeholder="Réf, Desc, Fab...">
+                    <label for="inventory-search-filter">Recherche Texte:</label>
+                    <input type="text" id="inventory-search-filter" placeholder="Réf, Desc, Attribut 'Type'...">
                 </div>
-                 <button id="apply-inventory-filter-button" title="Appliquer les filtres">Filtrer</button>
+                 <div id="inventory-attribute-filters" class="attribute-filters-container">
+                    <!-- Attribute filters will be injected here by JS -->
+                    <i>Sélectionnez une catégorie pour voir les filtres spécifiques.</i>
+                 </div>
+                 <button id="apply-inventory-filter-button" title="Appliquer tous les filtres">Filtrer</button>
             </div>
-
             <div class="inventory-display data-display-box">
                 <table id="inventory-table" class="data-table">
                     <thead>
                         <tr>
+                            <th class="col-select" title="Sélectionner pour le Kit Actuel">Sel.</th>
                             <th>Référence</th>
                             <th>Description</th>
                             <th>Catégorie</th>
+                            <th>Type (Attr.)</th>
                             <th>Tiroir</th>
-                            <th>Fabricant</th>
                             <th>Quantité</th>
                             <th>Datasheet</th>
                         </tr>
                     </thead>
                     <tbody id="inventory-table-body">
-                        <!-- Lignes générées par JS -->
+                        <!-- Inventory rows will be injected here by JS -->
                     </tbody>
                 </table>
-                 <p id="inventory-no-results" class="no-results-message" style="display: none;">Aucun résultat.</p>
+                 <p id="inventory-no-results" class="no-results-message" style="display: none;">Aucun composant trouvé.</p>
             </div>
-
             <div id="inventory-pagination" class="pagination-controls">
                 <button id="inventory-prev-page" disabled>« Préc.</button>
                 <span id="inventory-page-info">Page 1 / 1</span>
                 <button id="inventory-next-page" disabled>Suiv. »</button>
+
+                <!-- *** CORRECTION ICI : Décommenté et structuré *** -->
+                <div class="items-per-page-selector">
+                    <label for="items-per-page-select">Afficher:</label>
+                    <select id="items-per-page-select" title="Nombre d'éléments par page">
+                        <option value="15">15</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span> par page</span>
+                </div>
+                <!-- *** FIN CORRECTION *** -->
+
             </div>
         </main>
 
-         <!-- ===================== VUE HISTORIQUE (LOG) ===================== -->
+        <!-- ===================== KIT VIEW (Formerly BOM) ===================== -->
+        <main id="bom-view" class="view-section" style="display: none;">
+            <h2 class="view-title">Kit Actuel / Liste de Prélèvement</h2>
+
+            <div id="bom-feedback" class="feedback-area" style="margin-bottom: 20px;">
+                <!-- Feedback messages for Kit view (e.g., "Drawer collected", "Kit cleared") -->
+            </div>
+
+            <h3 class="section-subtitle">Tiroirs à Visiter</h3>
+            <div id="current-kit-drawers" class="drawer-buttons-container">
+                <!-- Drawer buttons will be injected here by JS -->
+                <p style="text-align: center; color: var(--text-muted); padding: 20px 0;">
+                    <i>Sélectionnez des composants dans l'onglet "Inventaire" pour les voir apparaître ici.</i>
+                </p>
+            </div>
+
+            <div class="form-actions" style="margin-top: 30px; text-align: center;">
+                <button id="clear-kit-button" class="action-button secondary" title="Vider la sélection actuelle et réinitialiser les tiroirs">
+                    Vider le Kit Actuel
+                </button>
+            </div>
+        </main>
+
+         <!-- ===================== LOG VIEW ===================== -->
          <main id="log-view" class="view-section" style="display: none;">
             <h2 class="view-title">Historique des Mouvements</h2>
             <div class="log-display data-display-box">
@@ -149,18 +168,18 @@
                      <thead>
                          <tr>
                              <th>Date & Heure</th>
-                             <th>Technicien</th>
+                             <th>Tech.</th>
                              <th>Action</th>
                              <th>Référence</th>
                              <th>+/-</th>
                              <th>Stock Final</th>
-                             <!-- Colonne Actions ajoutée par JS si zine -->
                          </tr>
                      </thead>
-                     <tbody id="log-table-body"></tbody>
+                     <tbody id="log-table-body">
+                        <!-- Log entries will be injected here by JS -->
+                     </tbody>
                  </table>
-                 <p id="log-no-results" class="no-results-message" style="display: none;">Historique vide.</p>
-                 <!-- Bouton Purge ajouté par JS après le tableau si zine -->
+                 <p id="log-no-results" class="no-results-message" style="display: none;">L'historique est vide.</p>
             </div>
             <div id="log-pagination" class="pagination-controls">
                 <button id="log-prev-page" disabled>« Préc.</button>
@@ -169,429 +188,207 @@
             </div>
          </main>
 
-        <!-- ===================== VUE ADMINISTRATION ===================== -->
-        <main id="admin-view" class="view-section" style="display: none;">
-             <h2 class="view-title">Administration</h2>
-             <!-- Section Gestion des Catégories -->
-            <section id="category-manager" class="admin-section">
-                <h3>Gestion des Catégories</h3>
-                 <div class="admin-columns">
-                    <div class="category-list-section">
-                        <h4>Catégories Existantes</h4>
-                        <ul id="category-list"></ul>
-                    </div>
-                    <div class="category-form-section">
-                        <h4 id="category-form-title">Ajouter une Catégorie</h4>
-                        <form id="category-form">
-                            <input type="hidden" id="category-id-edit" value="">
-                            <div class="form-group"><label for="category-name">Nom:</label><input type="text" id="category-name" required></div>
-                            <div class="form-group"><label for="category-attributes">Attributs (séparés par virgule):</label><textarea id="category-attributes" rows="3" placeholder="Ex: Type, Capacité, Tension"></textarea><small>Définit les champs spécifiques.</small></div>
-                            <div class="form-actions"><button type="submit" id="save-category-button">Enregistrer</button><button type="button" id="cancel-edit-button" style="display: none;">Annuler</button></div>
-                        </form>
-                    </div>
-                </div>
-            </section>
-            <!-- Section Gestion du Stock -->
-            <section id="stock-manager" class="admin-section">
-                <h3>Gestion du Stock</h3>
-                <form id="stock-form" onsubmit="return false;">
-                    <div class="form-group"><label for="component-ref-admin">Référence Composant:</label><input type="text" id="component-ref-admin" required placeholder="Ex: LM358N"><button type="button" id="check-stock-button">Vérifier Stock</button></div>
-                    <div id="component-info" style="display: none;">
-                        <div class="form-group inline-group">
-                            <label>Stock Actuel:</label><span id="current-quantity">N/A</span>
-                            <label for="quantity-change" style="margin-left: 20px;">Modifier (+/-):</label><input type="number" id="quantity-change" value="0">
-                            <button type="button" id="update-quantity-button">Mettre à jour</button>
-                        </div>
-                        <hr>
-                        <p><em>Ou modifiez les détails complets ci-dessous :</em></p>
-                    </div>
-                    <div id="component-details">
-                        <div class="form-group"><label for="component-category-select">Catégorie:</label><select id="component-category-select" required><option value="">-- Sélectionner --</option></select></div>
-                        <div class="form-group"><label for="component-desc">Description:</label><input type="text" id="component-desc" placeholder="Ex: Ampli Op Double"></div>
-                        <div class="form-group"><label for="component-mfg">Fabricant:</label><input type="text" id="component-mfg" placeholder="Ex: TI"></div>
-                        <div class="form-group"><label for="component-drawer-admin">Tiroir (optionnel):</label><input type="text" id="component-drawer-admin" placeholder="Ex: 01A5"></div>
-                        <div class="form-group"><label for="component-datasheet">Lien Datasheet (optionnel):</label><input type="url" id="component-datasheet" placeholder="https://..."></div>
-                        <div id="category-specific-attributes" class="form-group" style="display: none;"></div>
-                        <div class="form-group"><label for="component-initial-quantity">Quantité Totale:</label><input type="number" id="component-initial-quantity" value="0" min="0"></div>
-                        <div class="form-group">
-                            <label for="component-threshold">Seuil Critique (optionnel):</label>
-                            <input type="number" id="component-threshold" min="0" placeholder="Ex: 10">
-                            <small>Seuil pour indicateur orange/rouge.</small>
-                        </div>
-                        <div class="form-actions"><button type="submit" id="save-component-button">Enregistrer Composant</button></div>
-                    </div>
-                </form>
-            </section>
-             <div id="admin-feedback" class="feedback-area"></div>
-        </main> <!-- Fin de #admin-view -->
-
-        <!-- ===================== VUE PARAMÈTRES ===================== -->
-        <main id="settings-view" class="view-section" style="display: none;">
-            <h2 class="view-title">Paramètres & Gestion Données</h2>
-
-            <!-- Section Export -->
-            <section id="export-section" class="admin-section">
-                <h3>Exporter les Données</h3>
-                <div class="export-options">
-                    <div class="form-group">
-                        <label>Exporter le Stock Actuel :</label>
-                        <button id="export-inventory-csv-button" class="action-button">Exporter en CSV</button>
-                        <small>Télécharge un fichier CSV de tout l'inventaire.</small>
-                    </div>
-                    <hr>
-                    <div class="form-group">
-                        <label>Exporter l'Historique des Mouvements :</label>
-                        <button id="export-log-txt-button" class="action-button">Exporter en TXT</button>
-                        <small>Télécharge un fichier TXT de tous les logs.</small>
-                    </div>
-                </div>
-                <div id="export-feedback" class="feedback-area" style="margin-top: 15px;"></div>
-            </section>
-
-            <!-- Section Import -->
-            <section id="import-section" class="admin-section">
-                <h3>Importer du Stock (via CSV)</h3>
-                <div class="import-options">
-                    <div class="form-group">
-                        <label for="import-csv-file">Sélectionner un fichier CSV :</label>
-                        <input type="file" id="import-csv-file" accept=".csv">
-                        <small>Colonnes requises: <strong>ref</strong>, <strong>quantity</strong>. Optionnelles: description, manufacturer, datasheet, drawer, category_name, critical_threshold, attributes (JSON). Voir doc.</small>
-                    </div>
-                    <!-- Options d'import ajoutées ici plus tard -->
-                    <button id="import-inventory-csv-button" class="action-button success">Lancer l'Importation</button>
-                </div>
-                <div id="import-feedback" class="feedback-area" style="margin-top: 15px;"></div>
-            </section>
-
-        </main> <!-- Fin de #settings-view -->
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StockAV</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Librairie Supabase JS v2 -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Librairie PapaParse pour CSV -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha512-dfX5uYVXzyU8+KHqj8bjo7UkOdg18PaOtpa48djpNbZHwExddghZ+ZmzWT06R5v6NSk3ZUfsH6FNEDepLx9hPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-</head>
-<body> <!-- La classe user-logged-in sera ajoutée/retirée ici par JS -->
-    <!-- Afficheur 7 Segments -->
-    <div id="seven-segment-display" class="display-off">
-        <div class="digit digit-1">
-            <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
-            <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
-            <div class="segment segment-g"></div>
-        </div>
-        <div class="digit digit-2">
-             <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
-             <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
-             <div class="segment segment-g"></div>
-        </div>
-        <div class="digit digit-3">
-             <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
-             <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
-             <div class="segment segment-g"></div>
-        </div>
-        <div class="digit digit-4">
-             <div class="segment segment-a"></div><div class="segment segment-b"></div><div class="segment segment-c"></div>
-             <div class="segment segment-d"></div><div class="segment segment-e"></div><div class="segment segment-f"></div>
-             <div class="segment segment-g"></div>
-        </div>
-    </div>
-
-    <div class="container">
-        <header class="app-header">
-            <h1>StockAV</h1>
-            <p class="app-subtitle">Gestion de stock des pièces éléctroniques</p>
-            <!-- Zone de Connexion / Infos Utilisateur -->
-            <div id="auth-section">
-                <div id="login-area" class="login-section">
-                    <label for="login-code">Code Technicien:</label>
-                    <input type="text" id="login-code" placeholder="Votre code unique">
-                    <label for="login-password">Mot de passe:</label>
-                    <input type="password" id="login-password" placeholder="Votre mot de passe">
-                    <button id="login-button">Connexion</button>
-                    <p id="login-error" class="error-message" style="display: none;"></p>
-                </div>
-                <div id="user-info-area" class="user-info" style="display: none;">
-                    Connecté: <strong id="user-display"></strong>
-                    <button id="logout-button" title="Se déconnecter">Déconnexion</button>
-                </div>
-            </div>
-        </header>
-
-        <!-- Navigation Principale -->
-        <nav id="main-navigation" class="view-navigation">
-            <button id="show-search-view" class="nav-button active">Recherche Composant</button>
-            <button id="show-inventory-view" class="nav-button">Stock Actuel</button>
-            <button id="show-log-view" class="nav-button protected" style="display: none;" disabled title="Connexion requise">Historique (LOG)</button>
-            <button id="show-admin-view" class="nav-button protected" style="display: none;" disabled title="Connexion requise">Administration</button>
-            <button id="show-settings-view" class="nav-button protected" style="display: none;" disabled title="Accès restreint 'zine'">Paramètres</button> <!-- Modifié title -->
-        </nav>
-
-        <!-- ================== VUE RECHERCHE UTILISATEUR (CHAT) ================== -->
-        <main id="search-view" class="view-section active-view">
-             <h2 class="view-title">Recherche de Composants</h2>
-
-             <!-- 1. Zone d'affichage des messages -->
-             <div class="response-section">
-                 <h3 class="section-subtitle">Conversation avec StockAV</h3>
-                 <div id="response-output" class="output-box chat-box">
-                     <!-- Messages ajoutés dynamiquement par JS -->
-                 </div>
-                 <div id="loading-indicator" class="loading typing-indicator" style="display: none;">
-                     <i>StockAV réfléchit...</i>
-                 </div>
-             </div>
-
-             <!-- 2. Zone de saisie -->
-             <div class="search-section">
-                 <div class="search-box">
-                     <input type="text" id="component-input" placeholder="Demandez à StockAV (ex: 'LM358N dispo ?')">
-                     <button id="search-button" title="Envoyer la requête">Envoyer</button>
-                 </div>
-             </div>
-
-        </main>
-
-        <!-- ===================== VUE INVENTAIRE ===================== -->
-        <main id="inventory-view" class="view-section" style="display: none;">
-            <h2 class="view-title">Stock Actuel</h2>
-            <div class="inventory-filters filter-box">
+        <!-- ===================== AUDIT VIEW ===================== -->
+        <main id="audit-view" class="view-section" style="display: none;">
+            <h2 class="view-title">Audit d'Inventaire Physique</h2>
+            <div class="audit-filters filter-box">
                 <div class="form-group">
-                    <label for="inventory-category-filter">Catégorie:</label>
-                    <select id="inventory-category-filter">
-                        <option value="all">Toutes</option>
-                        <!-- JS -->
-                    </select>
+                    <label for="audit-category-filter">Filtrer par Catégorie:</label>
+                    <select id="audit-category-filter"><option value="all">Toutes</option></select>
                 </div>
-                <div class="form-group filter-search-group">
-                    <label for="inventory-search-filter">Recherche:</label>
-                    <input type="text" id="inventory-search-filter" placeholder="Réf, Desc, Fab...">
+                <div class="form-group">
+                    <label for="audit-drawer-filter">Filtrer par Tiroir (ex: A01, B*, C??):</label>
+                    <input type="text" id="audit-drawer-filter" placeholder="Lettres, chiffres, -, *">
                 </div>
-                 <button id="apply-inventory-filter-button" title="Appliquer les filtres">Filtrer</button>
+                <button id="apply-audit-filter-button" title="Appliquer les filtres">Afficher</button>
             </div>
-
-            <div class="inventory-display data-display-box">
-                <table id="inventory-table" class="data-table">
+            <div id="audit-feedback" class="feedback-area" style="margin-top: 15px;"></div>
+            <div class="audit-display data-display-box">
+                <table id="audit-table" class="data-table">
                     <thead>
                         <tr>
                             <th>Référence</th>
                             <th>Description</th>
-                            <th>Catégorie</th>
                             <th>Tiroir</th>
-                            <th>Fabricant</th>
-                            <th>Quantité</th>
-                            <th>Datasheet</th>
+                            <th>Qté Système</th>
+                            <th>Qté Physique</th>
+                            <th>Différence</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
-                    <tbody id="inventory-table-body">
-                        <!-- Lignes générées par JS -->
+                    <tbody id="audit-table-body">
+                        <!-- Audit rows will be injected here by JS -->
                     </tbody>
                 </table>
-                 <p id="inventory-no-results" class="no-results-message" style="display: none;">Aucun résultat.</p>
-            </div>
-
-            <div id="inventory-pagination" class="pagination-controls">
-                <button id="inventory-prev-page" disabled>« Préc.</button>
-                <span id="inventory-page-info">Page 1 / 1</span>
-                <button id="inventory-next-page" disabled>Suiv. »</button>
+                <p id="audit-no-results" class="no-results-message" style="display: none;">Aucun composant trouvé pour les filtres.</p>
             </div>
         </main>
 
-         <!-- ===================== VUE HISTORIQUE (LOG) ===================== -->
-         <main id="log-view" class="view-section" style="display: none;">
-            <h2 class="view-title">Historique des Mouvements</h2>
-            <!-- Feedback area pour purge/erreurs -->
-            <div id="log-feedback" class="feedback-area" style="display:none;"></div>
-            <div class="log-display data-display-box">
-                 <table id="log-table" class="data-table">
-                     <thead>
-                         <tr>
-                             <th>Date & Heure</th>
-                             <th>Technicien</th>
-                             <th>Action</th>
-                             <th>Référence</th>
-                             <th>+/-</th>
-                             <th>Stock Final</th>
-                             <!-- Colonne Actions ajoutée par JS si zine -->
-                         </tr>
-                     </thead>
-                     <tbody id="log-table-body"></tbody>
-                 </table>
-                 <p id="log-no-results" class="no-results-message" style="display: none;">Historique vide.</p>
-                 <!-- Bouton Purge Tout ajouté par JS après le tableau si zine (via div #purge-log-container) -->
-            </div>
-            <div id="log-pagination" class="pagination-controls">
-                <button id="log-prev-page" disabled>« Préc.</button>
-                <span id="log-page-info">Page 1 / 1</span>
-                <button id="log-next-page" disabled>Suiv. »</button>
-            </div>
-         </main>
-
-        <!-- ===================== VUE ADMINISTRATION ===================== -->
+        <!-- ===================== ADMIN VIEW ===================== -->
         <main id="admin-view" class="view-section" style="display: none;">
              <h2 class="view-title">Administration</h2>
-             <!-- Section Gestion des Catégories -->
-            <section id="category-manager" class="admin-section">
-                <h3>Gestion des Catégories</h3>
+             <div id="admin-feedback" class="feedback-area"></div> <!-- Feedback général Admin en haut -->
+
+             <!-- Category Management -->
+             <section id="category-manager" class="admin-section">
+                 <h3>Gestion des Catégories</h3>
                  <div class="admin-columns">
                     <div class="category-list-section">
                         <h4>Catégories Existantes</h4>
-                        <ul id="category-list"></ul>
+                        <ul id="category-list">
+                            <!-- Category list items injected by JS -->
+                        </ul>
                     </div>
                     <div class="category-form-section">
                         <h4 id="category-form-title">Ajouter une Catégorie</h4>
                         <form id="category-form">
                             <input type="hidden" id="category-id-edit" value="">
                             <div class="form-group"><label for="category-name">Nom:</label><input type="text" id="category-name" required></div>
-                            <div class="form-group"><label for="category-attributes">Attributs (séparés par virgule):</label><textarea id="category-attributes" rows="3" placeholder="Ex: Type, Capacité, Tension"></textarea><small>Définit les champs spécifiques (optionnel).</small></div>
-                            <div class="form-actions"><button type="submit" id="save-category-button">Enregistrer</button><button type="button" id="cancel-edit-button" style="display: none;">Annuler</button></div>
+                            <div class="form-group">
+                                <label for="category-attributes">Attributs (séparés par virgule):</label>
+                                <textarea id="category-attributes" rows="3" placeholder="Ex: Type, Capacité, Tension, Package"></textarea>
+                                <small>Définit les champs spécifiques pour les composants. L'ordre n'importe pas.</small>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" id="save-category-button" class="action-button success">Enregistrer Catégorie</button>
+                                <button type="button" id="cancel-edit-button" class="action-button secondary" style="display: none;">Annuler Modification</button>
+                            </div>
                         </form>
                     </div>
-                </div>
-            </section>
-            <!-- Section Gestion du Stock -->
-            <section id="stock-manager" class="admin-section">
-                <h3>Gestion du Stock (Ajout / Modification)</h3>
-                <form id="stock-form" onsubmit="return false;">
-                    <div class="form-group"><label for="component-ref-admin">Référence Composant:</label><input type="text" id="component-ref-admin" required placeholder="Ex: LM358N"><button type="button" id="check-stock-button">Vérifier / Pré-remplir</button></div>
-                    <div id="component-info" style="display: none;">
-                        <div class="form-group inline-group">
-                            <label>Stock Actuel:</label><span id="current-quantity">N/A</span>
-                            <label for="quantity-change" style="margin-left: 20px;">Modifier (+/-):</label><input type="number" id="quantity-change" value="0">
-                            <button type="button" id="update-quantity-button">Mettre à jour Qté seule</button>
-                        </div>
-                        <hr>
-                        <p><em>Ou modifiez les détails complets ci-dessous et enregistrez :</em></p>
-                    </div>
-                    <div id="component-details">
-                        <div class="form-group"><label for="component-category-select">Catégorie (*):</label><select id="component-category-select" required><option value="">-- Sélectionner une catégorie --</option></select></div>
-                        <div class="form-group"><label for="component-desc">Description:</label><input type="text" id="component-desc" placeholder="Ex: Amplificateur Opérationnel Double"></div>
-                        <div class="form-group"><label for="component-mfg">Fabricant:</label><input type="text" id="component-mfg" placeholder="Ex: Texas Instruments"></div>
-                        <div class="form-group"><label for="component-drawer-admin">Tiroir (optionnel):</label><input type="text" id="component-drawer-admin" placeholder="Ex: 01A5 (Format libre)"></div>
-                        <div class="form-group"><label for="component-datasheet">Lien Datasheet (optionnel):</label><input type="url" id="component-datasheet" placeholder="https://... lien complet"></div>
-                        <div id="category-specific-attributes" class="form-group" style="display: none;"></div> <!-- Rempli par JS -->
-                        <div class="form-group"><label for="component-initial-quantity">Quantité Totale (*):</label><input type="number" id="component-initial-quantity" value="0" min="0" required></div>
-                        <div class="form-group">
-                            <label for="component-threshold">Seuil Critique (optionnel):</label>
-                            <input type="number" id="component-threshold" min="0" placeholder="Ex: 10 (pour indicateur orange)">
-                            <small>Seuil à partir duquel la quantité est considérée comme basse.</small>
-                        </div>
-                        <div class="form-actions"><button type="submit" id="save-component-button">Enregistrer Composant</button></div>
-                    </div>
-                </form>
-            </section>
-             <div id="admin-feedback" class="feedback-area"></div>
-        </main> <!-- Fin de #admin-view -->
+                 </div>
+             </section>
 
-        <!-- ===================== VUE PARAMÈTRES ===================== -->
+             <!-- Stock Management -->
+             <section id="stock-manager" class="admin-section">
+                 <h3>Gestion du Stock (Ajout / Modification / Suppression)</h3>
+                 <form id="stock-form">
+                     <div class="form-group">
+                         <label for="component-ref-admin">Référence Composant:</label>
+                         <input type="text" id="component-ref-admin" required placeholder="Ex: LM358N, ESP32-WROOM, 100nF" style="text-transform: uppercase;">
+                         <button type="button" id="check-stock-button" class="action-button info" title="Vérifier si ce composant existe et charger ses détails">Vérifier / Charger</button>
+                     </div>
+
+                     <!-- Actions Rapides (si composant existant) -->
+                     <div id="component-actions" style="display: none;" class="admin-subsection">
+                         <h4>Actions Rapides pour <span id="component-ref-display" style="font-weight: bold;"></span></h4>
+                         <div class="form-group inline-group">
+                             <label>Stock Actuel:</label><strong id="current-quantity" style="font-size: 1.1em;">N/A</strong>
+                             <label for="quantity-change" style="margin-left: 20px;">Modifier (+/-):</label>
+                             <input type="number" id="quantity-change" value="0" style="width: 80px;">
+                             <button type="button" id="update-quantity-button" class="action-button primary">Mettre à jour Quantité</button>
+                         </div>
+                         <hr style="margin: 15px 0;">
+                         <div class="form-group">
+                             <button type="button" id="delete-component-button" class="action-button danger" style="display: none;" title="Supprimer définitivement ce composant et son historique">Supprimer ce Composant</button>
+                             <small style="color: var(--error-color); margin-left: 10px;">Attention, action irréversible ! Supprime aussi l'historique.</small>
+                         </div>
+                          <p style="text-align: center; font-style: italic; color: var(--text-muted); margin-top: 20px;">OU modifiez les détails complets ci-dessous et cliquez sur "Enregistrer Modifications".</p>
+                     </div>
+
+                     <!-- Détails Complets (pour ajout ou modification) -->
+                     <div id="component-details">
+                          <h4 style="margin-top: 30px;">Détails du Composant</h4>
+                         <div class="admin-columns"> <!-- Utiliser colonnes pour meilleure disposition -->
+                             <div style="flex: 1;">
+                                 <div class="form-group"><label for="component-desc">Description:</label><input type="text" id="component-desc" placeholder="Ex: Amplificateur Opérationnel Double"></div>
+                                 <div class="form-group"><label for="component-mfg">Fabricant:</label><input type="text" id="component-mfg" placeholder="Ex: Texas Instruments"></div>
+                                 <div class="form-group"><label for="component-category-select">Catégorie:</label><select id="component-category-select" required><option value="">-- Sélectionner --</option></select></div>
+                                 <div class="form-group"><label for="component-drawer-admin">Tiroir:</label><input type="text" id="component-drawer-admin" placeholder="Ex: A01B3" style="text-transform: uppercase;"></div>
+                             </div>
+                             <div style="flex: 1;">
+                                <div class="form-group"><label for="component-initial-quantity">Quantité Totale:</label><input type="number" id="component-initial-quantity" value="0" min="0" required><small>Quantité physique actuelle.</small></div>
+                                <div class="form-group"><label for="component-threshold">Seuil Critique:</label><input type="number" id="component-threshold" min="0" placeholder="Ex: 10 (Optionnel)"><small>Niveau alerte. Laisser vide si non requis.</small></div>
+                                <div class="form-group"><label for="component-datasheet">Lien Datasheet:</label><input type="url" id="component-datasheet" placeholder="https://... (Optionnel)"></div>
+                             </div>
+                         </div>
+                         <!-- Attributs spécifiques (injectés par JS) -->
+                         <div id="category-specific-attributes" class="admin-subsection specific-attributes-section" style="display: none;">
+                            <!-- Attribute inputs injected by JS -->
+                         </div>
+                         <div class="form-actions">
+                             <button type="submit" id="save-component-button" class="action-button success">Enregistrer Composant</button>
+                         </div>
+                     </div>
+                 </form>
+             </section>
+
+             <!-- Export Critical Stock -->
+             <section id="export-critical-section" class="admin-section">
+                 <h3>Exporter Stock Faible / Rupture</h3>
+                 <div class="form-group">
+                     <label>Télécharger la liste des composants critiques :</label>
+                     <button id="export-critical-txt-button" class="action-button">Exporter en TXT</button>
+                     <small>Génère un fichier texte listant les composants avec stock <= 0 ou <= seuil critique.</small>
+                 </div>
+                 <div id="export-critical-feedback" class="feedback-area" style="margin-top: 15px;"></div>
+             </section>
+
+        </main>
+
+                <!-- ===================== SETTINGS VIEW ===================== -->
         <main id="settings-view" class="view-section" style="display: none;">
-            <h2 class="view-title">Paramètres & Gestion Données</h2>
+             <h2 class="view-title">Paramètres & Gestion Données</h2>
+             <div id="generic-feedback" class="feedback-area" style="display: none; margin-bottom: 20px;"></div> <!-- Feedback générique en haut -->
 
-            <!-- Section Export -->
-            <section id="export-section" class="admin-section">
-                <h3>Exporter les Données</h3>
-                <div class="export-options">
-                    <div class="form-group">
-                        <label>Exporter le Stock Actuel :</label>
-                        <button id="export-inventory-csv-button" class="action-button">Exporter en CSV</button>
-                        <small>Télécharge un fichier CSV de tout l'inventaire.</small>
-                    </div>
-                    <hr>
-                    <div class="form-group">
-                        <label>Exporter l'Historique des Mouvements :</label>
-                        <button id="export-log-txt-button" class="action-button">Exporter en TXT</button>
-                        <small>Télécharge un fichier TXT de tous les logs.</small>
-                    </div>
-                </div>
-                <div id="export-feedback" class="feedback-area" style="margin-top: 15px;"></div>
-            </section>
+             <!-- Export Section -->
+             <section id="export-section" class="admin-section">
+                 <h3>Exporter Données Générales</h3>
+                 <div class="export-options admin-columns">
+                     <div class="form-group" style="flex: 1;">
+                         <label>Exporter le Stock Actuel Complet:</label>
+                         <button id="export-inventory-csv-button" class="action-button primary">Exporter Inventaire (CSV)</button>
+                         <small>Télécharge un fichier CSV de tout l'inventaire.</small>
+                     </div>
+                     <div class="form-group" style="flex: 1;">
+                         <label>Exporter l'Historique Complet:</label>
+                         <button id="export-log-txt-button" class="action-button primary">Exporter Historique (TXT)</button>
+                         <small>Télécharge un fichier texte de tout l'historique.</small>
+                     </div>
+                 </div>
+                 <div id="export-feedback" class="feedback-area" style="margin-top: 15px;"></div>
+             </section>
 
-            <!-- Section Import -->
-            <section id="import-section" class="admin-section">
-                <h3>Importer du Stock (via CSV)</h3>
-                <div class="import-options">
-                    <div class="form-group">
-                        <label for="import-csv-file">Sélectionner un fichier CSV :</label>
-                        <input type="file" id="import-csv-file" accept=".csv">
-                        <small>Colonnes requises: <strong>ref</strong>, <strong>quantity</strong>, <strong>category_name</strong>. Optionnelles: description, manufacturer, datasheet, drawer, critical_threshold, attributes (JSON). Les catégories doivent exister.</small>
-                    </div>
-                    <!-- === NOUVEAU: Options d'import === -->
-                    <div class="form-group import-mode-options">
-                        <label>Mode d'importation :</label>
-                        <div class="radio-group">
-                            <input type="radio" name="import-mode" value="upsert" id="import-mode-upsert" checked>
-                            <label for="import-mode-upsert">Ajouter ou Mettre à jour</label>
-                            <small>Ajoute les nouveaux composants, met à jour les existants (basé sur 'ref').</small>
-                        </div>
-                        <div class="radio-group">
-                            <input type="radio" name="import-mode" value="overwrite" id="import-mode-overwrite">
-                            <label for="import-mode-overwrite" class="warning-label">Écraser le stock existant</label>
-                            <small class="warning-text"><strong>Attention:</strong> Efface tout l'inventaire actuel avant d'importer les données du fichier.</small>
-                        </div>
-                    </div>
-                    <!-- === FIN NOUVEAU === -->
-                    <button id="import-inventory-csv-button" class="action-button success">Lancer l'Importation</button>
-                </div>
-                <div id="import-feedback" class="feedback-area" style="margin-top: 15px;"></div>
-            </section>
+             <!-- Import Section -->
+             <section id="import-section" class="admin-section">
+                 <h3>Importer du Stock (via CSV)</h3>
+                 <div class="import-options">
+                     <div class="form-group">
+                         <label for="import-csv-file">Sélectionner un fichier CSV (UTF-8) :</label>
+                         <input type="file" id="import-csv-file" accept=".csv, text/csv">
+                         <small>Headers requis: <strong>ref, quantity</strong>. Optionnels: description, manufacturer, datasheet, drawer, category_name, critical_threshold, attributes (JSON stringifié).</small>
+                     </div>
+                     <div class="form-group import-mode-choice">
+                         <label>Mode d'importation :</label>
+                         <div class="radio-group">
+                             <label for="import-mode-enrich"><input type="radio" name="import-mode" id="import-mode-enrich" value="enrich" checked> Enrichir / Mettre à jour<small> Ajoute les nouveaux composants, met à jour les existants.</small></label>
+                             <label for="import-mode-overwrite"><input type="radio" name="import-mode" id="import-mode-overwrite" value="overwrite"> Écraser<strong style="color: var(--error-color);"> Supprime TOUT (Inventaire + Historique) avant l'import !</strong></label>
+                         </div>
+                     </div>
+                     <button id="import-inventory-csv-button" class="action-button success">Lancer l'Importation</button>
+                 </div>
+                 <div id="import-feedback" class="feedback-area" style="margin-top: 15px;"></div>
+             </section>
 
-        </main> <!-- Fin de #settings-view -->
+        </main>
 
-
+        <!-- ===================== FOOTER ===================== -->
         <footer class="app-footer">
-            <p>© 2025 StockAV - Zine S.</p> <!-- Mise à jour nom -->
+            <p>© 2025 StockAV - Gestion Simplifiée</p>
         </footer>
-    </div>
+    </div> <!-- Fin .container -->
 
-    <!-- Fenêtre Modale pour Modifier Quantité (+/-) -->
+    <!-- ===================== QUANTITY CHANGE MODAL (+/-) ===================== -->
     <div id="modal-overlay"></div>
     <div id="quantity-change-modal">
-        <h3>Modifier le Stock</h3>
+         <h3>Modifier le Stock</h3>
         <p>Composant: <strong id="modal-component-ref">N/A</strong></p>
         <p>Quantité actuelle: <strong id="modal-current-quantity">N/A</strong></p>
-        <div class="quantity-adjuster">
-            <button id="modal-decrease-button" class="adjust-button" title="Diminuer la quantité">-</button>
-            <span id="modal-change-amount" class="change-amount-display">0</span>
-            <button id="modal-increase-button" class="adjust-button" title="Augmenter la quantité">+</button>
+        <div id="modal-current-attributes" style="display: none; margin-bottom: 15px;">
+            <h4 style="text-align: center; margin-bottom: 10px; color: var(--text-muted); font-size: 0.9em; border-bottom: 1px dashed #eee; padding-bottom: 5px;">Attributs Clés :</h4>
+            <div id="modal-attributes-list">
+                <!-- Attribute badges injected by JS -->
+            </div>
         </div>
-        <!-- Section Attributs (pour Étape 3) -->
-        <div class="modal-attributes-section" style="display: none;">
-            <h4 class="modal-attributes-title">Attributs Spécifiques :</h4>
-            <dl id="modal-component-attributes" class="modal-attributes-list">
-                <!-- Attributs chargés par JS -->
-            </dl>
-        </div>
-        <!-- Fin Section Attributs -->
-        <div id="modal-feedback" class="modal-feedback"></div>
-        <div class="modal-actions">
-            <button id="modal-cancel-button">Annuler</button>
-            <button id="modal-confirm-button">Confirmer</button>
-        </div>
-    </div>
-
-    <!-- Charger le script JS APRES tout le HTML -->
-    <script src="script.js"></script>
-</body>
-</html>
-
-        <footer class="app-footer">
-            <p>© 2025 StockAV - UQÀM</p> <!-- Nom mis à jour -->
-        </footer>
-    </div>
-
-    <!-- Fenêtre Modale pour Modifier Quantité (+/-) -->
-    <div id="modal-overlay"></div>
-    <div id="quantity-change-modal">
-        <h3>Modifier le Stock</h3>
-        <p>Composant: <strong id="modal-component-ref">N/A</strong></p>
-        <p>Quantité actuelle: <strong id="modal-current-quantity">N/A</strong></p>
         <div class="quantity-adjuster">
             <button id="modal-decrease-button" class="adjust-button" title="Diminuer la quantité">-</button>
             <span id="modal-change-amount" class="change-amount-display">0</span>
@@ -599,12 +396,13 @@
         </div>
         <div id="modal-feedback" class="modal-feedback"></div>
         <div class="modal-actions">
-            <button id="modal-cancel-button">Annuler</button>
-            <button id="modal-confirm-button">Confirmer</button>
+            <button id="modal-cancel-button" class="action-button secondary">Annuler</button>
+            <button id="modal-confirm-button" class="action-button primary">Confirmer</button>
         </div>
     </div>
 
-    <!-- Charger le script JS APRES tout le HTML -->
+    <!-- JavaScript File -->
     <script src="script.js"></script>
+
 </body>
 </html>

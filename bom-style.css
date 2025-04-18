@@ -1,0 +1,339 @@
+/* ----- DÉBUT DU FICHIER bom-style.css COMPLET (Finalisé) ----- */
+
+/* --- Variables & Reset Minimal --- */
+:root {
+    --primary-color: #0056b3; /* Bleu principal */
+    --primary-color-dark: #004085;
+    --secondary-color: #6c757d; /* Gris secondaire */
+    --light-gray: #f8f9fa;
+    --border-color: #dee2e6;
+    --text-color: #212529;
+    --text-muted: #6c757d;
+    --success-color: #155724; /* Vert succès */
+    --success-bg: #d4edda;
+    --error-color: #721c24; /* Rouge erreur */
+    --error-bg: #f8d7da;
+    --warning-color: #856404; /* Orange/Jaune pour Avertissement */
+    --warning-bg: #fff3cd;
+    --info-color: #004085; /* Bleu info */
+    --info-bg: #cce5ff;
+    --font-family-base: 'Inter', sans-serif;
+    --border-radius: 0.3rem;
+    --box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    /* Couleurs stock */
+    --stock-ok-color: #28a745;
+    --stock-warning-color: #ffc107;
+    --stock-critical-color: #dc3545;
+    --stock-unknown-color: #adb5bd;
+    /* Couleur bouton vider */
+    --clear-button-bg: var(--secondary-color);
+    --clear-button-hover-bg: #5a6268;
+    /* Couleur erreur input */
+    --input-error-border: var(--error-color);
+}
+
+html {
+    box-sizing: border-box;
+    -webkit-text-size-adjust: 100%;
+}
+
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
+body {
+    font-family: var(--font-family-base);
+    line-height: 1.5;
+    margin: 0;
+    padding: 0;
+    background-color: #ffffff;
+    color: var(--text-color);
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* --- Conteneur Principal --- */
+.bom-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* --- En-tête --- */
+.bom-header {
+    text-align: center;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+.bom-header h1 {
+    color: var(--primary-color);
+    margin: 0 0 10px 0;
+    font-weight: 700;
+    font-size: 1.6em;
+}
+
+/* --- Styles Authentification --- */
+#bom-auth-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    margin-bottom: 15px;
+}
+#bom-login-area {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 450px;
+    padding: 10px 5px;
+    box-sizing: border-box;
+}
+#bom-login-area label {
+    font-weight: 500;
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin-right: 2px;
+    flex-shrink: 0;
+}
+#bom-login-area input[type="text"],
+#bom-login-area input[type="password"] {
+    padding: 9px 12px;
+    border: 1px solid #ced4da;
+    border-radius: var(--border-radius);
+    width: 130px;
+    font-size: 0.95em;
+    box-sizing: border-box;
+    margin-right: 5px;
+}
+#bom-login-area input:focus {
+    border-color: var(--primary-color);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 86, 179, 0.25);
+}
+#bom-login-area button#bom-login-button {
+    padding: 9px 18px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.95em;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+}
+#bom-login-area button#bom-login-button:hover:not(:disabled) { background-color: var(--primary-color-dark); }
+#bom-login-area button#bom-login-button:disabled { background-color: var(--secondary-color); opacity: 0.7; cursor: not-allowed; }
+#bom-login-error.feedback-area.error {
+    background-color: transparent;
+    border: none;
+    color: var(--error-color);
+    font-size: 0.9em;
+    font-weight: 500;
+    padding: 0;
+    margin-top: 8px;
+    text-align: center;
+    width: 100%;
+    flex-basis: 100%;
+    box-sizing: border-box;
+}
+#bom-user-info-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+    color: var(--text-muted);
+    gap: 10px;
+    padding: 5px 0;
+}
+#bom-user-info-area strong#bom-user-display { color: var(--primary-color-dark); font-weight: 600; }
+#bom-user-info-area button#bom-logout-button {
+    padding: 6px 12px;
+    font-size: 0.85em;
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+#bom-user-info-area button#bom-logout-button:hover:not(:disabled) { background-color: #5a6268; }
+#bom-user-info-area button#bom-logout-button:disabled { opacity: 0.6; cursor: not-allowed; }
+/* --- Fin Styles Authentification --- */
+
+
+/* --- Contenu Principal & Liste Tiroirs --- */
+#bom-main-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+.drawer-list-container {
+    flex-grow: 1;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: flex-start;
+    gap: 15px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--light-gray);
+    min-height: 100px;
+}
+
+/* Style message chargement/vide/connexion requise */
+#bom-drawer-list p#drawer-loading-message.loading-text,
+#bom-drawer-list p.empty-kit-message {
+    text-align: center;
+    margin: 40px auto;
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 1.1em;
+    width: 100%;
+}
+
+/* Boutons Tiroirs */
+button.bom-drawer-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: auto;
+    min-width: 100px;
+    padding: 18px 20px;
+    border: 2px solid transparent;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 1.4em;
+    font-weight: 600;
+    color: white;
+    text-align: left;
+    transition: all 0.2s ease;
+    box-shadow: var(--box-shadow);
+    position: relative;
+    user-select: none;
+}
+button.bom-drawer-button:active:not(.collected) {
+    transform: scale(0.98);
+}
+
+/* Icône checkmark */
+button.bom-drawer-button .checkmark {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    flex-shrink: 0;
+    margin-left: 15px;
+    position: relative;
+}
+/* Style du checkmark lui-même (via pseudo-élément) */
+button.bom-drawer-button.collected .checkmark::after {
+    content: '';
+    display: block;
+    position: absolute;
+    left: 9px;
+    top: 5px;
+    width: 8px;
+    height: 14px;
+    border: solid var(--secondary-color); /* Coche couleur gris foncé */
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+}
+
+/* Couleurs basées sur statut (non collecté) */
+button.bom-drawer-button.status-ok:not(.collected) { background-color: var(--stock-ok-color); border-color: #1c7430; }
+button.bom-drawer-button.status-warning:not(.collected) { background-color: var(--stock-warning-color); border-color: #cc9a06; color: #333; }
+button.bom-drawer-button.status-warning:not(.collected) .checkmark { border-color: rgba(0, 0, 0, 0.5); }
+button.bom-drawer-button.status-critical:not(.collected) { background-color: var(--stock-critical-color); border-color: #a71d2a; }
+button.bom-drawer-button.status-unknown:not(.collected) { background-color: var(--stock-unknown-color); border-color: #868e96; color: #fff; }
+
+/* Bouton collecté - Style GRIS + BARRÉ (spécificité augmentée) */
+button.bom-drawer-button.collected.status-ok,
+button.bom-drawer-button.collected.status-warning,
+button.bom-drawer-button.collected.status-critical,
+button.bom-drawer-button.collected.status-unknown,
+button.bom-drawer-button.collected {
+    background-color: var(--secondary-color) !important; /* Utiliser !important */
+    border-color: #495057 !important;
+    color: #e9ecef !important;
+    opacity: 0.75;
+    text-decoration: line-through;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.15);
+}
+/* Icône sur bouton collecté */
+button.bom-drawer-button.collected .checkmark {
+    background-color: rgba(255, 255, 255, 0.9);
+    border-color: rgba(255, 255, 255, 0.9);
+}
+/* Hover sur bouton collecté */
+button.bom-drawer-button.collected.status-ok:hover,
+button.bom-drawer-button.collected.status-warning:hover,
+button.bom-drawer-button.collected.status-critical:hover,
+button.bom-drawer-button.collected.status-unknown:hover,
+button.bom-drawer-button.collected:hover {
+    opacity: 0.9;
+    background-color: #5a6268 !important; /* Utiliser !important */
+    border-color: #495057 !important;
+    transform: none;
+}
+
+/* Actions en bas (Vider Kit) */
+.bom-actions {
+    margin-top: 25px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+    text-align: center;
+}
+/* Style du bouton Vider le kit */
+button#clear-kit-button.action-button.secondary {
+    padding: 12px 25px;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 500;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    background-color: var(--clear-button-bg);
+    color: white;
+}
+button#clear-kit-button.action-button.secondary:hover:not(:disabled) { background-color: var(--clear-button-hover-bg); }
+button#clear-kit-button.action-button.secondary:disabled { background-color: #adb5bd !important; cursor: not-allowed !important; opacity: 0.65 !important; }
+
+/* Feedback Area */
+.feedback-area {
+    margin-bottom: 15px;
+    padding: 12px 15px;
+    border-radius: var(--border-radius);
+    display: none;
+    font-size: 0.95em;
+    border: 1px solid transparent;
+    font-weight: 500;
+    text-align: center;
+}
+.feedback-area.success { background-color: var(--success-bg); color: var(--success-color); border-color: #badbcc; display: block; }
+.feedback-area.error { background-color: var(--error-bg); color: var(--error-color); border-color: #f5c2c7; display: block; }
+.feedback-area.info { background-color: var(--info-bg); color: var(--info-color); border-color: #b8daff; display: block; }
+
+/* --- Footer --- */
+.bom-footer {
+    text-align: center;
+    margin-top: 30px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+
+/* ----- FIN DU FICHIER bom-style.css COMPLET (Finalisé) ----- */

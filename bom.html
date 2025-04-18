@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>StockAV - Kit Actuel</title>
+    <link rel="stylesheet" href="bom-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- JS Dédié -->
+    <script src="bom-script.js" defer></script>
+</head>
+<body>
+
+    <div class="bom-container">
+        <header class="bom-header">
+            <h1>Kit Actuel</h1>
+            <!-- --- MODIFIÉ / AJOUTÉ : Zone d'authentification --- -->
+            <div id="bom-auth-section">
+                <div id="bom-login-area" class="login-section">
+                    <label for="bom-login-code">Code:</label>
+                    <input type="text" id="bom-login-code" placeholder="Votre code" autocomplete="username">
+                    <label for="bom-login-password">MdP:</label>
+                    <input type="password" id="bom-login-password" placeholder="********" autocomplete="current-password">
+                    <button id="bom-login-button">Connexion</button>
+                    <p id="bom-login-error" class="feedback-area error" style="display: none; width: 100%; text-align: center; margin-top: 8px;"></p>
+                </div>
+                <div id="bom-user-info-area" class="user-info" style="display: none;">
+                    Connecté: <strong id="bom-user-display"></strong>
+                    <button id="bom-logout-button" title="Se déconnecter">Déconnexion</button>
+                </div>
+            </div>
+            <!-- --- FIN MODIFICATION AUTH --- -->
+        </header>
+
+        <main id="bom-main-content">
+            <div id="bom-feedback" class="feedback-area" style="display: none;">
+                <!-- Messages de feedback -->
+            </div>
+
+            <div id="bom-drawer-list" class="drawer-list-container">
+                <!-- Boutons tiroirs injectés par JS -->
+                <p class="loading-text" id="drawer-loading-message">Connexion requise...</p>
+            </div>
+
+            <div class="bom-actions">
+                <!-- Le bouton Vider Kit est géré dynamiquement par JS -->
+                <button id="clear-kit-button" class="action-button secondary" style="display: none;" title="Vider votre kit actuel en base de données">
+                    Vider le Kit
+                </button>
+            </div>
+        </main>
+
+         <footer class="bom-footer">
+            <p>© StockAV</p>
+        </footer>
+    </div>
+
+</body>
+</html>
