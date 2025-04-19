@@ -1,19 +1,30 @@
+
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StockAV</title>
+
+    <!-- === Favicon (Doit être dans le dossier 'img' relatif à cet index.html) === -->
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="apple-touch-icon" href="img/logo.png"> <!-- Pour iOS -->
+    <!-- === FIN Favicon === -->
+
+    <!-- Liens CSS -->
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="admin-styles.css"> <!-- Gardé pour la vue Admin -->
+
+    <!-- Polices -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Supabase Client -->
+
+    <!-- Bibliothèques JS externes -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- PapaParse for CSV Import/Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha512-dfX5uYVXzyU8+KHqj8bjo7UkOdg18PaOtpa48djpNbZHwExddghZ+ZmzWT06R5v6NSk3ZUfsH6FNEDepLx9hPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <!-- Optional: FileSaver.js for more robust downloads -->
+    <!-- Optional: FileSaver.js -->
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js" integrity="sha512-Qlv6VSKh1gDKGoJbovnlckEzUfPIFMfXaIzQWGM3LsaAEbkfsHxSXVfMGzMscFqFwfGDrBcsKUmzdvHGCF0yYg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script> -->
 </head>
 <body>
@@ -29,6 +40,9 @@
     <div class="container">
         <!-- ===================== HEADER ===================== -->
         <header class="app-header">
+            <!-- === Logo (Doit être dans le dossier 'img' relatif à cet index.html) === -->
+            <img src="img/logo.png" alt="Logo StockAV" id="app-logo">
+            <!-- === FIN Logo === -->
             <h1>StockAV</h1>
             <p class="app-subtitle">Gestion de stock de composants électroniques</p>
             <div id="auth-section">
@@ -64,7 +78,7 @@
              <div class="response-section">
                  <h3 class="section-subtitle">Conversation avec StockAV</h3>
                  <div id="response-output" class="output-box chat-box">
-                    <!-- Messages will be prepended here by JS -->
+                    <!-- Messages injectés par JS -->
                  </div>
                  <div id="loading-indicator" class="loading typing-indicator" style="display: none;">
                      <i>StockAV réfléchit...</i>
@@ -91,7 +105,7 @@
                     <input type="text" id="inventory-search-filter" placeholder="Réf, Desc, Attribut 'Type'...">
                 </div>
                  <div id="inventory-attribute-filters" class="attribute-filters-container">
-                    <!-- Attribute filters will be injected here by JS -->
+                    <!-- Filtres d'attributs injectés par JS -->
                     <i>Sélectionnez une catégorie pour voir les filtres spécifiques.</i>
                  </div>
                  <button id="apply-inventory-filter-button" title="Appliquer tous les filtres">Filtrer</button>
@@ -111,7 +125,7 @@
                         </tr>
                     </thead>
                     <tbody id="inventory-table-body">
-                        <!-- Inventory rows will be injected here by JS -->
+                        <!-- Lignes d'inventaire injectées par JS -->
                     </tbody>
                 </table>
                  <p id="inventory-no-results" class="no-results-message" style="display: none;">Aucun composant trouvé.</p>
@@ -120,8 +134,6 @@
                 <button id="inventory-prev-page" disabled>« Préc.</button>
                 <span id="inventory-page-info">Page 1 / 1</span>
                 <button id="inventory-next-page" disabled>Suiv. »</button>
-
-                <!-- *** CORRECTION ICI : Décommenté et structuré *** -->
                 <div class="items-per-page-selector">
                     <label for="items-per-page-select">Afficher:</label>
                     <select id="items-per-page-select" title="Nombre d'éléments par page">
@@ -132,27 +144,22 @@
                     </select>
                     <span> par page</span>
                 </div>
-                <!-- *** FIN CORRECTION *** -->
-
             </div>
         </main>
 
         <!-- ===================== KIT VIEW (Formerly BOM) ===================== -->
         <main id="bom-view" class="view-section" style="display: none;">
             <h2 class="view-title">Kit Actuel / Liste de Prélèvement</h2>
-
             <div id="bom-feedback" class="feedback-area" style="margin-bottom: 20px;">
-                <!-- Feedback messages for Kit view (e.g., "Drawer collected", "Kit cleared") -->
+                <!-- Messages de feedback Kit -->
             </div>
-
             <h3 class="section-subtitle">Tiroirs à Visiter</h3>
             <div id="current-kit-drawers" class="drawer-buttons-container">
-                <!-- Drawer buttons will be injected here by JS -->
+                <!-- Boutons tiroirs injectés par JS -->
                 <p style="text-align: center; color: var(--text-muted); padding: 20px 0;">
                     <i>Sélectionnez des composants dans l'onglet "Inventaire" pour les voir apparaître ici.</i>
                 </p>
             </div>
-
             <div class="form-actions" style="margin-top: 30px; text-align: center;">
                 <button id="clear-kit-button" class="action-button secondary" title="Vider la sélection actuelle et réinitialiser les tiroirs">
                     Vider le Kit Actuel
@@ -176,7 +183,7 @@
                          </tr>
                      </thead>
                      <tbody id="log-table-body">
-                        <!-- Log entries will be injected here by JS -->
+                        <!-- Entrées d'historique injectées par JS -->
                      </tbody>
                  </table>
                  <p id="log-no-results" class="no-results-message" style="display: none;">L'historique est vide.</p>
@@ -217,7 +224,7 @@
                         </tr>
                     </thead>
                     <tbody id="audit-table-body">
-                        <!-- Audit rows will be injected here by JS -->
+                        <!-- Lignes d'audit injectées par JS -->
                     </tbody>
                 </table>
                 <p id="audit-no-results" class="no-results-message" style="display: none;">Aucun composant trouvé pour les filtres.</p>
@@ -227,17 +234,14 @@
         <!-- ===================== ADMIN VIEW ===================== -->
         <main id="admin-view" class="view-section" style="display: none;">
              <h2 class="view-title">Administration</h2>
-             <div id="admin-feedback" class="feedback-area"></div> <!-- Feedback général Admin en haut -->
-
+             <div id="admin-feedback" class="feedback-area"></div>
              <!-- Category Management -->
              <section id="category-manager" class="admin-section">
                  <h3>Gestion des Catégories</h3>
                  <div class="admin-columns">
                     <div class="category-list-section">
                         <h4>Catégories Existantes</h4>
-                        <ul id="category-list">
-                            <!-- Category list items injected by JS -->
-                        </ul>
+                        <ul id="category-list"></ul>
                     </div>
                     <div class="category-form-section">
                         <h4 id="category-form-title">Ajouter une Catégorie</h4>
@@ -247,63 +251,60 @@
                             <div class="form-group">
                                 <label for="category-attributes">Attributs (séparés par virgule):</label>
                                 <textarea id="category-attributes" rows="3" placeholder="Ex: Type, Capacité, Tension, Package"></textarea>
-                                <small>Définit les champs spécifiques pour les composants. L'ordre n'importe pas.</small>
+                                <small>Définit les champs spécifiques. L'ordre n'importe pas.</small>
                             </div>
                             <div class="form-actions">
                                 <button type="submit" id="save-category-button" class="action-button success">Enregistrer Catégorie</button>
-                                <button type="button" id="cancel-edit-button" class="action-button secondary" style="display: none;">Annuler Modification</button>
+                                <button type="button" id="cancel-edit-button" class="action-button secondary" style="display: none;">Annuler</button>
                             </div>
                         </form>
                     </div>
                  </div>
              </section>
-
              <!-- Stock Management -->
              <section id="stock-manager" class="admin-section">
-                 <h3>Gestion du Stock (Ajout / Modification / Suppression)</h3>
+                 <h3>Gestion du Stock (Ajout / Modif / Suppr)</h3>
                  <form id="stock-form">
                      <div class="form-group">
                          <label for="component-ref-admin">Référence Composant:</label>
-                         <input type="text" id="component-ref-admin" required placeholder="Ex: LM358N, ESP32-WROOM, 100nF" style="text-transform: uppercase;">
-                         <button type="button" id="check-stock-button" class="action-button info" title="Vérifier si ce composant existe et charger ses détails">Vérifier / Charger</button>
+                         <input type="text" id="component-ref-admin" required placeholder="Ex: LM358N, ESP32-WROOM" style="text-transform: uppercase;">
+                         <button type="button" id="check-stock-button" class="action-button info" title="Vérifier et charger détails">Vérifier / Charger</button>
                      </div>
-
-                     <!-- Actions Rapides (si composant existant) -->
+                     <!-- Actions Rapides -->
                      <div id="component-actions" style="display: none;" class="admin-subsection">
                          <h4>Actions Rapides pour <span id="component-ref-display" style="font-weight: bold;"></span></h4>
                          <div class="form-group inline-group">
-                             <label>Stock Actuel:</label><strong id="current-quantity" style="font-size: 1.1em;">N/A</strong>
+                             <label>Stock Actuel:</label><strong id="current-quantity">N/A</strong>
                              <label for="quantity-change" style="margin-left: 20px;">Modifier (+/-):</label>
                              <input type="number" id="quantity-change" value="0" style="width: 80px;">
-                             <button type="button" id="update-quantity-button" class="action-button primary">Mettre à jour Quantité</button>
+                             <button type="button" id="update-quantity-button" class="action-button primary">Mettre à jour Qté</button>
                          </div>
                          <hr style="margin: 15px 0;">
                          <div class="form-group">
                              <button type="button" id="delete-component-button" class="action-button danger" style="display: none;" title="Supprimer définitivement ce composant et son historique">Supprimer ce Composant</button>
-                             <small style="color: var(--error-color); margin-left: 10px;">Attention, action irréversible ! Supprime aussi l'historique.</small>
+                             <small style="color: var(--error-color); margin-left: 10px;">Attention, irréversible !</small>
                          </div>
-                          <p style="text-align: center; font-style: italic; color: var(--text-muted); margin-top: 20px;">OU modifiez les détails complets ci-dessous et cliquez sur "Enregistrer Modifications".</p>
+                         <p style="text-align: center; font-style: italic; color: var(--text-muted); margin-top: 20px;">OU modifiez les détails ci-dessous et cliquez sur "Enregistrer".</p>
                      </div>
-
-                     <!-- Détails Complets (pour ajout ou modification) -->
+                     <!-- Détails Complets -->
                      <div id="component-details">
                           <h4 style="margin-top: 30px;">Détails du Composant</h4>
-                         <div class="admin-columns"> <!-- Utiliser colonnes pour meilleure disposition -->
+                         <div class="admin-columns">
                              <div style="flex: 1;">
-                                 <div class="form-group"><label for="component-desc">Description:</label><input type="text" id="component-desc" placeholder="Ex: Amplificateur Opérationnel Double"></div>
-                                 <div class="form-group"><label for="component-mfg">Fabricant:</label><input type="text" id="component-mfg" placeholder="Ex: Texas Instruments"></div>
+                                 <div class="form-group"><label for="component-desc">Description:</label><input type="text" id="component-desc"></div>
+                                 <div class="form-group"><label for="component-mfg">Fabricant:</label><input type="text" id="component-mfg"></div>
                                  <div class="form-group"><label for="component-category-select">Catégorie:</label><select id="component-category-select" required><option value="">-- Sélectionner --</option></select></div>
-                                 <div class="form-group"><label for="component-drawer-admin">Tiroir:</label><input type="text" id="component-drawer-admin" placeholder="Ex: A01B3" style="text-transform: uppercase;"></div>
+                                 <div class="form-group"><label for="component-drawer-admin">Tiroir:</label><input type="text" id="component-drawer-admin" style="text-transform: uppercase;"></div>
                              </div>
                              <div style="flex: 1;">
-                                <div class="form-group"><label for="component-initial-quantity">Quantité Totale:</label><input type="number" id="component-initial-quantity" value="0" min="0" required><small>Quantité physique actuelle.</small></div>
-                                <div class="form-group"><label for="component-threshold">Seuil Critique:</label><input type="number" id="component-threshold" min="0" placeholder="Ex: 10 (Optionnel)"><small>Niveau alerte. Laisser vide si non requis.</small></div>
+                                <div class="form-group"><label for="component-initial-quantity">Quantité Totale:</label><input type="number" id="component-initial-quantity" value="0" min="0" required><small>Physique actuelle.</small></div>
+                                <div class="form-group"><label for="component-threshold">Seuil Critique:</label><input type="number" id="component-threshold" min="0" placeholder="Ex: 10 (Optionnel)"><small>Niveau alerte.</small></div>
                                 <div class="form-group"><label for="component-datasheet">Lien Datasheet:</label><input type="url" id="component-datasheet" placeholder="https://... (Optionnel)"></div>
                              </div>
                          </div>
-                         <!-- Attributs spécifiques (injectés par JS) -->
+                         <!-- Attributs spécifiques -->
                          <div id="category-specific-attributes" class="admin-subsection specific-attributes-section" style="display: none;">
-                            <!-- Attribute inputs injected by JS -->
+                            <!-- Attributs injectés par JS -->
                          </div>
                          <div class="form-actions">
                              <button type="submit" id="save-component-button" class="action-button success">Enregistrer Composant</button>
@@ -311,25 +312,22 @@
                      </div>
                  </form>
              </section>
-
              <!-- Export Critical Stock -->
              <section id="export-critical-section" class="admin-section">
                  <h3>Exporter Stock Faible / Rupture</h3>
                  <div class="form-group">
                      <label>Télécharger la liste des composants critiques :</label>
                      <button id="export-critical-txt-button" class="action-button">Exporter en TXT</button>
-                     <small>Génère un fichier texte listant les composants avec stock <= 0 ou <= seuil critique.</small>
+                     <small>Stock <= 0 ou <= seuil critique.</small>
                  </div>
                  <div id="export-critical-feedback" class="feedback-area" style="margin-top: 15px;"></div>
              </section>
-
         </main>
 
         <!-- ===================== SETTINGS VIEW ===================== -->
         <main id="settings-view" class="view-section" style="display: none;">
              <h2 class="view-title">Paramètres & Gestion Données</h2>
-             <div id="generic-feedback" class="feedback-area" style="display: none; margin-bottom: 20px;"></div> <!-- Feedback générique en haut -->
-
+             <div id="generic-feedback" class="feedback-area" style="display: none; margin-bottom: 20px;"></div>
              <!-- Export Section -->
              <section id="export-section" class="admin-section">
                  <h3>Exporter Données Générales</h3>
@@ -337,38 +335,36 @@
                      <div class="form-group" style="flex: 1;">
                          <label>Exporter le Stock Actuel Complet:</label>
                          <button id="export-inventory-csv-button" class="action-button primary">Exporter Inventaire (CSV)</button>
-                         <small>Télécharge un fichier CSV de tout l'inventaire.</small>
+                         <small>Télécharge CSV de tout l'inventaire.</small>
                      </div>
                      <div class="form-group" style="flex: 1;">
                          <label>Exporter l'Historique Complet:</label>
                          <button id="export-log-txt-button" class="action-button primary">Exporter Historique (TXT)</button>
-                         <small>Télécharge un fichier texte de tout l'historique.</small>
+                         <small>Télécharge TXT de tout l'historique.</small>
                      </div>
                  </div>
                  <div id="export-feedback" class="feedback-area" style="margin-top: 15px;"></div>
              </section>
-
              <!-- Import Section -->
              <section id="import-section" class="admin-section">
                  <h3>Importer du Stock (via CSV)</h3>
                  <div class="import-options">
                      <div class="form-group">
-                         <label for="import-csv-file">Sélectionner un fichier CSV (UTF-8) :</label>
+                         <label for="import-csv-file">Sélectionner fichier CSV (UTF-8) :</label>
                          <input type="file" id="import-csv-file" accept=".csv, text/csv">
-                         <small>Headers requis: <strong>ref, quantity</strong>. Optionnels: description, manufacturer, datasheet, drawer, category_name, critical_threshold, attributes (JSON stringifié).</small>
+                         <small>Headers requis: <strong>ref, quantity</strong>. Optionnels: description, mfg, datasheet, drawer, category_name, threshold, attributes (JSON).</small>
                      </div>
                      <div class="form-group import-mode-choice">
                          <label>Mode d'importation :</label>
                          <div class="radio-group">
-                             <label for="import-mode-enrich"><input type="radio" name="import-mode" id="import-mode-enrich" value="enrich" checked> Enrichir / Mettre à jour<small> Ajoute les nouveaux composants, met à jour les existants.</small></label>
-                             <label for="import-mode-overwrite"><input type="radio" name="import-mode" id="import-mode-overwrite" value="overwrite"> Écraser<strong style="color: var(--error-color);"> Supprime TOUT (Inventaire + Historique) avant l'import !</strong></label>
+                             <label for="import-mode-enrich"><input type="radio" name="import-mode" id="import-mode-enrich" value="enrich" checked> Enrichir / Mettre à jour<small> Ajoute/MAJ composants.</small></label>
+                             <label for="import-mode-overwrite"><input type="radio" name="import-mode" id="import-mode-overwrite" value="overwrite"> Écraser<strong style="color: var(--error-color);"> Supprime TOUT avant import !</strong></label>
                          </div>
                      </div>
                      <button id="import-inventory-csv-button" class="action-button success">Lancer l'Importation</button>
                  </div>
                  <div id="import-feedback" class="feedback-area" style="margin-top: 15px;"></div>
              </section>
-
         </main>
 
         <!-- ===================== FOOTER ===================== -->
@@ -386,7 +382,7 @@
         <div id="modal-current-attributes" style="display: none; margin-bottom: 15px;">
             <h4 style="text-align: center; margin-bottom: 10px; color: var(--text-muted); font-size: 0.9em; border-bottom: 1px dashed #eee; padding-bottom: 5px;">Attributs Clés :</h4>
             <div id="modal-attributes-list">
-                <!-- Attribute badges injected by JS -->
+                <!-- Badges d'attributs injectés par JS -->
             </div>
         </div>
         <div class="quantity-adjuster">
@@ -401,8 +397,9 @@
         </div>
     </div>
 
-    <!-- JavaScript File -->
+    <!-- Fichier JavaScript principal -->
     <script src="script.js"></script>
 
 </body>
 </html>
+
