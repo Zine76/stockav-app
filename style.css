@@ -48,6 +48,12 @@
     /* --- NOUVEAU: Couleur pour Ligne Sélectionnée --- */
     --kit-selected-bg: #e6f7ff; /* Bleu très léger */
     --input-error-border: #dc3545; /* Rouge pour inputs invalides */
+    /* --- AJOUTÉ: Couleur pour Ligne Collectée --- */
+    --drawer-collected-bg: #f0f0f0; /* Gris léger */
+    --drawer-collected-hover-bg: #e8e8e8; /* Gris légèrement plus foncé */
+    --drawer-collected-text: #555; /* Texte légèrement assombri */
+    --drawer-collected-opacity: 0.75;
+    --drawer-collected-hover-opacity: 0.85;
 }
 
 body {
@@ -91,16 +97,26 @@ body {
     margin-bottom: 25px;
     text-align: center;
 }
+
+/* === AJOUT : Style pour le Logo === */
+#app-logo {
+    display: block; /* Permet margin: auto */
+    max-width: 100px; /* Ajustez si besoin (était 80px dans bom-style.css) */
+    height: auto; /* Garde les proportions */
+    margin: 0 auto 15px auto; /* Centre horizontalement, espace en dessous */
+}
+/* === FIN AJOUT === */
+
 .app-header h1 {
     color: var(--primary-color);
-    margin: 0;
+    margin: 0 0 5px 0; /* Réduit la marge basse si logo au-dessus */
     font-weight: 700;
     font-size: 1.8em;
 }
 .app-subtitle {
     font-size: 1em;
     color: var(--text-muted);
-    margin-top: 5px;
+    margin-top: 0; /* Réduit marge haute si titre au-dessus */
     margin-bottom: 20px;
     font-weight: 400;
 }
@@ -625,7 +641,7 @@ button.drawer-button {
     padding: 12px 18px;
     border: 2px solid transparent;
     border-radius: var(--border-radius);
-    cursor: default; /* Pas de curseur pointeur ici */
+    cursor: default; /* Pas de curseur pointeur ici par défaut */
     font-size: 1.1em;
     font-weight: 600;
     color: white; /* Texte blanc par défaut */
@@ -641,14 +657,20 @@ button.drawer-button.status-ok { background-color: var(--stock-ok-color); border
 button.drawer-button.status-warning { background-color: var(--stock-warning-color); border-color: #cc9a06; color: #333; } /* Texte sombre sur jaune */
 button.drawer-button.status-critical { background-color: var(--stock-critical-color); border-color: #a71d2a; }
 button.drawer-button.status-unknown { background-color: var(--stock-unknown-color); border-color: #868e96; color: #fff; }
-/* Style pour le bouton 'collected' dans index.html (juste visuel) */
+/* Style pour le bouton 'collected' dans index.html (visuel + curseur) */
 button.drawer-button.collected {
-    background-color: var(--secondary-color);
-    border-color: #495057;
-    color: #e9ecef;
+    background-color: var(--secondary-color) !important; /* Style Grisé */
+    border-color: #495057 !important;
+    color: #e9ecef !important;
     opacity: 0.75;
     text-decoration: line-through;
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    cursor: pointer; /* Rendre cliquable pour basculer l'état visuel */
+}
+button.drawer-button.collected:hover {
+    opacity: 0.9;
+    background-color: #5a6268 !important;
+    border-color: #495057 !important;
 }
 /* Bouton Vider Kit */
 #clear-kit-button { /* Utilise .action-button.secondary */
@@ -789,36 +811,52 @@ button.drawer-button.collected {
 
 /* --- AJOUTÉ: Styles pour Ligne Inventaire avec Tiroir Collecté --- */
 .data-table tbody tr.drawer-collected-in-bom {
-    background-color: #f0f0f0 !important; /* Fond gris léger, !important pour surcharger nth-child et hover */
-    opacity: 0.75; /* Légèrement estompé */
+    background-color: var(--drawer-collected-bg) !important; /* Fond gris léger, !important pour surcharger nth-child */
+    opacity: var(--drawer-collected-opacity); /* Légèrement estompé */
+    cursor: default; /* Indiquer que la ligne n'est pas cliquable (pour la modale) */
 }
 
+/* Style pour le contenu des cellules de la ligne collectée */
 .data-table tbody tr.drawer-collected-in-bom td {
-    /* Optionnel: Barrer le texte */
-    /* text-decoration: line-through; */
-    /* text-decoration-color: #999; */
-    color: #555; /* Assombrir légèrement le texte */
+    color: var(--drawer-collected-text); /* Assombrir légèrement le texte par défaut */
+    cursor: default; /* Curseur par défaut sur toutes les cellules */
+    /* Optionnel: Barré ? Moins lisible.
+    text-decoration: line-through;
+    text-decoration-color: #999; */
 }
 
 /* Style spécifique pour la cellule du tiroir quand collecté */
-.data-table tbody tr.drawer-collected-in-bom td:nth-child(6) { /* Index 6 = Tiroir */
+.data-table tbody tr.drawer-collected-in-bom td:nth-child(6) { /* Index 6 = Tiroir (à vérifier si bon) */
     font-style: italic;
     font-weight: normal;
     color: var(--text-muted);
 }
 
-/* Empêcher le hover normal sur les lignes collectées */
+/* Empêcher le hover normal sur les lignes collectées et définir un hover spécifique */
 .data-table tbody tr.drawer-collected-in-bom:hover {
-    background-color: #e8e8e8 !important; /* Garder un fond gris au hover, légèrement différent */
-    cursor: default; /* Ne pas montrer le curseur main pour la modale */
+    background-color: var(--drawer-collected-hover-bg) !important; /* Garder un fond gris au hover, légèrement différent */
+    opacity: var(--drawer-collected-hover-opacity); /* Légèrement moins transparent au survol */
+    cursor: default;
 }
 
-/* Rendre la checkbox moins proéminente */
-.data-table tbody tr.drawer-collected-in-bom td.col-select input[type="checkbox"] {
+/* Rendre la checkbox moins proéminente/interactive visuellement (mais toujours cliquable) */
+.data-table tbody tr.drawer-collected-in-bom td.col-select input[type="checkbox"].kit-select-checkbox {
     opacity: 0.6;
-    cursor: default; /* Pas de curseur pointeur spécifique */
+    cursor: pointer; /* Garder curseur pointeur car elle reste fonctionnelle */
+}
+
+/* Assurer que les liens restent cliquables visuellement */
+.data-table tbody tr.drawer-collected-in-bom td a {
+    cursor: pointer;
+    color: var(--link-color); /* Garder la couleur du lien */
+    opacity: 0.8; /* Légèrement estompé mais reste distinct */
+}
+.data-table tbody tr.drawer-collected-in-bom td a:hover {
+    opacity: 1;
+    color: var(--primary-color-dark);
 }
 /* --- FIN AJOUTÉ --- */
 
 
 /* ----- FIN DU FICHIER style.css ----- */
+
