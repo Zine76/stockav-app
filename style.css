@@ -1,4 +1,4 @@
-/* ----- DÉBUT DU FICHIER style.css ----- */
+/* ----- DÉBUT DU FICHIER style.css (CORRECTIF LOGO IPHONE INCLUS) ----- */
 
 /* --- Polices et Variables Globales --- */
 :root {
@@ -98,14 +98,16 @@ body {
     text-align: center;
 }
 
-/* === AJOUT : Style pour le Logo === */
+/* === Style pour le Logo (CORRIGÉ POUR IPHONE) === */
 #app-logo {
     display: block; /* Permet margin: auto */
-    max-width: 100px; /* Ajustez si besoin (était 80px dans bom-style.css) */
+    width: 100%; /* AJOUTÉ: Force l'image à ne pas dépasser son conteneur */
+    max-width: 100px; /* Limite sa taille maximale à 100px */
     height: auto; /* Garde les proportions */
     margin: 0 auto 15px auto; /* Centre horizontalement, espace en dessous */
+    object-fit: contain; /* AJOUTÉ (sécurité): Assure affichage correct sans distorsion */
 }
-/* === FIN AJOUT === */
+/* === FIN CORRECTION LOGO === */
 
 .app-header h1 {
     color: var(--primary-color);
@@ -363,11 +365,12 @@ a.external-link:hover { opacity: 0.85; box-shadow: var(--box-shadow); }
 
 /* Styles Checkbox et Ligne Sélectionnée Inventaire */
 #inventory-table td.col-select input[type="checkbox"].kit-select-checkbox { cursor: pointer; width: 18px; height: 18px; vertical-align: middle; accent-color: var(--primary-color); }
+#inventory-table td.col-select input[type="checkbox"].kit-select-checkbox:disabled { cursor: not-allowed; opacity: 0.5; } /* Style checkbox désactivée */
 #inventory-table tbody tr.kit-selected { background-color: var(--kit-selected-bg) !important; font-weight: 500; }
-#inventory-table tbody tr.kit-selected:hover { background-color: #d0eaff !important; /* Plus foncé au hover si sélectionné */ }
+#inventory-table tbody tr.kit-selected:hover:not(.drawer-collected-in-bom) { background-color: #d0eaff !important; /* Plus foncé au hover si sélectionné ET non collecté */ }
 /* Curseur pour clic modale (toute la ligne sauf checkbox et liens) */
 .data-table tbody tr.inventory-item-row { cursor: default; }
-.data-table tbody tr.inventory-item-row td:not(.col-select) { cursor: pointer; } /* Curseur main sur les cellules cliquables */
+.data-table tbody tr.inventory-item-row:not(.drawer-collected-in-bom) td:not(.col-select) { cursor: pointer; } /* Curseur main sur les cellules cliquables SAUF si ligne collectée */
 .data-table tbody tr.inventory-item-row td a { cursor: pointer; } /* Restaurer curseur pour liens */
 
 /* Masquer Tiroir si non connecté */
@@ -820,13 +823,10 @@ button.drawer-button.collected:hover {
 .data-table tbody tr.drawer-collected-in-bom td {
     color: var(--drawer-collected-text); /* Assombrir légèrement le texte par défaut */
     cursor: default; /* Curseur par défaut sur toutes les cellules */
-    /* Optionnel: Barré ? Moins lisible.
-    text-decoration: line-through;
-    text-decoration-color: #999; */
 }
 
 /* Style spécifique pour la cellule du tiroir quand collecté */
-.data-table tbody tr.drawer-collected-in-bom td:nth-child(6) { /* Index 6 = Tiroir (à vérifier si bon) */
+.data-table tbody tr.drawer-collected-in-bom td:nth-child(6) { /* Index 6 = Tiroir */
     font-style: italic;
     font-weight: normal;
     color: var(--text-muted);
@@ -839,10 +839,11 @@ button.drawer-button.collected:hover {
     cursor: default;
 }
 
-/* Rendre la checkbox moins proéminente/interactive visuellement (mais toujours cliquable) */
+/* Griser la checkbox et la rendre non cliquable visuellement et fonctionnellement */
 .data-table tbody tr.drawer-collected-in-bom td.col-select input[type="checkbox"].kit-select-checkbox {
-    opacity: 0.6;
-    cursor: pointer; /* Garder curseur pointeur car elle reste fonctionnelle */
+    opacity: 0.5;
+    cursor: not-allowed; /* Indiquer qu'elle n'est plus cliquable */
+    /* Le JS doit aussi désactiver la checkbox (disabled=true) */
 }
 
 /* Assurer que les liens restent cliquables visuellement */
@@ -859,4 +860,3 @@ button.drawer-button.collected:hover {
 
 
 /* ----- FIN DU FICHIER style.css ----- */
-
