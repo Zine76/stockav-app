@@ -331,7 +331,11 @@ a.external-link:hover { opacity: 0.85; box-shadow: var(--box-shadow); }
 .data-table thead { background-color: #e9ecef; border-bottom: 2px solid var(--border-color); }
 .data-table th { font-weight: 600; white-space: nowrap; color: var(--text-muted); text-transform: uppercase; font-size: 0.85em; }
 .data-table tbody tr:nth-child(even) { background-color: var(--light-gray); }
+<<<<<<< HEAD
 .data-table tbody tr:hover:not(.kit-selected):not(.row-highlighted-error):not(.row-highlighted-success):not(.drawer-collected-in-bom) { background-color: #e2e6ea; } /* Modifié pour ne pas appliquer sur drawer-collected */
+=======
+.data-table tbody tr:hover:not(.kit-selected):not(.row-highlighted-error):not(.row-highlighted-success) { background-color: #e2e6ea; }
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
 .data-table td a { color: var(--link-color); text-decoration: none; font-weight: 500;}
 .data-table td a:hover { text-decoration: underline; }
 
@@ -592,7 +596,11 @@ hr { border: 0; height: 1px; background-color: #e9ecef; margin: 30px 0; }
 .data-table tbody tr.row-highlighted-error { animation: highlight-error 3.5s ease-out forwards; }
 
 
+<<<<<<< HEAD
 /* ----- STYLES POUR VUE KIT ACTUEL (index.html) ----- */
+=======
+/* ----- STYLES POUR VUE KIT ACTUEL ----- */
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
 #bom-view .section-subtitle { /* Titre "Tiroirs à Visiter" */
     margin-bottom: 20px;
     text-align: center;
@@ -613,13 +621,21 @@ hr { border: 0; height: 1px; background-color: #e9ecef; margin: 30px 0; }
     justify-content: center; /* Centrer les boutons horizontalement */
 }
 .drawer-buttons-container p { width: 100%; } /* Message initial prend toute largeur */
+<<<<<<< HEAD
 /* Boutons Tiroirs (dans index.html) */
 /* Note: Ces boutons n'ont pas la coche et ne sont pas interactifs comme dans bom.html */
+=======
+/* Boutons Tiroirs */
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
 button.drawer-button {
     padding: 12px 18px;
     border: 2px solid transparent;
     border-radius: var(--border-radius);
+<<<<<<< HEAD
     cursor: default; /* Pas de curseur pointeur ici */
+=======
+    cursor: pointer;
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
     font-size: 1.1em;
     font-weight: 600;
     color: white; /* Texte blanc par défaut */
@@ -630,12 +646,23 @@ button.drawer-button {
     position: relative;
     user-select: none;
 }
+<<<<<<< HEAD
+=======
+button.drawer-button:hover:not(.collected) {
+    transform: translateY(-2px); /* Léger soulèvement */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
 /* Couleurs basées sur statut */
 button.drawer-button.status-ok { background-color: var(--stock-ok-color); border-color: #1c7430; }
 button.drawer-button.status-warning { background-color: var(--stock-warning-color); border-color: #cc9a06; color: #333; } /* Texte sombre sur jaune */
 button.drawer-button.status-critical { background-color: var(--stock-critical-color); border-color: #a71d2a; }
 button.drawer-button.status-unknown { background-color: var(--stock-unknown-color); border-color: #868e96; color: #fff; }
+<<<<<<< HEAD
 /* Style pour le bouton 'collected' dans index.html (juste visuel) */
+=======
+/* Bouton collecté */
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
 button.drawer-button.collected {
     background-color: var(--secondary-color);
     border-color: #495057;
@@ -643,18 +670,35 @@ button.drawer-button.collected {
     opacity: 0.75;
     text-decoration: line-through;
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+<<<<<<< HEAD
+=======
+    cursor: pointer; /* Laisser cliquable pour dé-collecter */
+}
+button.drawer-button.collected:hover {
+    opacity: 0.9; /* Légèrement plus visible au hover si collecté */
+    transform: none; /* Pas de soulèvement */
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
 }
 /* Bouton Vider Kit */
 #clear-kit-button { /* Utilise .action-button.secondary */
     padding: 10px 20px;
     font-size: 1em;
 }
+<<<<<<< HEAD
 /* ----- FIN STYLES KIT ACTUEL (index.html) ----- */
+=======
+/* ----- FIN STYLES KIT ACTUEL ----- */
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
 
 /* --- Styles Footer --- */
 .app-footer { text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid var(--border-color); font-size: 0.88em; color: var(--text-muted); }
 
+<<<<<<< HEAD
 /* --- Styles pour items-per-page --- */
+=======
+/* --- NOUVEAU: Styles pour items-per-page --- */
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
 .items-per-page-selector {
     display: inline-block; /* Pour le mettre sur la même ligne que les boutons */
     margin-left: 25px; /* Espacement par rapport aux boutons de pagination */
@@ -689,6 +733,10 @@ button.drawer-button.collected {
     color: var(--text-muted);
     margin-left: 6px;
 }
+<<<<<<< HEAD
+=======
+/* --- FIN NOUVEAU --- */
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
 
 /* --- Responsive --- */
 @media (max-width: 992px) {
@@ -712,6 +760,10 @@ button.drawer-button.collected {
     .view-title { font-size: 1.4em; margin-bottom: 25px;}
     /* Ajustement pagination pour petits écrans */
     .pagination-controls {
+<<<<<<< HEAD
+=======
+        /* Déjà en flex grâce aux styles précédents */
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
         gap: 10px 15px; /* Espacement cohérent */
     }
     .items-per-page-selector {
@@ -781,6 +833,7 @@ button.drawer-button.collected {
     .admin-section h4 { font-size: 1em; margin-bottom: 15px; }
 }
 
+<<<<<<< HEAD
 /* --- AJOUTÉ: Styles pour Ligne Inventaire avec Tiroir Collecté --- */
 .data-table tbody tr.drawer-collected-in-bom {
     background-color: #f0f0f0 !important; /* Fond gris léger, !important pour surcharger nth-child et hover */
@@ -816,3 +869,6 @@ button.drawer-button.collected {
 
 
 /* ----- FIN DU FICHIER style.css ----- */
+=======
+/* ----- FIN DU FICHIER style.css ----- */
+>>>>>>> 1f58c510d28f10acb01970f7ef84d93495272f99
