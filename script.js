@@ -1,4 +1,4 @@
-// --- START OF FILE script.js (V10 - Chat Modal Trigger + Direct Answer Attempt) ---
+// --- START OF FILE script.js (avec export QR révisé) ---
 
 document.addEventListener('DOMContentLoaded', () => {
     "use strict"; // Active le mode strict
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Récupération des Éléments DOM ---
-    // ... (Récupération DOM inchangée) ...
+    // ... (Récupération DOM inchangée, incluant exportQrButton) ...
     const loginArea = document.getElementById('login-area');
     const loginCodeInput = document.getElementById('login-code');
     const loginPasswordInput = document.getElementById('login-password');
@@ -67,14 +67,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const adminTabButton = document.getElementById('show-admin-view');
     const settingsTabButton = document.getElementById('show-settings-view');
     const auditTabButton = document.getElementById('show-audit-view');
-    const kitTabButton = document.getElementById('show-bom-view'); // Garder l'ID original bom-view même si renommé "Kit"
+    const kitTabButton = document.getElementById('show-bom-view');
     const searchView = document.getElementById('search-view');
     const inventoryView = document.getElementById('inventory-view');
     const logView = document.getElementById('log-view');
     const adminView = document.getElementById('admin-view');
     const settingsView = document.getElementById('settings-view');
     const auditView = document.getElementById('audit-view');
-    const kitView = document.getElementById('bom-view'); // Garder l'ID original
+    const kitView = document.getElementById('bom-view');
     const viewSections = document.querySelectorAll('main.view-section');
     const protectedButtons = document.querySelectorAll('#show-log-view, #show-admin-view, #show-settings-view, #show-audit-view, #show-bom-view');
     const quantityChangeModal = document.getElementById('quantity-change-modal');
@@ -162,16 +162,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearKitButton = document.getElementById('clear-kit-button');
     const genericFeedbackDiv = document.getElementById('generic-feedback');
     const itemsPerPageSelect = document.getElementById('items-per-page-select');
+    const exportQrButton = document.getElementById('export-qr-button');
 
     // --- État et Historique du Chat ---
     // ... (État chat inchangé) ...
     let chatHistory = [];
-    let conversationState = {
-        awaitingQuantityConfirmation: false, // Gardé au cas où, mais moins utilisé
-        chosenRefForStockCheck: null, // Gardé au cas où
-        availableQuantity: 0, // Gardé au cas où
-        criticalThreshold: null // Gardé au cas où
-    };
+    let conversationState = { awaitingQuantityConfirmation: false, chosenRefForStockCheck: null, availableQuantity: 0, criticalThreshold: null };
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     // --- Fonctions Kit (inchangées) ---
@@ -189,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Helpers Généraux (Stock Status, Indicator, HTML Escape) ---
     // ... (Code inchangé) ...
     function getStockStatus(quantity, threshold) { if (quantity === undefined || quantity === null || isNaN(quantity)) return 'unknown'; quantity = Number(quantity); threshold = (threshold === undefined || threshold === null || isNaN(threshold) || threshold < 0) ? -1 : Number(threshold); if (quantity <= 0) return 'critical'; if (threshold !== -1 && quantity <= threshold) return 'warning'; return 'ok'; }
-    function createStockIndicatorHTML(quantity, threshold) { const status = getStockStatus(quantity, threshold); const qtyText = (quantity === undefined || quantity === null) ? 'N/A' : quantity; const thresholdText = (threshold === undefined || threshold === null || threshold < 0) ? 'N/A' : threshold; return `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()} (Qté: ${qtyText}, Seuil: ${thresholdText ?? 'N/A'})"></span>`; } // Correction seuil N/A
+    function createStockIndicatorHTML(quantity, threshold) { const status = getStockStatus(quantity, threshold); const qtyText = (quantity === undefined || quantity === null) ? 'N/A' : quantity; const thresholdText = (threshold === undefined || threshold === null || threshold < 0) ? 'N/A' : threshold; return `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()} (Qté: ${qtyText}, Seuil: ${thresholdText ?? 'N/A'})"></span>`; }
     function escapeHtml(unsafe) { if (typeof unsafe !== 'string') return unsafe; return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
 
     // --- Authentification (inchangée) ---
@@ -214,14 +210,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function populateInventoryFilters() { if (!inventoryCategoryFilter) return; try { const currentCategoryValue = inventoryCategoryFilter.value; inventoryCategoryFilter.innerHTML = '<option value="all">Toutes</option>'; if (categoriesCache.length === 0 && currentUser) await getCategories(); categoriesCache.sort((a, b) => a.name.localeCompare(b.name)).forEach(cat => { const option = document.createElement('option'); option.value = cat.id; option.textContent = escapeHtml(cat.name); inventoryCategoryFilter.appendChild(option); }); if (categoriesCache.some(cat => String(cat.id) === String(currentCategoryValue))) { inventoryCategoryFilter.value = currentCategoryValue; } else { inventoryCategoryFilter.value = 'all'; } await updateAttributeFiltersUI(); } catch (err) { console.error("Erreur population filtres inventaire:", err); if (inventoryCategoryFilter) inventoryCategoryFilter.innerHTML = '<option value="all" disabled>Erreur chargement</option>'; if (attributeFiltersContainer) attributeFiltersContainer.innerHTML = '<i style="color: var(--error-color);">Erreur chargement catégories.</i>'; } }
     async function displayInventory(page = 1) { currentInventoryPage = page; if (!inventoryTableBody || !supabase || !attributeFiltersContainer) { console.warn("displayInventory: Prérequis manquants (DOM, Supabase)."); if(inventoryTableBody) inventoryTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">Erreur interne ou DOM manquant.</td></tr>`; return; } inventoryTableBody.innerHTML = `<tr class="loading-row"><td colspan="8" style="text-align:center;"><i>Chargement...</i></td></tr>`; if(inventoryNoResults) inventoryNoResults.style.display = 'none'; if(inventoryPrevPageButton) inventoryPrevPageButton.disabled = true; if(inventoryNextPageButton) inventoryNextPageButton.disabled = true; if(inventoryPageInfo) inventoryPageInfo.textContent = 'Chargement...'; try { const categoryValue = inventoryCategoryFilter?.value || 'all'; const categoryIdToSend = categoryValue === 'all' ? null : categoryValue; const searchValue = inventorySearchFilter?.value.trim() || ''; const searchTermToSend = searchValue || null; const attributeFiltersToSend = {}; attributeFiltersContainer.querySelectorAll('select').forEach(selectElement => { const attributeName = selectElement.dataset.attributeName; const selectedValue = selectElement.value; if (attributeName && selectedValue !== 'all') { attributeFiltersToSend[attributeName] = selectedValue; } }); const finalAttributeFilters = Object.keys(attributeFiltersToSend).length > 0 ? attributeFiltersToSend : null; console.log("Calling RPC search_inventory with params:", { p_category_id: categoryIdToSend, p_search_term: searchTermToSend, p_attribute_filters: finalAttributeFilters, p_page: currentInventoryPage, p_items_per_page: ITEMS_PER_PAGE }); const { data, error } = await supabase.rpc('search_inventory', { p_category_id: categoryIdToSend, p_search_term: searchTermToSend, p_attribute_filters: finalAttributeFilters, p_page: currentInventoryPage, p_items_per_page: ITEMS_PER_PAGE }); inventoryTableBody.innerHTML = ''; if (error) { throw new Error(`Erreur RPC search_inventory: ${error.message} (Code: ${error.code}, Details: ${error.details})`); } const totalItems = (data && data.length > 0) ? data[0].total_count : 0; const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE); console.log(`RPC returned ${data?.length || 0} items for page ${currentInventoryPage}. Total items matching filters: ${totalItems}`); if (totalItems === 0) { if(inventoryNoResults) { inventoryNoResults.textContent = `Aucun composant trouvé pour les filtres sélectionnés.`; inventoryTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 20px;">${inventoryNoResults.textContent}</td></tr>`; inventoryNoResults.style.display = 'none'; } if(inventoryPageInfo) inventoryPageInfo.textContent = 'Page 0 / 0'; if(inventoryPrevPageButton) inventoryPrevPageButton.disabled = true; if(inventoryNextPageButton) inventoryNextPageButton.disabled = true; } else { if(inventoryNoResults) inventoryNoResults.style.display = 'none'; data.forEach(item => { const row = inventoryTableBody.insertRow(); row.dataset.ref = item.ref; row.dataset.itemData = JSON.stringify(item); row.classList.add('inventory-item-row'); const isSelected = currentUser && currentKitSelection.some(kitItem => kitItem.ref === item.ref); if (isSelected) { row.classList.add('kit-selected'); } const drawerKey = item.drawer; const isCollected = drawerKey && collectedDrawersSet.has(drawerKey); if (isCollected) { row.classList.add('drawer-collected-in-bom'); } const selectCell = row.insertCell(); selectCell.classList.add('col-select'); if (currentUser && item.quantity > 0) { const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.classList.add('kit-select-checkbox'); checkbox.dataset.ref = item.ref; checkbox.title = `Ajouter/Retirer ${item.ref} au kit`; checkbox.checked = isSelected; checkbox.disabled = isCollected; selectCell.appendChild(checkbox); } else if (currentUser && item.quantity <= 0) { selectCell.innerHTML = '<span title="Stock épuisé" style="cursor:default; color: var(--text-muted); font-size:0.8em;">N/A</span>'; } else { selectCell.innerHTML = '&nbsp;'; } const refCell = row.insertCell(); const status = getStockStatus(item.quantity, item.critical_threshold); const indicatorSpan = document.createElement('span'); indicatorSpan.classList.add('stock-indicator', `level-${status}`); indicatorSpan.title = `Stock: ${status.toUpperCase()} (Qté: ${item.quantity}, Seuil: ${item.critical_threshold ?? 'N/A'})`; refCell.appendChild(indicatorSpan); refCell.appendChild(document.createTextNode(" " + (item.ref || 'N/A'))); row.insertCell().textContent = item.description || '-'; row.insertCell().textContent = item.category_name || 'N/A'; const typeAttribute = item.attributes?.Type || '-'; row.insertCell().textContent = typeAttribute; const drawerCell = row.insertCell(); drawerCell.textContent = item.drawer || '-'; drawerCell.style.textAlign = 'center'; const qtyCell = row.insertCell(); qtyCell.textContent = item.quantity ?? 0; qtyCell.style.textAlign = 'center'; const dsCell = row.insertCell(); dsCell.style.textAlign = 'center'; if (item.datasheet) { try { new URL(item.datasheet); const link = document.createElement('a'); link.href = item.datasheet; link.textContent = 'Voir'; link.target = '_blank'; link.rel = 'noopener noreferrer'; dsCell.appendChild(link); } catch (_) { dsCell.textContent = '-'; } } else { dsCell.textContent = '-'; } }); currentInventoryPage = Math.max(1, Math.min(currentInventoryPage, totalPages || 1)); if(inventoryPageInfo) inventoryPageInfo.textContent = `Page ${currentInventoryPage} / ${totalPages || 1}`; if(inventoryPrevPageButton) inventoryPrevPageButton.disabled = currentInventoryPage === 1; if(inventoryNextPageButton) inventoryNextPageButton.disabled = currentInventoryPage >= totalPages; } } catch (err) { console.error("Erreur affichage inventaire:", err); inventoryTableBody.innerHTML = `<tr><td colspan="8" class="error-message" style="text-align:center; color: var(--error-color);">Erreur chargement: ${err.message}</td></tr>`; if(inventoryPageInfo) inventoryPageInfo.textContent = 'Erreur'; if(inventoryNoResults) { inventoryNoResults.textContent = `Erreur chargement inventaire: ${err.message}`; inventoryNoResults.style.display = 'block'; } if(inventoryPrevPageButton) inventoryPrevPageButton.disabled = true; if(inventoryNextPageButton) inventoryNextPageButton.disabled = true; } }
 
-
     // --- LOGIQUE HISTORIQUE (inchangée) ---
     // ... (displayLog, formatLogTimestamp) ...
     async function displayLog(page = 1) { currentLogPage = page; if (!logTableBody || !supabase || !currentUser) { if(logTableBody) logTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">${currentUser ? 'Erreur interne ou DOM.' : 'Connexion requise.'}</td></tr>`; console.warn("displayLog: Prérequis manquants (DOM, Supabase ou User)."); return; } logTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;"><i>Chargement...</i></td></tr>`; if(logNoResults) logNoResults.style.display = 'none'; if(logPrevPageButton) logPrevPageButton.disabled = true; if(logNextPageButton) logNextPageButton.disabled = true; if(logPageInfo) logPageInfo.textContent = 'Chargement...'; const itemsPerPage = ITEMS_PER_PAGE; const startIndex = (currentLogPage - 1) * itemsPerPage; const endIndex = startIndex + itemsPerPage - 1; try { console.log(`Fetching log data for page ${currentLogPage} (Range: ${startIndex}-${endIndex})`); let query = supabase.from('log').select('created_at, user_code, action, item_ref, quantity_change, final_quantity', { count: 'exact' }).order('created_at', { ascending: false }).range(startIndex, endIndex); const { data, error, count } = await query; console.log(`Log query returned. Error: ${error ? error.message : 'null'}, Count: ${count}`); logTableBody.innerHTML = ''; if (error) { throw new Error(`Erreur DB log: ${error.message}`); } const totalItems = count || 0; const totalPages = Math.ceil(totalItems / itemsPerPage); if (totalItems === 0) { if(logNoResults) { logNoResults.textContent = "L'historique est vide."; logTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">${logNoResults.textContent}</td></tr>`; logNoResults.style.display = 'none'; } if(logPageInfo) logPageInfo.textContent = 'Page 0 / 0'; if(logPrevPageButton) logPrevPageButton.disabled = true; if(logNextPageButton) logNextPageButton.disabled = true; console.log("Log is empty."); } else { if(logNoResults) logNoResults.style.display = 'none'; console.log(`Displaying ${data.length} log entries.`); data.forEach(entry => { const row = logTableBody.insertRow(); row.insertCell().textContent = formatLogTimestamp(entry.created_at); row.insertCell().textContent = entry.user_code ? entry.user_code.toUpperCase() : 'Système'; row.insertCell().textContent = entry.action || 'Inconnue'; row.insertCell().textContent = entry.item_ref || 'N/A'; const changeCell = row.insertCell(); const change = entry.quantity_change ?? 0; changeCell.textContent = change > 0 ? `+${change}` : (change < 0 ? `${change}` : '0'); changeCell.classList.add(change > 0 ? 'positive' : (change < 0 ? 'negative' : '')); changeCell.style.textAlign = 'center'; const finalQtyCell = row.insertCell(); finalQtyCell.textContent = entry.final_quantity ?? 'N/A'; finalQtyCell.style.textAlign = 'center'; }); currentLogPage = Math.max(1, Math.min(currentLogPage, totalPages || 1)); if(logPageInfo) logPageInfo.textContent = `Page ${currentLogPage} / ${totalPages || 1}`; if(logPrevPageButton) logPrevPageButton.disabled = currentLogPage === 1; if(logNextPageButton) logNextPageButton.disabled = currentLogPage >= totalPages; } } catch (err) { console.error("Erreur displayLog:", err); const errorMsg = `Erreur chargement historique: ${err.message}`; logTableBody.innerHTML = `<tr><td colspan="6" class="error-message" style="text-align:center; color: var(--error-color);">${errorMsg}</td></tr>`; if(logPageInfo) logPageInfo.textContent = 'Erreur'; if(logNoResults) { logNoResults.textContent = errorMsg; logNoResults.style.display = 'block'; } if(logPrevPageButton) logPrevPageButton.disabled = true; if(logNextPageButton) logNextPageButton.disabled = true; } }
     function formatLogTimestamp(dateString) { if (!dateString) return 'Date inconnue'; try { const date = new Date(dateString); if (isNaN(date.getTime())) return 'Date invalide'; const year = date.getFullYear(); const month = (date.getMonth() + 1).toString().padStart(2, '0'); const day = date.getDate().toString().padStart(2, '0'); const hours = date.getHours().toString().padStart(2, '0'); const minutes = date.getMinutes().toString().padStart(2, '0'); const seconds = date.getSeconds().toString().padStart(2, '0'); return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`; } catch (e) { console.warn("Erreur formatage date:", e); return dateString; } }
 
-    // --- VUE ADMIN (inchangée) ---
-    // ... (getCategories, invalidateCategoriesCache, loadAdminData, loadCategoriesAdmin, addCategoryEventListeners, resetCategoryForm, populateComponentCategorySelectAdmin, renderSpecificAttributes, addComponentCategorySelectListener, showAdminFeedback, resetStockForm, addStockEventListeners, handleExportCriticalStockTXT) ...
+    // --- VUE ADMIN (Modification pour gestion affichage et activation bouton QR) ---
+    // ... (fonctions inchangées sauf resetStockForm, addStockEventListeners) ...
     async function getCategories() { if (!supabase) { console.error("getCategories: Supabase non initialisé."); return []; } console.log("Récupération catégories..."); try { const { data, error } = await supabase.from('categories').select('id, name, attributes').order('name', { ascending: true }); if (error) throw new Error(`Erreur DB catégories: ${error.message}`); categoriesCache = (data || []).map(cat => { if (cat.attributes && !Array.isArray(cat.attributes)) { console.warn(`Attributs catégorie ${cat.name} (ID: ${cat.id}) ne sont pas un Array:`, cat.attributes); if (typeof cat.attributes === 'string') { try { const parsed = JSON.parse(cat.attributes); if (Array.isArray(parsed)) { cat.attributes = parsed.map(String); } else { throw new Error("JSON parsed is not an array"); } } catch (e) { cat.attributes = cat.attributes.split(',').map(s => s.trim()).filter(Boolean); } } else { cat.attributes = []; } } else if (!cat.attributes) { cat.attributes = []; } cat.attributes = cat.attributes.map(attr => String(attr).trim()).filter(Boolean); cat.id = String(cat.id); return cat; }); console.log("Catégories récupérées et formatées:", categoriesCache.length); return categoriesCache; } catch (err) { console.error("Erreur récupération catégories:", err); categoriesCache = []; showAdminFeedback("Erreur chargement catégories.", 'error'); return []; } }
     function invalidateCategoriesCache() { console.log("Cache catégories invalidé."); categoriesCache = []; [inventoryCategoryFilter, componentCategorySelectAdmin, auditCategoryFilter].forEach(select => { if (select) { const currentValue = select.value; select.innerHTML = '<option value="">Chargement...</option>'; if (select === inventoryCategoryFilter || select === auditCategoryFilter) { select.innerHTML = '<option value="all">Toutes</option>' + select.innerHTML; select.value = (currentValue === 'all') ? 'all' : ''; } } }); if(attributeFiltersContainer) attributeFiltersContainer.innerHTML = ''; if(specificAttributesDiv) specificAttributesDiv.style.display = 'none'; }
     async function loadAdminData() { if (!adminView.classList.contains('active-view') || !currentUser) return; console.log("Chargement données Admin..."); showAdminFeedback("Chargement...", 'info'); resetStockForm(); resetCategoryForm(); try { if (categoriesCache.length === 0) await getCategories(); await loadCategoriesAdmin(); await populateComponentCategorySelectAdmin(); showAdminFeedback("", 'info', true); } catch (err) { console.error("Erreur chargement admin:", err); showAdminFeedback(`Erreur chargement admin: ${err.message}`, 'error'); } }
@@ -232,491 +227,482 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderSpecificAttributes(attributesArray, categoryName, existingValues = {}) { if (!specificAttributesDiv || !Array.isArray(attributesArray)) { if (specificAttributesDiv) { specificAttributesDiv.innerHTML = ''; specificAttributesDiv.style.display = 'none'; } console.log("Pas d'attributs à afficher pour", categoryName); return; } console.log(`Rendu des attributs spécifiques pour ${categoryName}:`, attributesArray, "Valeurs existantes:", existingValues); specificAttributesDiv.innerHTML = `<h4>Attributs Spécifiques (${escapeHtml(categoryName)})</h4>`; if (attributesArray.length === 0) { specificAttributesDiv.innerHTML += '<p><i>Aucun attribut spécifique défini pour cette catégorie.</i></p>'; } else { attributesArray.forEach(attrName => { if (!attrName || typeof attrName !== 'string' || attrName.trim() === '') return; const cleanAttrName = attrName.trim(); const formGroup = document.createElement('div'); formGroup.classList.add('form-group'); const label = document.createElement('label'); const inputId = `attr-${cleanAttrName.replace(/[^a-zA-Z0-9-_]/g, '-')}`; label.htmlFor = inputId; label.textContent = `${cleanAttrName}:`; const input = document.createElement('input'); input.type = 'text'; input.id = inputId; input.name = `attribute_${cleanAttrName}`; input.dataset.attributeName = cleanAttrName; input.placeholder = `Valeur pour ${cleanAttrName}`; if (existingValues && existingValues.hasOwnProperty(cleanAttrName)) { const value = existingValues[cleanAttrName]; input.value = (value !== null && value !== undefined) ? String(value) : ''; } formGroup.appendChild(label); formGroup.appendChild(input); specificAttributesDiv.appendChild(formGroup); }); } specificAttributesDiv.style.display = 'block'; }
     function addComponentCategorySelectListener() { componentCategorySelectAdmin?.addEventListener('change', () => { const categoryId = componentCategorySelectAdmin.value; const existingAttributes = {}; if (!categoryId) { if (specificAttributesDiv) specificAttributesDiv.style.display = 'none'; return; } const category = categoriesCache.find(cat => String(cat.id) === String(categoryId)); if (category && Array.isArray(category.attributes)) { renderSpecificAttributes(category.attributes, category.name, existingAttributes); } else { if (specificAttributesDiv) specificAttributesDiv.style.display = 'none'; if (category && !Array.isArray(category.attributes)) { console.warn("Format des attributs invalide pour la catégorie:", categoryId, category.attributes); } else if (!category) { console.warn("Catégorie sélectionnée non trouvée dans le cache:", categoryId); } } }); }
     function showAdminFeedback(message, type = 'info', instantHide = false){ if(!adminFeedbackDiv) { console.log(`Admin Feedback (${type}): ${message}`); return; } adminFeedbackDiv.textContent = message; adminFeedbackDiv.className = `feedback-area ${type}`; adminFeedbackDiv.style.display = message ? 'block' : 'none'; if (type !== 'error') { const delay = instantHide ? 0 : (type === 'info' ? 2500 : 4000); setTimeout(() => { if (adminFeedbackDiv.textContent === message) { adminFeedbackDiv.style.display = 'none'; } }, delay); } }
-    function resetStockForm() { if (!stockForm) return; stockForm.reset(); if(componentRefAdminInput) { componentRefAdminInput.disabled = false; componentRefAdminInput.value = ''; } if(checkStockButton) checkStockButton.disabled = false; if(componentActionsWrapper) componentActionsWrapper.style.display = 'none'; if(componentDetails) componentDetails.style.display = 'block'; const refDisplay = document.getElementById('component-ref-display'); if (refDisplay) refDisplay.textContent = 'N/A'; if(currentQuantitySpan) currentQuantitySpan.textContent = 'N/A'; if(quantityChangeInput) quantityChangeInput.value = '0'; if(updateQuantityButton) updateQuantityButton.disabled = true; if(deleteComponentButton) { deleteComponentButton.style.display = 'none'; deleteComponentButton.disabled = true; } if(specificAttributesDiv) { specificAttributesDiv.innerHTML = ''; specificAttributesDiv.style.display = 'none'; } if(saveComponentButton) { saveComponentButton.disabled = false; saveComponentButton.textContent = 'Enregistrer Nouveau Composant'; } if (adminFeedbackDiv && !adminFeedbackDiv.classList.contains('error')) { showAdminFeedback('', 'info', true); } componentRefAdminInput?.focus(); }
-    function addStockEventListeners() { checkStockButton?.addEventListener('click', async () => { const ref = componentRefAdminInput?.value.trim().toUpperCase(); if (!ref) { showAdminFeedback("Veuillez entrer une référence composant.", 'error'); componentRefAdminInput.focus(); return; } showAdminFeedback(`Vérification de la référence "${ref}"...`, 'info'); componentRefAdminInput.disabled = true; checkStockButton.disabled = true; componentActionsWrapper.style.display = 'none'; componentDetails.style.display = 'block'; saveComponentButton.disabled = true; try { const item = await getStockInfoFromSupabase(ref); if (item) { showAdminFeedback(`Composant "${ref}" trouvé. Mode édition.`, 'info', true); componentActionsWrapper.style.display = 'block'; const refDisplay = document.getElementById('component-ref-display'); if (refDisplay) refDisplay.textContent = ref; currentQuantitySpan.textContent = item.quantity; quantityChangeInput.value = 0; updateQuantityButton.disabled = false; deleteComponentButton.style.display = 'inline-block'; deleteComponentButton.disabled = false; componentCategorySelectAdmin.value = item.category_id || ""; componentDescInput.value = item.description || ""; componentMfgInput.value = item.manufacturer || ""; componentDatasheetInput.value = item.datasheet || ""; componentDrawerAdminInput.value = item.drawer || ""; componentInitialQuantityInput.value = item.quantity; componentThresholdInput.value = item.critical_threshold ?? ""; const category = categoriesCache.find(c => String(c.id) === String(item.category_id)); if (category && Array.isArray(category.attributes)) { renderSpecificAttributes(category.attributes, category.name, item.attributes || {}); } else { if(specificAttributesDiv) specificAttributesDiv.style.display = 'none'; } saveComponentButton.textContent = `Enregistrer Modifications (${ref})`; saveComponentButton.disabled = false; } else { showAdminFeedback(`Référence "${ref}" non trouvée. Passage en mode ajout.`, 'warning'); componentActionsWrapper.style.display = 'none'; componentCategorySelectAdmin.value = ""; componentDescInput.value = ""; componentMfgInput.value = ""; componentDatasheetInput.value = ""; componentDrawerAdminInput.value = ""; componentInitialQuantityInput.value = 0; componentThresholdInput.value = ""; if (specificAttributesDiv) specificAttributesDiv.style.display = 'none'; saveComponentButton.textContent = `Enregistrer Nouveau Composant`; saveComponentButton.disabled = false; } } catch (err) { console.error("Erreur lors de la vérification du stock:", err); showAdminFeedback(`Erreur lors de la vérification de "${ref}": ${err.message}`, 'error'); resetStockForm(); } finally { if (componentRefAdminInput && !componentRefAdminInput.disabled) componentRefAdminInput.disabled = false; if (checkStockButton && !checkStockButton.disabled) checkStockButton.disabled = false; } }); updateQuantityButton?.addEventListener('click', async () => { const refElement = document.getElementById('component-ref-display'); const ref = refElement?.textContent; const changeStr = quantityChangeInput?.value; const change = parseInt(changeStr || '0', 10); if (!ref || ref === 'N/A') { showAdminFeedback("Référence composant inconnue pour la mise à jour.", 'error'); return; } if (isNaN(change)) { showAdminFeedback("Quantité de changement invalide.", 'error'); quantityChangeInput.focus(); return; } if (change === 0) { showAdminFeedback("Aucun changement de quantité spécifié.", 'info', true); return; } if (!currentUser) { showAdminFeedback("Connexion requise pour modifier le stock.", 'error'); return; } showAdminFeedback(`Mise à jour quantité pour "${ref}" (${change > 0 ? '+' : ''}${change})...`, 'info'); updateQuantityButton.disabled = true; deleteComponentButton.disabled = true; try { console.log(`Calling RPC update_stock_and_log for ${ref}, change: ${change}`); const { data: newQuantity, error: rpcError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: change, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Admin Adjust Qty' }); if (rpcError) { if (rpcError.message.includes('new_quantity_below_zero')) throw new Error("Stock insuffisant pour ce retrait."); if (rpcError.message.includes('component_not_found')) throw new Error("Composant non trouvé (peut-être supprimé ?)."); throw new Error(`Erreur RPC: ${rpcError.message} (Code: ${rpcError.code})`); } showAdminFeedback(`Quantité pour "${ref}" mise à jour. Nouvelle quantité: ${newQuantity}.`, 'success'); currentQuantitySpan.textContent = newQuantity; quantityChangeInput.value = 0; if (componentInitialQuantityInput) componentInitialQuantityInput.value = newQuantity; if (inventoryView.classList.contains('active-view')) await displayInventory(currentInventoryPage); if (auditView.classList.contains('active-view')) await displayAudit(); if (logView.classList.contains('active-view')) await displayLog(1); if(lastDisplayedDrawerRef === ref) await updateSevenSegmentForComponent(ref); const kitIndex = currentKitSelection.findIndex(k => k.ref === ref); if (kitIndex > -1) { currentKitSelection[kitIndex].quantity = newQuantity; await saveKitToSupabase(); if (kitView.classList.contains('active-view')) displayCurrentKitDrawers(); } } catch (err) { console.error("Erreur lors de la mise à jour rapide de quantité:", err); showAdminFeedback(`Erreur MàJ "${ref}": ${err.message}`, 'error'); } finally { updateQuantityButton.disabled = false; if (componentActionsWrapper.style.display !== 'none') { deleteComponentButton.disabled = false; } } }); stockForm?.addEventListener('submit', async (event) => { event.preventDefault(); if (!currentUser) { showAdminFeedback("Connexion requise.", 'error'); return; } const ref = componentRefAdminInput?.value.trim().toUpperCase(); const categoryId = componentCategorySelectAdmin?.value || null; const description = componentDescInput?.value.trim() || null; const manufacturer = componentMfgInput?.value.trim() || null; const datasheet = componentDatasheetInput?.value.trim() || null; const drawer = componentDrawerAdminInput?.value.trim().toUpperCase() || null; const quantityRaw = componentInitialQuantityInput?.value; const thresholdRaw = componentThresholdInput?.value.trim(); if (!ref) { showAdminFeedback("La référence composant est requise.", 'error'); componentRefAdminInput.focus(); return; } if (ref.length > 50) { showAdminFeedback("La référence est trop longue (max 50).", "error"); componentRefAdminInput.focus(); return; } const quantity = parseInt(quantityRaw, 10); if (quantityRaw === '' || quantityRaw === null || isNaN(quantity) || quantity < 0) { showAdminFeedback("La quantité doit être un nombre positif ou zéro.", 'error'); componentInitialQuantityInput.focus(); return; } if (datasheet) { try { new URL(datasheet); } catch (_) { showAdminFeedback("L'URL de la datasheet n'est pas valide.", 'error'); componentDatasheetInput.focus(); return; } } if (drawer && !/^[A-Z0-9\-]{1,10}$/.test(drawer)) { showAdminFeedback("Format du tiroir invalide (max 10, A-Z, 0-9, -).", "error"); componentDrawerAdminInput.focus(); return; } const critical_threshold = (thresholdRaw && !isNaN(parseInt(thresholdRaw)) && parseInt(thresholdRaw) >= 0) ? parseInt(thresholdRaw) : null; const attributes = {}; let attributesValid = true; specificAttributesDiv?.querySelectorAll('input[data-attribute-name]').forEach(input => { const name = input.dataset.attributeName; let value = input.value.trim(); if (value !== '') { attributes[name] = value; } else { attributes[name] = null; } }); if (!attributesValid) { return; } const attributesToSave = Object.keys(attributes).length > 0 ? attributes : null; const isEditing = componentActionsWrapper?.style.display === 'block'; const componentData = { ref, category_id: categoryId || null, description, manufacturer, datasheet, drawer, critical_threshold, attributes: attributesToSave }; if (!isEditing) { componentData.quantity = quantity; } if (!isEditing) { console.log("Préparation ajout nouveau composant:", componentData); showAdminFeedback(`Ajout du nouveau composant "${ref}"...`, 'info'); } else { console.log(`Préparation modification composant "${ref}":`, componentData); showAdminFeedback(`Enregistrement des modifications pour "${ref}"...`, 'info'); } saveComponentButton.disabled = true; checkStockButton.disabled = true; componentRefAdminInput.disabled = true; if(updateQuantityButton) updateQuantityButton.disabled = true; if(deleteComponentButton) deleteComponentButton.disabled = true; try { const { data: upsertedData, error: upsertError } = await supabase.from('inventory').upsert(componentData, { onConflict: 'ref' }).select().single(); if (upsertError) { if (upsertError.message.includes('violates foreign key constraint') && upsertError.message.includes('category_id')) { const failedCategoryOption = [...componentCategorySelectAdmin.options].find(opt => opt.value === categoryId); const failedCategoryName = failedCategoryOption ? failedCategoryOption.textContent : categoryId; throw new Error(`La catégorie sélectionnée "${failedCategoryName}" n'existe pas ou plus.`); } throw new Error(`Erreur base de données lors de l'enregistrement: ${upsertError.message} (Code: ${upsertError.code})`); } let finalQuantity = quantity; if (isEditing) { const currentDbQuantity = parseInt(currentQuantitySpan.textContent, 10); const quantityInForm = parseInt(quantityRaw, 10); if (!isNaN(currentDbQuantity) && !isNaN(quantityInForm) && quantityInForm !== currentDbQuantity) { const change = quantityInForm - currentDbQuantity; console.log(`Modification détectée dans le formulaire de quantité (${currentDbQuantity} -> ${quantityInForm}). Appel RPC pour ajuster de ${change}.`); showAdminFeedback(`Mise à jour quantité pour "${ref}" (${change > 0 ? '+' : ''}${change})...`, 'info'); const { data: updatedQtyRpc, error: rpcError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: change, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Admin Form Adjust' }); if (rpcError) { if (rpcError.message.includes('new_quantity_below_zero')) throw new Error("Stock insuffisant (ajustement formulaire)."); if (rpcError.message.includes('component_not_found')) throw new Error("Composant non trouvé (ajustement formulaire)."); throw new Error(`Erreur RPC (ajustement formulaire): ${rpcError.message}`); } finalQuantity = updatedQtyRpc; console.log(`Quantité ajustée via RPC (formulaire): ${finalQuantity}`); } else { finalQuantity = currentDbQuantity; } } else { if (finalQuantity > 0) { console.log(`Log manuel de l'ajout initial de ${finalQuantity} pour ${ref} via RPC...`); const { error: logError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: 0, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Admin Initial Add', p_force_log: true, p_initial_quantity: finalQuantity }); if (logError) console.warn("Erreur lors du log de l'ajout initial:", logError); } } const operationType = isEditing ? 'Modifié' : 'Ajouté'; showAdminFeedback(`Composant "${ref}" ${operationType} avec succès.`, 'success'); resetStockForm(); if (inventoryView.classList.contains('active-view')) await displayInventory(1); if (auditView.classList.contains('active-view')) await displayAudit(); if (logView.classList.contains('active-view')) await displayLog(1); await updateSevenSegmentForComponent(ref); const kitIndex = currentKitSelection.findIndex(k => k.ref === ref); if (kitIndex > -1) { const updatedItemForKit = await getStockInfoFromSupabase(ref); if (updatedItemForKit) { currentKitSelection[kitIndex] = updatedItemForKit; console.log(`Item ${ref} mis à jour dans le kit local.`); } else { currentKitSelection.splice(kitIndex, 1); console.log(`Item ${ref} retiré du kit local car introuvable après modification.`); } await saveKitToSupabase(); if (kitView.classList.contains('active-view')) displayCurrentKitDrawers(); } } catch (err) { console.error("Erreur lors de l'enregistrement du composant:", err); showAdminFeedback(`Erreur enregistrement "${ref}": ${err.message}`, 'error'); saveComponentButton.disabled = false; checkStockButton.disabled = false; componentRefAdminInput.disabled = false; if (isEditing) { if(updateQuantityButton) updateQuantityButton.disabled = false; if(deleteComponentButton) deleteComponentButton.disabled = false; } } }); deleteComponentButton?.addEventListener('click', async () => { const refElement = document.getElementById('component-ref-display'); const ref = refElement?.textContent; if (!ref || ref === 'N/A') { showAdminFeedback("Référence composant inconnue pour la suppression.", 'error'); return; } if (!currentUser) { showAdminFeedback("Connexion requise pour supprimer.", 'error'); return; } if (!confirm(`ATTENTION !\nÊtes-vous sûr de vouloir supprimer définitivement le composant "${ref}" et tout son historique associé ?\n\nCette action est IRRÉVERSIBLE.`)) { return; } showAdminFeedback(`Suppression de "${ref}" et de son historique en cours...`, 'info'); deleteComponentButton.disabled = true; updateQuantityButton.disabled = true; saveComponentButton.disabled = true; checkStockButton.disabled = true; componentRefAdminInput.disabled = true; let kitWasModified = false; const indexInKit = currentKitSelection.findIndex(k => k.ref === ref); if (indexInKit > -1) { currentKitSelection.splice(indexInKit, 1); kitWasModified = true; console.log(`Item ${ref} retiré du kit local avant suppression.`); } try { console.log(`Suppression de l'historique (log) pour ${ref}...`); const { error: deleteLogError } = await supabase.from('log').delete().eq('item_ref', ref); if (deleteLogError) { console.warn(`Erreur (non bloquante) lors de la suppression de l'historique pour ${ref}: ${deleteLogError.message}`); } else { console.log(`Historique pour ${ref} supprimé.`); } console.log(`Suppression du composant ${ref} de l'inventaire...`); const { error: deleteInvError } = await supabase.from('inventory').delete().eq('ref', ref); if (deleteInvError && deleteInvError.code === 'PGRST116') { showAdminFeedback(`Composant "${ref}" non trouvé (peut-être déjà supprimé).`, 'warning'); } else if (deleteInvError) { throw new Error(`Erreur lors de la suppression du composant dans la base de données: ${deleteInvError.message}`); } else { showAdminFeedback(`Composant "${ref}" et son historique supprimés avec succès.`, 'success'); } if (kitWasModified) { await saveKitToSupabase(); } resetStockForm(); if(lastDisplayedDrawerRef === ref) updateSevenSegmentForComponent(null); if (inventoryView.classList.contains('active-view')) await displayInventory(1); if (auditView.classList.contains('active-view')) await displayAudit(); if (logView.classList.contains('active-view')) await displayLog(1); if (kitView.classList.contains('active-view')) displayCurrentKitDrawers(); } catch (err) { console.error("Erreur lors de la suppression du composant:", err); showAdminFeedback(`Erreur lors de la suppression de "${ref}": ${err.message}`, 'error'); checkStockButton.disabled = false; componentRefAdminInput.disabled = false; } }); exportCriticalButton?.addEventListener('click', handleExportCriticalStockTXT); }
+    function resetStockForm() { if (!stockForm) return; stockForm.reset(); if(componentRefAdminInput) { componentRefAdminInput.disabled = false; componentRefAdminInput.value = ''; } if(checkStockButton) checkStockButton.disabled = false; if(componentActionsWrapper) componentActionsWrapper.style.display = 'none'; if(componentDetails) componentDetails.style.display = 'block'; const refDisplay = document.getElementById('component-ref-display'); if (refDisplay) refDisplay.textContent = 'N/A'; if(currentQuantitySpan) currentQuantitySpan.textContent = 'N/A'; if(quantityChangeInput) quantityChangeInput.value = '0'; if(updateQuantityButton) updateQuantityButton.disabled = true; if(deleteComponentButton) { deleteComponentButton.style.display = 'none'; deleteComponentButton.disabled = true; } if(specificAttributesDiv) { specificAttributesDiv.innerHTML = ''; specificAttributesDiv.style.display = 'none'; } if(saveComponentButton) { saveComponentButton.disabled = false; saveComponentButton.textContent = 'Enregistrer Nouveau Composant'; } if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; } // <<< CACHER ET DÉSACTIVER BOUTON QR
+        if (adminFeedbackDiv && !adminFeedbackDiv.classList.contains('error')) { showAdminFeedback('', 'info', true); } componentRefAdminInput?.focus(); }
+
+    function addStockEventListeners() {
+        checkStockButton?.addEventListener('click', async () => {
+            const ref = componentRefAdminInput?.value.trim().toUpperCase();
+            if (!ref) { showAdminFeedback("Veuillez entrer une référence composant.", 'error'); componentRefAdminInput.focus(); return; }
+            showAdminFeedback(`Vérification de la référence "${ref}"...`, 'info');
+            componentRefAdminInput.disabled = true; checkStockButton.disabled = true;
+            componentActionsWrapper.style.display = 'none'; componentDetails.style.display = 'block';
+            saveComponentButton.disabled = true;
+            if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; } // <<< Cacher/Désactiver pendant vérif
+            try {
+                const item = await getStockInfoFromSupabase(ref);
+                if (item) {
+                    showAdminFeedback(`Composant "${ref}" trouvé. Mode édition.`, 'info', true);
+                    componentActionsWrapper.style.display = 'block';
+                    const refDisplay = document.getElementById('component-ref-display');
+                    if (refDisplay) refDisplay.textContent = ref;
+                    currentQuantitySpan.textContent = item.quantity;
+                    quantityChangeInput.value = 0; updateQuantityButton.disabled = false;
+                    deleteComponentButton.style.display = 'inline-block'; deleteComponentButton.disabled = false;
+                    componentCategorySelectAdmin.value = item.category_id || "";
+                    componentDescInput.value = item.description || ""; componentMfgInput.value = item.manufacturer || "";
+                    componentDatasheetInput.value = item.datasheet || ""; componentDrawerAdminInput.value = item.drawer || "";
+                    componentInitialQuantityInput.value = item.quantity; componentThresholdInput.value = item.critical_threshold ?? "";
+                    const category = categoriesCache.find(c => String(c.id) === String(item.category_id));
+                    if (category && Array.isArray(category.attributes)) { renderSpecificAttributes(category.attributes, category.name, item.attributes || {}); }
+                    else { if(specificAttributesDiv) specificAttributesDiv.style.display = 'none'; }
+                    saveComponentButton.textContent = `Enregistrer Modifications (${ref})`;
+                    saveComponentButton.disabled = false;
+                    // <<< Afficher ET Activer/Désactiver le bouton QR selon si un tiroir est défini >>>
+                    if (exportQrButton) {
+                        const hasDrawer = componentDrawerAdminInput.value.trim() !== '';
+                        exportQrButton.style.display = 'inline-block';
+                        exportQrButton.disabled = !hasDrawer;
+                        exportQrButton.title = hasDrawer ? `Exporter l'étiquette QR pour le tiroir ${componentDrawerAdminInput.value}` : "Exporter l'étiquette QR (un tiroir doit être défini)";
+                    }
+                } else {
+                    showAdminFeedback(`Référence "${ref}" non trouvée. Passage en mode ajout.`, 'warning');
+                    componentActionsWrapper.style.display = 'none';
+                    componentCategorySelectAdmin.value = ""; componentDescInput.value = ""; componentMfgInput.value = "";
+                    componentDatasheetInput.value = ""; componentDrawerAdminInput.value = "";
+                    componentInitialQuantityInput.value = 0; componentThresholdInput.value = "";
+                    if (specificAttributesDiv) specificAttributesDiv.style.display = 'none';
+                    saveComponentButton.textContent = `Enregistrer Nouveau Composant`;
+                    saveComponentButton.disabled = false;
+                    if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; } // <<< Cacher/Désactiver en mode ajout
+                }
+            } catch (err) {
+                console.error("Erreur lors de la vérification du stock:", err);
+                showAdminFeedback(`Erreur lors de la vérification de "${ref}": ${err.message}`, 'error');
+                resetStockForm(); // S'assure que QR est caché en cas d'erreur
+            } finally {
+                if (componentRefAdminInput && !componentRefAdminInput.disabled) componentRefAdminInput.disabled = false;
+                if (checkStockButton && !checkStockButton.disabled) checkStockButton.disabled = false;
+            }
+        });
+
+        updateQuantityButton?.addEventListener('click', async () => { /* ... (code inchangé ici, car ne modifie pas le tiroir) ... */
+            const refElement = document.getElementById('component-ref-display');
+            const ref = refElement?.textContent; const changeStr = quantityChangeInput?.value;
+            const change = parseInt(changeStr || '0', 10);
+            if (!ref || ref === 'N/A') { showAdminFeedback("Référence composant inconnue pour la mise à jour.", 'error'); return; }
+            if (isNaN(change)) { showAdminFeedback("Quantité de changement invalide.", 'error'); quantityChangeInput.focus(); return; }
+            if (change === 0) { showAdminFeedback("Aucun changement de quantité spécifié.", 'info', true); return; }
+            if (!currentUser) { showAdminFeedback("Connexion requise pour modifier le stock.", 'error'); return; }
+            showAdminFeedback(`Mise à jour quantité pour "${ref}" (${change > 0 ? '+' : ''}${change})...`, 'info');
+            updateQuantityButton.disabled = true; deleteComponentButton.disabled = true;
+            try {
+                console.log(`Calling RPC update_stock_and_log for ${ref}, change: ${change}`);
+                const { data: newQuantity, error: rpcError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: change, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Admin Adjust Qty' });
+                if (rpcError) {
+                    if (rpcError.message.includes('new_quantity_below_zero')) throw new Error("Stock insuffisant pour ce retrait.");
+                    if (rpcError.message.includes('component_not_found')) throw new Error("Composant non trouvé (peut-être supprimé ?).");
+                    throw new Error(`Erreur RPC: ${rpcError.message} (Code: ${rpcError.code})`);
+                }
+                showAdminFeedback(`Quantité pour "${ref}" mise à jour. Nouvelle quantité: ${newQuantity}.`, 'success');
+                currentQuantitySpan.textContent = newQuantity;
+                quantityChangeInput.value = 0;
+                if (componentInitialQuantityInput) componentInitialQuantityInput.value = newQuantity;
+                // Le bouton QR doit rester visible et son état (activé/désactivé) ne change pas ici
+                if (inventoryView.classList.contains('active-view')) await displayInventory(currentInventoryPage);
+                if (auditView.classList.contains('active-view')) await displayAudit();
+                if (logView.classList.contains('active-view')) await displayLog(1);
+                if(lastDisplayedDrawerRef === ref) await updateSevenSegmentForComponent(ref);
+                const kitIndex = currentKitSelection.findIndex(k => k.ref === ref);
+                if (kitIndex > -1) {
+                    currentKitSelection[kitIndex].quantity = newQuantity; await saveKitToSupabase();
+                    if (kitView.classList.contains('active-view')) displayCurrentKitDrawers();
+                }
+            } catch (err) {
+                console.error("Erreur lors de la mise à jour rapide de quantité:", err);
+                showAdminFeedback(`Erreur MàJ "${ref}": ${err.message}`, 'error');
+            } finally {
+                updateQuantityButton.disabled = false;
+                if (componentActionsWrapper.style.display !== 'none') { deleteComponentButton.disabled = false; }
+            }
+        });
+
+        stockForm?.addEventListener('submit', async (event) => { /* ... (code inchangé sauf gestion bouton QR à la fin) ... */
+            event.preventDefault();
+            if (!currentUser) { showAdminFeedback("Connexion requise.", 'error'); return; }
+            const ref = componentRefAdminInput?.value.trim().toUpperCase();
+            const categoryId = componentCategorySelectAdmin?.value || null; const description = componentDescInput?.value.trim() || null;
+            const manufacturer = componentMfgInput?.value.trim() || null; const datasheet = componentDatasheetInput?.value.trim() || null;
+            const drawer = componentDrawerAdminInput?.value.trim().toUpperCase() || null; const quantityRaw = componentInitialQuantityInput?.value;
+            const thresholdRaw = componentThresholdInput?.value.trim();
+
+            if (!ref) { showAdminFeedback("La référence composant est requise.", 'error'); componentRefAdminInput.focus(); return; }
+            if (ref.length > 50) { showAdminFeedback("La référence est trop longue (max 50).", "error"); componentRefAdminInput.focus(); return; }
+            const quantity = parseInt(quantityRaw, 10);
+            if (quantityRaw === '' || quantityRaw === null || isNaN(quantity) || quantity < 0) { showAdminFeedback("La quantité doit être un nombre positif ou zéro.", 'error'); componentInitialQuantityInput.focus(); return; }
+            if (datasheet) { try { new URL(datasheet); } catch (_) { showAdminFeedback("L'URL de la datasheet n'est pas valide.", 'error'); componentDatasheetInput.focus(); return; } }
+            if (drawer && !/^[A-Z0-9\-]{1,10}$/.test(drawer)) { showAdminFeedback("Format du tiroir invalide (max 10, A-Z, 0-9, -).", "error"); componentDrawerAdminInput.focus(); return; }
+            const critical_threshold = (thresholdRaw && !isNaN(parseInt(thresholdRaw)) && parseInt(thresholdRaw) >= 0) ? parseInt(thresholdRaw) : null;
+            const attributes = {}; let attributesValid = true;
+            specificAttributesDiv?.querySelectorAll('input[data-attribute-name]').forEach(input => { const name = input.dataset.attributeName; let value = input.value.trim(); if (value !== '') { attributes[name] = value; } else { attributes[name] = null; } });
+            if (!attributesValid) { return; }
+            const attributesToSave = Object.keys(attributes).length > 0 ? attributes : null;
+            const isEditing = componentActionsWrapper?.style.display === 'block';
+            const componentData = { ref, category_id: categoryId || null, description, manufacturer, datasheet, drawer, critical_threshold, attributes: attributesToSave };
+            if (!isEditing) { componentData.quantity = quantity; }
+
+            if (!isEditing) { console.log("Préparation ajout nouveau composant:", componentData); showAdminFeedback(`Ajout du nouveau composant "${ref}"...`, 'info'); }
+            else { console.log(`Préparation modification composant "${ref}":`, componentData); showAdminFeedback(`Enregistrement des modifications pour "${ref}"...`, 'info'); }
+            saveComponentButton.disabled = true; checkStockButton.disabled = true; componentRefAdminInput.disabled = true;
+            if(updateQuantityButton) updateQuantityButton.disabled = true; if(deleteComponentButton) deleteComponentButton.disabled = true;
+            if (exportQrButton) exportQrButton.disabled = true; // <<< Désactiver pendant l'enregistrement
+
+            try {
+                const { data: upsertedData, error: upsertError } = await supabase.from('inventory').upsert(componentData, { onConflict: 'ref' }).select().single();
+                if (upsertError) {
+                    if (upsertError.message.includes('violates foreign key constraint') && upsertError.message.includes('category_id')) {
+                        const failedCategoryOption = [...componentCategorySelectAdmin.options].find(opt => opt.value === categoryId);
+                        const failedCategoryName = failedCategoryOption ? failedCategoryOption.textContent : categoryId;
+                        throw new Error(`La catégorie sélectionnée "${failedCategoryName}" n'existe pas ou plus.`);
+                    }
+                    throw new Error(`Erreur base de données lors de l'enregistrement: ${upsertError.message} (Code: ${upsertError.code})`);
+                }
+
+                let finalQuantity = quantity;
+                let currentDbQuantity = NaN;
+                if (isEditing) {
+                    currentDbQuantity = parseInt(currentQuantitySpan.textContent, 10);
+                    const quantityInForm = parseInt(quantityRaw, 10);
+                    if (!isNaN(currentDbQuantity) && !isNaN(quantityInForm) && quantityInForm !== currentDbQuantity) {
+                        const change = quantityInForm - currentDbQuantity;
+                        console.log(`Modification détectée dans le formulaire de quantité (${currentDbQuantity} -> ${quantityInForm}). Appel RPC pour ajuster de ${change}.`);
+                        showAdminFeedback(`Mise à jour quantité pour "${ref}" (${change > 0 ? '+' : ''}${change})...`, 'info');
+                        const { data: updatedQtyRpc, error: rpcError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: change, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Admin Form Adjust' });
+                        if (rpcError) {
+                            if (rpcError.message.includes('new_quantity_below_zero')) throw new Error("Stock insuffisant (ajustement formulaire).");
+                            if (rpcError.message.includes('component_not_found')) throw new Error("Composant non trouvé (ajustement formulaire).");
+                            throw new Error(`Erreur RPC (ajustement formulaire): ${rpcError.message}`);
+                        }
+                        finalQuantity = updatedQtyRpc;
+                        console.log(`Quantité ajustée via RPC (formulaire): ${finalQuantity}`);
+                    } else {
+                        finalQuantity = currentDbQuantity;
+                    }
+                } else { // C'est un ajout
+                    if (finalQuantity > 0) {
+                        console.log(`Log manuel de l'ajout initial de ${finalQuantity} pour ${ref} via RPC...`);
+                        const { error: logError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: 0, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Admin Initial Add', p_force_log: true, p_initial_quantity: finalQuantity });
+                        if (logError) console.warn("Erreur lors du log de l'ajout initial:", logError);
+                    }
+                }
+
+                const operationType = isEditing ? 'Modifié' : 'Ajouté';
+                showAdminFeedback(`Composant "${ref}" ${operationType} avec succès.`, 'success');
+
+                // Mise à jour UI après succès
+                componentRefAdminInput.disabled = false;
+                checkStockButton.disabled = false;
+                saveComponentButton.disabled = false;
+                componentActionsWrapper.style.display = 'block';
+                const refDisplay = document.getElementById('component-ref-display');
+                 if (refDisplay) refDisplay.textContent = ref;
+
+                if (!isNaN(finalQuantity)) {
+                    currentQuantitySpan.textContent = finalQuantity;
+                    if (componentInitialQuantityInput) componentInitialQuantityInput.value = finalQuantity;
+                }
+                 if(updateQuantityButton) updateQuantityButton.disabled = false;
+                 if(deleteComponentButton) {
+                    deleteComponentButton.style.display = 'inline-block';
+                    deleteComponentButton.disabled = false;
+                 }
+                 saveComponentButton.textContent = `Enregistrer Modifications (${ref})`;
+
+                // <<< Gérer le bouton QR après enregistrement >>>
+                if (exportQrButton) {
+                    const hasDrawer = componentDrawerAdminInput.value.trim() !== ''; // Vérifier la valeur *actuelle* du champ
+                    exportQrButton.style.display = 'inline-block'; // Afficher
+                    exportQrButton.disabled = !hasDrawer;         // Activer/Désactiver
+                    exportQrButton.title = hasDrawer ? `Exporter l'étiquette QR pour le tiroir ${componentDrawerAdminInput.value}` : "Exporter l'étiquette QR (un tiroir doit être défini)";
+                }
+
+                // Recharger les vues si nécessaire
+                if (inventoryView.classList.contains('active-view')) await displayInventory(1);
+                if (auditView.classList.contains('active-view')) await displayAudit();
+                if (logView.classList.contains('active-view')) await displayLog(1);
+                await updateSevenSegmentForComponent(ref);
+
+                const kitIndex = currentKitSelection.findIndex(k => k.ref === ref);
+                if (kitIndex > -1) {
+                    const updatedItemForKit = await getStockInfoFromSupabase(ref);
+                    if (updatedItemForKit) { currentKitSelection[kitIndex] = updatedItemForKit; console.log(`Item ${ref} mis à jour dans le kit local.`); }
+                    else { currentKitSelection.splice(kitIndex, 1); console.log(`Item ${ref} retiré du kit local car introuvable après modification.`); }
+                    await saveKitToSupabase();
+                    if (kitView.classList.contains('active-view')) displayCurrentKitDrawers();
+                }
+
+            } catch (err) {
+                console.error("Erreur lors de l'enregistrement du composant:", err);
+                showAdminFeedback(`Erreur enregistrement "${ref}": ${err.message}`, 'error');
+                // Réactiver les boutons en cas d'erreur
+                saveComponentButton.disabled = false;
+                checkStockButton.disabled = false;
+                componentRefAdminInput.disabled = false;
+                 if (isEditing || componentActionsWrapper?.style.display === 'block') { // Si on était en mode édition ou si le bloc actions était visible
+                     if(updateQuantityButton) updateQuantityButton.disabled = false;
+                     if(deleteComponentButton) deleteComponentButton.disabled = false;
+                     if (exportQrButton) exportQrButton.disabled = !(componentDrawerAdminInput.value.trim() === ''); // Réactiver si tiroir présent
+                 } else {
+                     if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; } // Cacher si erreur à la création
+                 }
+            }
+        });
+
+        deleteComponentButton?.addEventListener('click', async () => { /* ... (code inchangé) ... */
+            const refElement = document.getElementById('component-ref-display');
+            const ref = refElement?.textContent;
+            if (!ref || ref === 'N/A') { showAdminFeedback("Référence composant inconnue pour la suppression.", 'error'); return; }
+            if (!currentUser) { showAdminFeedback("Connexion requise pour supprimer.", 'error'); return; }
+            if (!confirm(`ATTENTION !\nÊtes-vous sûr de vouloir supprimer définitivement le composant "${ref}" et tout son historique associé ?\n\nCette action est IRRÉVERSIBLE.`)) { return; }
+            showAdminFeedback(`Suppression de "${ref}" et de son historique en cours...`, 'info');
+            deleteComponentButton.disabled = true; updateQuantityButton.disabled = true; saveComponentButton.disabled = true;
+            checkStockButton.disabled = true; componentRefAdminInput.disabled = true;
+            if (exportQrButton) exportQrButton.style.display = 'none'; // <<< Cacher lors suppression
+
+            let kitWasModified = false;
+            const indexInKit = currentKitSelection.findIndex(k => k.ref === ref);
+            if (indexInKit > -1) { currentKitSelection.splice(indexInKit, 1); kitWasModified = true; console.log(`Item ${ref} retiré du kit local avant suppression.`); }
+
+            try {
+                console.log(`Suppression de l'historique (log) pour ${ref}...`);
+                const { error: deleteLogError } = await supabase.from('log').delete().eq('item_ref', ref);
+                if (deleteLogError) { console.warn(`Erreur (non bloquante) lors de la suppression de l'historique pour ${ref}: ${deleteLogError.message}`); }
+                else { console.log(`Historique pour ${ref} supprimé.`); }
+
+                console.log(`Suppression du composant ${ref} de l'inventaire...`);
+                const { error: deleteInvError } = await supabase.from('inventory').delete().eq('ref', ref);
+                if (deleteInvError && deleteInvError.code === 'PGRST116') { showAdminFeedback(`Composant "${ref}" non trouvé (peut-être déjà supprimé).`, 'warning'); }
+                else if (deleteInvError) { throw new Error(`Erreur lors de la suppression du composant dans la base de données: ${deleteInvError.message}`); }
+                else { showAdminFeedback(`Composant "${ref}" et son historique supprimés avec succès.`, 'success'); }
+
+                if (kitWasModified) { await saveKitToSupabase(); }
+                resetStockForm(); // <<< Appelle resetStockForm qui cachera le bouton QR
+                if(lastDisplayedDrawerRef === ref) updateSevenSegmentForComponent(null);
+                if (inventoryView.classList.contains('active-view')) await displayInventory(1);
+                if (auditView.classList.contains('active-view')) await displayAudit();
+                if (logView.classList.contains('active-view')) await displayLog(1);
+                if (kitView.classList.contains('active-view')) displayCurrentKitDrawers();
+            } catch (err) {
+                console.error("Erreur lors de la suppression du composant:", err);
+                showAdminFeedback(`Erreur lors de la suppression de "${ref}": ${err.message}`, 'error');
+                // Réactiver les boutons sauf delete si erreur
+                checkStockButton.disabled = false; componentRefAdminInput.disabled = false;
+                // Ne pas réactiver QR button ici, car l'état est incertain. Le reset cache déjà.
+            }
+        });
+
+        // --- Ajout d'un listener pour activer/désactiver le bouton QR quand le champ Tiroir change ---
+        componentDrawerAdminInput?.addEventListener('input', () => {
+            if (exportQrButton && exportQrButton.style.display === 'inline-block') { // Ne change que s'il est déjà visible (mode édition)
+                const hasDrawer = componentDrawerAdminInput.value.trim() !== '';
+                exportQrButton.disabled = !hasDrawer;
+                exportQrButton.title = hasDrawer ? `Exporter l'étiquette QR pour le tiroir ${componentDrawerAdminInput.value}` : "Exporter l'étiquette QR (un tiroir doit être défini)";
+            }
+        });
+
+        exportCriticalButton?.addEventListener('click', handleExportCriticalStockTXT);
+        exportQrButton?.addEventListener('click', handleExportQrCode); // Garder l'écouteur existant
+    } // Fin addStockEventListeners
+
+
+    // --- MODIFIED: handleExportQrCode (nouvelle version - Affichage Tiroir Uniquement) ---
+    async function handleExportQrCode() {
+        console.log("Export QR Code demandé (version Tiroir Uniquement).");
+        if (!exportQrButton || exportQrButton.disabled) return; // Ne rien faire si désactivé
+
+        // 1. Récupérer les données DEPUIS LES CHAMPS du formulaire Admin
+        const ref = componentRefAdminInput?.value.trim().toUpperCase(); // Récupéré mais ne sera pas affiché
+        const drawer = componentDrawerAdminInput?.value.trim().toUpperCase();
+        // const quantity = componentInitialQuantityInput?.value || '0'; // Plus nécessaire pour l'affichage
+        // const description = componentDescInput?.value.trim() || 'Pas de description'; // Plus nécessaire pour l'affichage
+
+        // 2. Validation
+        if (!ref) { // Garder la validation sur la réf pour savoir de *quel* composant on parle
+            showAdminFeedback("Impossible de générer le QR Code : Référence manquante.", 'error');
+            return;
+        }
+        if (!drawer) {
+            showAdminFeedback("Impossible de générer le QR Code : Tiroir manquant.", 'error');
+            return;
+        }
+
+        // 3. Données pour le QR code : UNIQUEMENT le tiroir
+        const qrData = drawer;
+        console.log("Données QR (brutes):", qrData);
+
+        // 4. URL-encoder ces données
+        const encodedQrData = encodeURIComponent(qrData);
+        console.log("Données QR (URL encodées):", encodedQrData);
+
+        // 5. Construire l'URL de l'image QR
+        const qrImageSize = 80; // Taille de l'image QR en pixels
+        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrImageSize}x${qrImageSize}&data=${encodedQrData}&margin=2`;
+        console.log("URL image QR:", qrImageUrl);
+
+        // 6. Générer le contenu HTML avec le nouveau layout et CSS (Tiroir seul, centré, plus grand)
+        const qrPageHtml = `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Étiquette Tiroir ${escapeHtml(drawer)} (pour ${escapeHtml(ref)})</title>
+    <style>
+        @page {
+            size: 45mm 20mm; /* Taille de la page d'impression */
+            margin: 1mm; /* Très petite marge */
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            width: 43mm; /* Largeur légèrement inférieure */
+            height: 18mm; /* Hauteur légèrement inférieure */
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .label-item {
+            width: 100%;
+            height: 100%;
+            border: 1px solid #ccc; /* Prévisualisation */
+            display: flex;
+            align-items: center;
+            justify-content: flex-start; /* Aligner QR à gauche */
+            padding: 1mm;
+            box-sizing: border-box;
+            overflow: hidden;
+            background-color: #fff;
+        }
+        .qr-code {
+            flex-shrink: 0;
+            width: 16mm;
+            height: 16mm;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 2mm; /* Espace entre QR et texte */
+        }
+        .qr-code img {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .text-info {
+            flex-grow: 1; /* Prend le reste de la place */
+            height: 100%;
+            display: flex; /* Utiliser flex pour centrer */
+            align-items: center; /* Centrer verticalement */
+            justify-content: center; /* Centrer horizontalement */
+            overflow: hidden;
+            text-align: center; /* Assurer centrage texte */
+        }
+        .text-info .drawer-id {
+            font-weight: bold;
+            font-size: 16pt; /* Tiroir plus grand */
+            color: black;
+            white-space: nowrap; /* Empêche le retour à la ligne */
+            line-height: 1; /* Ajuster si nécessaire */
+        }
+        /* Les styles pour .ref et .details sont supprimés car les éléments n'existent plus */
+        .buttons {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background: rgba(240, 240, 240, 0.8);
+            padding: 5px;
+            border-radius: 5px;
+            display: flex;
+            gap: 10px;
+        }
+        .buttons button { padding: 5px 10px; font-size: 10pt;}
+
+        @media print {
+            body {
+                width: 45mm;
+                height: 20mm;
+                display: block;
+            }
+            .label-item {
+                border: none;
+                padding: 0;
+                 width: 45mm;
+                 height: 20mm;
+            }
+            .qr-code { width: 18mm; height: 18mm; margin-right: 1mm;}
+            .buttons { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Contenu principal de l'étiquette (Tiroir seul) -->
+    <div class="label-item">
+        <div class="qr-code">
+            <img src="${qrImageUrl}" alt="QR Code pour tiroir ${escapeHtml(drawer)}" width="${qrImageSize}" height="${qrImageSize}">
+        </div>
+        <div class="text-info">
+            <div class="drawer-id">${escapeHtml(drawer)}</div>
+            <!-- Reference, Quantité, Description supprimées de l'affichage -->
+        </div>
+    </div>
+
+    <!-- Boutons pour interaction (masqués à l'impression) -->
+    <div class="buttons">
+        <button onclick="window.print();">Imprimer</button>
+        <button onclick="window.close();">Fermer</button>
+    </div>
+</body>
+</html>`;
+
+        // 7. Ouvrir cette page HTML dans une nouvelle fenêtre/onglet
+        try {
+            const qrWindow = window.open("", `Label_Tiroir_${drawer}`, "width=250,height=200,scrollbars=yes,resizable=yes");
+            if (qrWindow) {
+                qrWindow.document.open();
+                qrWindow.document.write(qrPageHtml);
+                qrWindow.document.close();
+                qrWindow.focus();
+                showAdminFeedback(`Fenêtre avec l'étiquette pour tiroir ${drawer} ouverte.`, 'success');
+            } else {
+                throw new Error("Impossible d'ouvrir la nouvelle fenêtre. Vérifiez si votre navigateur bloque les pop-ups.");
+            }
+        } catch (e) {
+            console.error("Erreur lors de l'ouverture de la fenêtre QR:", e);
+            showAdminFeedback(`Erreur génération QR : ${e.message}`, 'error');
+        }
+    } // --- FIN handleExportQrCode (Tiroir Uniquement) ---
+
+    // ... (handleExportCriticalStockTXT inchangée) ...
     async function handleExportCriticalStockTXT() { if (!exportCriticalFeedbackDiv) return; exportCriticalFeedbackDiv.textContent = 'Export du stock critique en cours...'; exportCriticalFeedbackDiv.className = 'feedback-area info'; exportCriticalFeedbackDiv.style.display = 'block'; try { const { data, error } = await supabase.from('inventory').select('ref, description, quantity, critical_threshold, drawer').order('ref'); if (error) throw new Error(`Erreur fetch inventaire: ${error.message}`); if (!data || data.length === 0) { exportCriticalFeedbackDiv.textContent = 'L\'inventaire est vide.'; exportCriticalFeedbackDiv.className = 'feedback-area warning'; return; } const criticalItems = data.filter(item => { const qty = item.quantity; const threshold = item.critical_threshold; if (qty <= 0) return true; if (threshold !== null && threshold >= 0 && qty <= threshold) return true; return false; }); if (criticalItems.length === 0) { exportCriticalFeedbackDiv.textContent = 'Aucun composant en état critique trouvé.'; exportCriticalFeedbackDiv.className = 'feedback-area info'; return; } let fileContent = `Rapport StockAV - Composants Critiques (${new Date().toLocaleString('fr-FR')})\n`; fileContent += `======================================================================\n\n`; criticalItems.forEach(item => { const status = item.quantity <= 0 ? "!! RUPTURE DE STOCK !!" : "** STOCK FAIBLE **"; fileContent += `Référence:    ${item.ref}\n`; fileContent += `Description:  ${item.description || '-'}\n`; fileContent += `Tiroir:       ${item.drawer || 'N/A'}\n`; fileContent += `Quantité:     ${item.quantity}\n`; fileContent += `Seuil critique: ${item.critical_threshold ?? 'Non défini'}\n`; fileContent += `STATUT:       ${status}\n`; fileContent += `----------------------------------------------------------------------\n`; }); const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-'); const filename = `stockav_critique_${timestamp}.txt`; downloadFile(filename, fileContent, 'text/plain;charset=utf-8'); exportCriticalFeedbackDiv.textContent = `Export TXT (${criticalItems.length} composants critiques) réussi.`; exportCriticalFeedbackDiv.className = 'feedback-area success'; } catch (err) { console.error("Erreur lors de l'export du stock critique:", err); exportCriticalFeedbackDiv.textContent = `Erreur lors de l'export: ${err.message}`; exportCriticalFeedbackDiv.className = 'feedback-area error'; } }
 
-    // --- VUE RECHERCHE (CHAT IA) ---
-
-    // addMessageToChat (inchangé depuis V9)
-    async function addMessageToChat(sender, messageContent, isHTML = false) {
-        if (!responseOutputChat) return;
-        const messageDiv = document.createElement('div');
-        messageDiv.classList.add('message', sender.toLowerCase());
-
-        if (isHTML) {
-            try {
-                const range = document.createRange();
-                const fragment = range.createContextualFragment(messageContent);
-                messageDiv.appendChild(fragment);
-                // Attacher les listeners aux boutons *dans* le fragment ajouté
-                // --- MODIFIED (Goal 2): Appel pour attacher le listener qui ouvre la modale ---
-                attachModalTriggerListeners(messageDiv);
-            } catch (e) {
-                console.error("Error parsing chat HTML:", e);
-                messageDiv.textContent = messageContent;
-            }
-        } else {
-            messageDiv.textContent = messageContent;
-        }
-
-        responseOutputChat.insertBefore(messageDiv, responseOutputChat.firstChild);
-        const role = sender === 'user' ? 'user' : 'assistant';
-        const textContentForHistory = messageDiv.textContent || messageContent;
-        chatHistory.push({ role: role, content: textContentForHistory.trim() });
-        if(chatHistory.length > 20) {
-             chatHistory = chatHistory.slice(-20); // Limiter l'historique
-        }
-        const maxMessagesInDOM = 50;
-        while (responseOutputChat.children.length > maxMessagesInDOM) {
-            responseOutputChat.removeChild(responseOutputChat.lastChild);
-        }
-        responseOutputChat.scrollTop = 0;
-    }
-
-    // --- MODIFIED (Goal 2): Renommée et modifiée pour ouvrir la modale ---
-    function attachModalTriggerListeners(containerElement) {
-        containerElement.querySelectorAll('button.choice-button.take-button').forEach(button => {
-            if (button.dataset.listenerAttached) return;
-            button.dataset.listenerAttached = "true";
-
-            button.addEventListener('click', async (event) => {
-                 const targetButton = event.target;
-                 const itemDataStr = targetButton.dataset.itemData; // Récupère les données JSON
-
-                 if (!itemDataStr) {
-                     console.error("Erreur: Attribut data-item-data manquant sur le bouton 'Prendre'.", targetButton);
-                     await addMessageToChat('ai', "Oups, problème interne pour sélectionner ce composant.");
-                     return;
-                 }
-                 if (!currentUser) { await promptLoginBeforeAction("prendre un composant"); return; }
-
-                 try {
-                    const itemData = JSON.parse(itemDataStr);
-                    const chosenRef = itemData.ref;
-                    const availableQty = itemData.local_qty;
-                    const attributes = itemData.specs || {}; // Utilise les specs comme attributs pour la modale
-
-                    if (!chosenRef || typeof availableQty !== 'number' || availableQty <= 0) {
-                        console.warn(`Données invalides ou stock nul pour ${chosenRef} dans data-item-data`, itemData);
-                        await addMessageToChat('ai', `Le stock pour ${escapeHtml(chosenRef)} semble être épuisé.`);
-                        return;
-                    }
-
-                    console.log(`Clic sur "Prendre" pour ${chosenRef}, Qté dispo: ${availableQty}. Ouverture de la modale.`);
-
-                    // Désactiver tous les boutons "Prendre" dans le *même* message AI
-                    const parentMessage = targetButton.closest('.message.ai');
-                    if (parentMessage) {
-                        parentMessage.querySelectorAll('button.choice-button.take-button').forEach(btn => btn.disabled = true);
-                    }
-
-                    // --- Appel direct de la modale ---
-                    updateSevenSegmentForComponent(chosenRef); // Mettre à jour l'afficheur 7 segments
-                    showQuantityModal(chosenRef, availableQty, attributes);
-
-                 } catch (e) {
-                     console.error("Erreur lors du parsing de data-item-data ou de l'ouverture de la modale:", e, itemDataStr);
-                     await addMessageToChat('ai', "Une erreur s'est produite lors de la sélection du composant.");
-                 }
-            });
-        });
-    }
-
-    // displayWelcomeMessage (inchangée)
-    function displayWelcomeMessage() {
-        if (!responseOutputChat) return;
-        responseOutputChat.innerHTML = '';
-        chatHistory = [];
-        resetConversationState();
-        addMessageToChat('ai', "Bonjour ! Je suis StockAV. Demandez-moi:\n• Si un composant est en stock (ex: 'LM393 dispo ?', 'stock pour 1N4007')\n• Des équivalents (ex: 'équivalent BC547')\n• Une recherche par specs (ex: 'condo 100nF 50V céramique', 'MOSFET 60V 20A TO-220')");
-        if(componentInputChat) { componentInputChat.value = ''; componentInputChat.focus(); }
-        updateSevenSegmentForComponent(null);
-    }
-
-    // buildLocalStockContext (inchangée)
-    async function buildLocalStockContext(limit = 20) {
-        if (!supabase || !currentUser) return null;
-        try {
-            const { data, error } = await supabase
-                .from('inventory')
-                .select('ref, quantity, drawer')
-                .order('updated_at', { ascending: false })
-                .limit(limit);
-            if (error) { console.warn("Erreur récupération contexte stock local:", error.message); return null; }
-            if (!data || data.length === 0) return {};
-            const context = data.reduce((acc, item) => {
-                if (item.ref) { acc[item.ref.toUpperCase()] = { qty: item.quantity ?? 0, drawer: item.drawer || null }; }
-                return acc;
-            }, {});
-            console.log(`[buildLocalStockContext] Contexte généré pour ${Object.keys(context).length} composants.`);
-            return context;
-        } catch (err) { console.error("Erreur JS dans buildLocalStockContext:", err); return null; }
-    }
-
-    // --- MODIFIED (Goal 1 & 3): Ajout de la vérification directe de stock ---
-    async function handleUserInput() {
-        if (!componentInputChat || !searchButtonChat || !loadingIndicatorChat || !responseOutputChat || !supabase) {
-            console.error("handleUserInput: Un ou plusieurs éléments DOM ou Supabase sont manquants.");
-            return;
-        }
-        const userMessageContent = componentInputChat.value.trim();
-        if (!userMessageContent) return;
-
-        addMessageToChat('user', userMessageContent);
-        componentInputChat.value = '';
-        componentInputChat.disabled = true;
-        searchButtonChat.disabled = true;
-        loadingIndicatorChat.style.display = 'block';
-        loadingIndicatorChat.querySelector('i').textContent = 'Analyse en cours...';
-        responseOutputChat.scrollTop = 0;
-
-        try {
-            // --- Nouvelle section: Détection Question Simple de Stock ---
-            // Regex simple pour "REF dispo?", "stock REF?", "chercher REF", "est-ce que REF est en stock" etc.
-            const simpleStockQueryRegex = /^(?:stock|dispo(?:nible)?|combien|cherch(?:e|er)|trouve(?:r)?|est-ce que)\s+(?:pour\s+|de\s+)?([\w\-\+]+)\s*(?:en stock|dans le stock)?\??$/i;
-            const match = userMessageContent.match(simpleStockQueryRegex);
-
-            if (match && match[1]) {
-                const refToCheck = match[1].toUpperCase();
-                console.log(`[handleUserInput] Détection question simple de stock pour: ${refToCheck}`);
-                loadingIndicatorChat.querySelector('i').textContent = `Vérification stock local pour ${escapeHtml(refToCheck)}...`;
-                await delay(100); // Petit délai visuel
-
-                const itemInfo = await getStockInfoFromSupabase(refToCheck);
-
-                if (itemInfo) {
-                    const qty = itemInfo.quantity;
-                    const drawer = itemInfo.drawer || 'N/A';
-                    const status = getStockStatus(qty, itemInfo.critical_threshold);
-                    const indicatorHTML = createStockIndicatorHTML(qty, itemInfo.critical_threshold);
-
-                    let responseText = `${indicatorHTML} Oui, <strong>${escapeHtml(refToCheck)}</strong> est en stock.`;
-                    responseText += `\nQuantité: ${qty}`;
-                    responseText += `\nTiroir: ${escapeHtml(drawer)}`;
-
-                    // Ajouter un bouton "Prendre" si en stock et connecté
-                    if (qty > 0 && currentUser) {
-                        // On crée un objet "item" similaire à ce que l'IA retournerait pour la modale
-                        const modalItemData = {
-                            ref: itemInfo.ref,
-                            local_qty: itemInfo.quantity,
-                            specs: itemInfo.attributes || {}, // Utilise les attributs de l'inventaire
-                            // On n'a pas besoin des autres champs (type, reason, availability) pour la modale
-                        };
-                        // On encode cet objet pour le bouton
-                        const itemDataStr = JSON.stringify(modalItemData);
-                        // Le bouton aura une classe spéciale pour être ciblé différemment si besoin
-                        responseText += `\n<button class="choice-button take-button direct-take-button" data-item-data='${escapeHtml(itemDataStr)}' title="Prendre ${escapeHtml(refToCheck)}">Prendre</button>`;
-                        await addMessageToChat('ai', responseText, true); // Ajoute comme HTML à cause du bouton
-                    } else if (qty <= 0) {
-                         responseText += "\n(Stock épuisé)";
-                         await addMessageToChat('ai', responseText, false);
-                    } else { // En stock mais non connecté
-                         responseText += "\n<i>(Connectez-vous pour pouvoir prendre)</i>";
-                         await addMessageToChat('ai', responseText, true); // HTML pour l'italique
-                    }
-                    updateSevenSegmentForComponent(refToCheck);
-
-                } else {
-                    await addMessageToChat('ai', `Non, <strong>${escapeHtml(refToCheck)}</strong> n'a pas été trouvé dans le stock local.`);
-                    updateSevenSegmentForComponent(null);
-                }
-                // Fin du traitement de la question simple, on sort de handleUserInput
-                return;
-            }
-            // --- Fin de la section: Détection Question Simple de Stock ---
-
-
-            // Si ce n'est pas une question simple, on continue avec la logique existante
-            if (conversationState.awaitingQuantityConfirmation) {
-                // Note: Ce bloc est moins susceptible d'être atteint maintenant que la modale est utilisée.
-                console.log("handleUserInput: Attente de confirmation de quantité détectée (devrait être rare maintenant). Appel de handleQuantityResponse.");
-                await handleQuantityResponse(userMessageContent);
-                return;
-            }
-
-            resetConversationState();
-
-            // Logique d'appel à l'IA pour recherche/équivalents (inchangée depuis V9)
-            const isTrivial = /^(ok|merci|oui|non|d'accord|bye|au revoir|a plus)$/i.test(userMessageContent);
-
-            if (!isTrivial) {
-                console.log("Intention détectée : Recherche Composant/Équivalent (avancée).");
-                loadingIndicatorChat.querySelector('i').textContent = `Recherche via IA...`;
-                const localStock = await buildLocalStockContext();
-                const HISTORY_LENGTH_ADVANCED = 4;
-                const recentHistory = chatHistory.slice(-HISTORY_LENGTH_ADVANCED);
-                console.log("Sending query to ai-advanced-search:", userMessageContent, "with context:", localStock ? "Yes" : "No");
-
-                const { data: searchData, error: searchError } = await supabase.functions.invoke('ai-advanced-search', {
-                     body: { query: userMessageContent, history: recentHistory, localStockContext: localStock }
-                });
-
-                if (searchError) {
-                    let detail = searchError.message || "Erreur inconnue";
-                     if (searchError instanceof Error && searchError.message) {
-                         if (searchError.message.includes("Failed to send")) { detail = "Impossible d'envoyer la requête."; }
-                         else if (searchError.message.includes("500") || searchError.message.includes("non-2xx") || searchError.message.includes("non-OK") || searchError.message.includes("Bad Gateway")) { detail = "Le service IA a retourné une erreur serveur (5xx)."; }
-                         else if (searchError.message.includes("timeout")) { detail = "Le service IA a mis trop de temps à répondre."; }
-                         else if (searchError.message.includes("429")) { detail = "Limite d'appels IA atteinte. Réessayez plus tard."; }
-                    }
-                    console.error("Erreur brute appel fonction:", searchError);
-                    throw new Error(`Erreur appel recherche avancée: ${detail}`);
-                }
-
-                if (searchData.error) {
-                    console.warn("Erreur retournée par la fonction Edge 'ai-advanced-search':", searchData.error);
-                    await addMessageToChat('ai', escapeHtml(searchData.error));
-                } else if (searchData.results && Array.isArray(searchData.results)) {
-                     // --- MODIFIED (Goal 1 - Amélioration présentation): Ajout message contextuel avant les résultats ---
-                     if (searchData.results.length > 0 && searchData.results[0].type !== 'error') {
-                         if (userMessageContent.toLowerCase().includes('équivalent')) {
-                             await addMessageToChat('ai', `Voici des équivalents possibles pour votre demande :`, false);
-                         } else if (simpleStockQueryRegex.test(userMessageContent)) { // Si c'était une question simple mais traitée par l'IA
-                             await addMessageToChat('ai', `Voici ce que j'ai trouvé concernant "${escapeHtml(userMessageContent)}" :`, false);
-                         } else {
-                              await addMessageToChat('ai', `Voici les résultats pour votre recherche :`, false);
-                         }
-                         await delay(50); // Petit délai pour l'ordre visuel
-                     }
-                     await displayStructuredResults(searchData.results);
-                } else {
-                    console.warn("Réponse valide mais sans résultats ni erreur explicite:", searchData);
-                    await addMessageToChat('ai', "Désolé, je n'ai pas pu obtenir de résultats pour cette demande.", false);
-                }
-
-            } else {
-                 await addMessageToChat('ai', "D'accord.", false);
-            }
-
-        } catch (error) {
-            console.error("Erreur majeure handleUserInput:", error);
-            await addMessageToChat('ai', `Oups ! Erreur technique: ${error.message}.`);
-            resetConversationState();
-        } finally {
-            componentInputChat.disabled = false;
-            searchButtonChat.disabled = false;
-            loadingIndicatorChat.style.display = 'none';
-            componentInputChat.focus();
-        }
-    }
-    // --- FIN MODIFIED handleUserInput ---
-
-
-    // --- MODIFIED (Goal 2): displayStructuredResults pour ajouter data-item-data ---
-    async function displayStructuredResults(results) {
-        if (!results || results.length === 0) {
-            // L'IA devrait retourner une erreur standard, mais sécurité :
-            await addMessageToChat('ai', "Je n'ai trouvé aucune information pertinente.", false);
-            return;
-        }
-
-        let responseHTML = `<div class="ai-results-container">`;
-        let foundActionableItem = false;
-
-        results.forEach((item, index) => {
-             if (item.type === 'error') {
-                 console.warn("Affichage de l'erreur standard retournée par l'IA:", item.ref);
-                 responseHTML += `<div class="equivalent-item error-message"><strong>Info:</strong> ${escapeHtml(item.ref || "Erreur inconnue.")}</div>`;
-                 return;
-             }
-
-            const isLocal = item.is_local === true;
-            const localQty = item.local_qty;
-            const localDrawer = item.local_drawer;
-            const ref = item.ref || "N/A";
-            const type = item.type || "Type inconnu";
-            const reason = item.reason || null;
-            const specs = item.specs || {};
-            const availability = item.availability || {};
-
-            const indicatorHTML = createStockIndicatorHTML(isLocal ? localQty : undefined, isLocal ? item.critical_threshold : undefined); // threshold peut être manquant, géré par la fonction
-
-            if (index === 0 && ref !== "N/A") {
-                 updateSevenSegmentForComponent(ref);
-            } else if (index === 0) {
-                 updateSevenSegmentForComponent(null);
-            }
-
-            responseHTML += `<div class="equivalent-item">`;
-
-            // 1. En-tête
-            responseHTML += `<div class="item-header">
-                               ${indicatorHTML}
-                               <strong>${escapeHtml(ref)}</strong>
-                               ${type !== "Type inconnu" ? `<span class="component-type">${escapeHtml(type)}</span>` : ''}
-                             </div>`;
-
-            // 2. Statut local ou raison
-            if (isLocal) {
-                responseHTML += `<div class="local-info">📍 Stock local: <strong>${localQty}</strong>${localDrawer ? ` (Tiroir: ${escapeHtml(localDrawer)})` : ''}</div>`;
-            } else if (reason) {
-                responseHTML += `<div class="equivalent-reason">${escapeHtml(reason)}</div>`;
-            } else {
-                 responseHTML += `<div class="stock-status-info">Non trouvé localement.</div>`;
-            }
-
-            // 3. Spécifications
-            let specsTableHTML = '';
-            const specKeys = Object.keys(specs);
-            const hasValidSpecs = specKeys.some(key => specs[key] !== null && specs[key] !== undefined && String(specs[key]).trim() !== '');
-            if (hasValidSpecs) {
-                specsTableHTML += `<div class="specs-container">
-                                    <table class="specs-table"><tbody>`;
-                const specMapping = { 'value': 'Valeur', 'voltage': 'Tension', 'current': 'Courant', 'power': 'Puissance', 'tolerance': 'Tolérance', 'package': 'Boîtier', 'gain': 'Gain (hFE)', 'rds_on': 'Rds(on)', 'vgs_th': 'Vgs(th)', 'capacity': 'Capacité', 'frequency': 'Fréquence', 'noise': 'Bruit', 'speed': 'Vitesse', 'temperature': 'Température', 'dielectric': 'Diélectrique' };
-                for (const key of specKeys) {
-                    const value = specs[key];
-                    if (value !== null && value !== undefined && String(value).trim() !== '') {
-                        const displayName = specMapping[key] || key.charAt(0).toUpperCase() + key.slice(1);
-                        specsTableHTML += `<tr>
-                                             <td class="spec-key">${escapeHtml(displayName)}:</td>
-                                             <td class="spec-value">${escapeHtml(value)}</td>
-                                           </tr>`;
-                    }
-                }
-                specsTableHTML += `</tbody></table></div>`;
-                responseHTML += specsTableHTML;
-            }
-
-            // 4. Liens externes
-            let linksHTML = '';
-            if (availability.digikey) linksHTML += `<a href="${escapeHtml(availability.digikey)}" target="_blank" rel="noopener noreferrer" class="external-link digikey" title="Chercher ${escapeHtml(ref)} sur Digi-Key.ca">Digi-Key</a>`;
-            if (availability.mouser) linksHTML += `<a href="${escapeHtml(availability.mouser)}" target="_blank" rel="noopener noreferrer" class="external-link mouser" title="Chercher ${escapeHtml(ref)} sur Mouser.ca">Mouser</a>`;
-            if (availability.aliexpress) linksHTML += `<a href="${escapeHtml(availability.aliexpress)}" target="_blank" rel="noopener noreferrer" class="external-link aliexpress" title="Chercher ${escapeHtml(ref)} sur AliExpress">AliExpress</a>`;
-            if (linksHTML) {
-                 responseHTML += `<div class="external-links-block">${linksHTML}</div>`;
-            }
-
-             // 5. Bouton "Prendre" (si applicable)
-             if (isLocal && localQty > 0 && currentUser) {
-                 // --- Ajout de data-item-data ici ---
-                 const itemDataForModal = { // Préparer l'objet pour la modale
-                     ref: ref,
-                     local_qty: localQty,
-                     specs: specs // Les specs de l'IA serviront d'attributs pour la modale
-                     // Ajouter d'autres champs si la modale les utilise (ex: drawer?)
-                 };
-                 const itemDataStr = JSON.stringify(itemDataForModal);
-                 // ---------------------------------
-                 responseHTML += `<div class="action-container">`;
-                 responseHTML += `<button class="choice-button take-button" data-item-data='${escapeHtml(itemDataStr)}' title="Prendre ${escapeHtml(ref)}">Prendre</button>`;
-                 responseHTML += `</div>`;
-                foundActionableItem = true;
-             } else if (isLocal && localQty <= 0) {
-                  responseHTML += `<div class="stock-status-info"><i>(Stock épuisé)</i></div>`;
-             } else if (isLocal && !currentUser) {
-                  responseHTML += `<div class="stock-status-info"><i>(Connectez-vous pour prendre)</i></div>`;
-             }
-
-            responseHTML += `</div>`; // Fin de la carte
-        });
-
-        responseHTML += `</div>`; // Fin .ai-results-container
-
-        if (!foundActionableItem && results.some(item => item.is_local && item.local_qty > 0) && !currentUser) {
-             responseHTML += "<br/><i>Connectez-vous pour pouvoir prendre les composants disponibles localement.</i>";
-        }
-
-        await addMessageToChat('ai', responseHTML, true);
-    }
-    // --- FIN MODIFIED displayStructuredResults ---
-
-    // promptLoginBeforeAction (inchangée)
+    // --- VUE RECHERCHE (CHAT IA) (inchangée) ---
+    // ... (addMessageToChat, attachModalTriggerListeners, displayWelcomeMessage, buildLocalStockContext, handleUserInput, displayStructuredResults, promptLoginBeforeAction, handleQuantityResponse, resetConversationState, getStockInfoFromSupabase) ...
+    async function addMessageToChat(sender, messageContent, isHTML = false) { if (!responseOutputChat) return; const messageDiv = document.createElement('div'); messageDiv.classList.add('message', sender.toLowerCase()); if (isHTML) { try { const range = document.createRange(); const fragment = range.createContextualFragment(messageContent); messageDiv.appendChild(fragment); attachModalTriggerListeners(messageDiv); } catch (e) { console.error("Error parsing chat HTML:", e); messageDiv.textContent = messageContent; } } else { messageDiv.textContent = messageContent; } responseOutputChat.insertBefore(messageDiv, responseOutputChat.firstChild); const role = sender === 'user' ? 'user' : 'assistant'; const textContentForHistory = messageDiv.textContent || messageContent; chatHistory.push({ role: role, content: textContentForHistory.trim() }); if(chatHistory.length > 20) { chatHistory = chatHistory.slice(-20); } const maxMessagesInDOM = 50; while (responseOutputChat.children.length > maxMessagesInDOM) { responseOutputChat.removeChild(responseOutputChat.lastChild); } responseOutputChat.scrollTop = 0; }
+    function attachModalTriggerListeners(containerElement) { containerElement.querySelectorAll('button.choice-button.take-button').forEach(button => { if (button.dataset.listenerAttached) return; button.dataset.listenerAttached = "true"; button.addEventListener('click', async (event) => { const targetButton = event.target; const itemDataStr = targetButton.dataset.itemData; if (!itemDataStr) { console.error("Erreur: Attribut data-item-data manquant sur le bouton 'Prendre'.", targetButton); await addMessageToChat('ai', "Oups, problème interne pour sélectionner ce composant."); return; } if (!currentUser) { await promptLoginBeforeAction("prendre un composant"); return; } try { const itemData = JSON.parse(itemDataStr); const chosenRef = itemData.ref; const availableQty = itemData.local_qty; const attributes = itemData.specs || {}; if (!chosenRef || typeof availableQty !== 'number' || availableQty <= 0) { console.warn(`Données invalides ou stock nul pour ${chosenRef} dans data-item-data`, itemData); await addMessageToChat('ai', `Le stock pour ${escapeHtml(chosenRef)} semble être épuisé.`); return; } console.log(`Clic sur "Prendre" pour ${chosenRef}, Qté dispo: ${availableQty}. Ouverture de la modale.`); const parentMessage = targetButton.closest('.message.ai'); if (parentMessage) { parentMessage.querySelectorAll('button.choice-button.take-button').forEach(btn => btn.disabled = true); } updateSevenSegmentForComponent(chosenRef); showQuantityModal(chosenRef, availableQty, attributes); } catch (e) { console.error("Erreur lors du parsing de data-item-data ou de l'ouverture de la modale:", e, itemDataStr); await addMessageToChat('ai', "Une erreur s'est produite lors de la sélection du composant."); } }); }); }
+    function displayWelcomeMessage() { if (!responseOutputChat) return; responseOutputChat.innerHTML = ''; chatHistory = []; resetConversationState(); addMessageToChat('ai', "Bonjour ! Je suis StockAV. Demandez-moi:\n• Si un composant est en stock (ex: 'LM393 dispo ?', 'stock pour 1N4007')\n• Des équivalents (ex: 'équivalent BC547')\n• Une recherche par specs (ex: 'condo 100nF 50V céramique', 'MOSFET 60V 20A TO-220')"); if(componentInputChat) { componentInputChat.value = ''; componentInputChat.focus(); } updateSevenSegmentForComponent(null); }
+    async function buildLocalStockContext(limit = 20) { if (!supabase || !currentUser) return null; try { const { data, error } = await supabase .from('inventory') .select('ref, quantity, drawer') .order('updated_at', { ascending: false }) .limit(limit); if (error) { console.warn("Erreur récupération contexte stock local:", error.message); return null; } if (!data || data.length === 0) return {}; const context = data.reduce((acc, item) => { if (item.ref) { acc[item.ref.toUpperCase()] = { qty: item.quantity ?? 0, drawer: item.drawer || null }; } return acc; }, {}); console.log(`[buildLocalStockContext] Contexte généré pour ${Object.keys(context).length} composants.`); return context; } catch (err) { console.error("Erreur JS dans buildLocalStockContext:", err); return null; } }
+    async function handleUserInput() { if (!componentInputChat || !searchButtonChat || !loadingIndicatorChat || !responseOutputChat || !supabase) { console.error("handleUserInput: Un ou plusieurs éléments DOM ou Supabase sont manquants."); return; } const userMessageContent = componentInputChat.value.trim(); if (!userMessageContent) return; addMessageToChat('user', userMessageContent); componentInputChat.value = ''; componentInputChat.disabled = true; searchButtonChat.disabled = true; loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = 'Analyse en cours...'; responseOutputChat.scrollTop = 0; try { const simpleStockQueryRegex = /^(?:stock|dispo(?:nible)?|combien|cherch(?:e|er)|trouve(?:r)?|est-ce que)\s+(?:pour\s+|de\s+)?([\w\-\+]+)\s*(?:en stock|dans le stock)?\??$/i; const match = userMessageContent.match(simpleStockQueryRegex); if (match && match[1]) { const refToCheck = match[1].toUpperCase(); console.log(`[handleUserInput] Détection question simple de stock pour: ${refToCheck}`); loadingIndicatorChat.querySelector('i').textContent = `Vérification stock local pour ${escapeHtml(refToCheck)}...`; await delay(100); const itemInfo = await getStockInfoFromSupabase(refToCheck); if (itemInfo) { const qty = itemInfo.quantity; const drawer = itemInfo.drawer || 'N/A'; const status = getStockStatus(qty, itemInfo.critical_threshold); const indicatorHTML = createStockIndicatorHTML(qty, itemInfo.critical_threshold); let responseText = `${indicatorHTML} Oui, <strong>${escapeHtml(refToCheck)}</strong> est en stock.`; responseText += `\nQuantité: ${qty}`; responseText += `\nTiroir: ${escapeHtml(drawer)}`; if (qty > 0 && currentUser) { const modalItemData = { ref: itemInfo.ref, local_qty: itemInfo.quantity, specs: itemInfo.attributes || {}, }; const itemDataStr = JSON.stringify(modalItemData); responseText += `\n<button class="choice-button take-button direct-take-button" data-item-data='${escapeHtml(itemDataStr)}' title="Prendre ${escapeHtml(refToCheck)}">Prendre</button>`; await addMessageToChat('ai', responseText, true); } else if (qty <= 0) { responseText += "\n(Stock épuisé)"; await addMessageToChat('ai', responseText, false); } else { responseText += "\n<i>(Connectez-vous pour pouvoir prendre)</i>"; await addMessageToChat('ai', responseText, true); } updateSevenSegmentForComponent(refToCheck); } else { await addMessageToChat('ai', `Non, <strong>${escapeHtml(refToCheck)}</strong> n'a pas été trouvé dans le stock local.`); updateSevenSegmentForComponent(null); } return; } if (conversationState.awaitingQuantityConfirmation) { console.log("handleUserInput: Attente de confirmation de quantité détectée (devrait être rare maintenant). Appel de handleQuantityResponse."); await handleQuantityResponse(userMessageContent); return; } resetConversationState(); const isTrivial = /^(ok|merci|oui|non|d'accord|bye|au revoir|a plus)$/i.test(userMessageContent); if (!isTrivial) { console.log("Intention détectée : Recherche Composant/Équivalent (avancée)."); loadingIndicatorChat.querySelector('i').textContent = `Recherche via IA...`; const localStock = await buildLocalStockContext(); const HISTORY_LENGTH_ADVANCED = 4; const recentHistory = chatHistory.slice(-HISTORY_LENGTH_ADVANCED); console.log("Sending query to ai-advanced-search:", userMessageContent, "with context:", localStock ? "Yes" : "No"); const { data: searchData, error: searchError } = await supabase.functions.invoke('ai-advanced-search', { body: { query: userMessageContent, history: recentHistory, localStockContext: localStock } }); if (searchError) { let detail = searchError.message || "Erreur inconnue"; if (searchError instanceof Error && searchError.message) { if (searchError.message.includes("Failed to send")) { detail = "Impossible d'envoyer la requête."; } else if (searchError.message.includes("500") || searchError.message.includes("non-2xx") || searchError.message.includes("non-OK") || searchError.message.includes("Bad Gateway")) { detail = "Le service IA a retourné une erreur serveur (5xx)."; } else if (searchError.message.includes("timeout")) { detail = "Le service IA a mis trop de temps à répondre."; } else if (searchError.message.includes("429")) { detail = "Limite d'appels IA atteinte. Réessayez plus tard."; } } console.error("Erreur brute appel fonction:", searchError); throw new Error(`Erreur appel recherche avancée: ${detail}`); } if (searchData.error) { console.warn("Erreur retournée par la fonction Edge 'ai-advanced-search':", searchData.error); await addMessageToChat('ai', escapeHtml(searchData.error)); } else if (searchData.results && Array.isArray(searchData.results)) { if (searchData.results.length > 0 && searchData.results[0].type !== 'error') { if (userMessageContent.toLowerCase().includes('équivalent')) { await addMessageToChat('ai', `Voici des équivalents possibles pour votre demande :`, false); } else if (simpleStockQueryRegex.test(userMessageContent)) { await addMessageToChat('ai', `Voici ce que j'ai trouvé concernant "${escapeHtml(userMessageContent)}" :`, false); } else { await addMessageToChat('ai', `Voici les résultats pour votre recherche :`, false); } await delay(50); } await displayStructuredResults(searchData.results); } else { console.warn("Réponse valide mais sans résultats ni erreur explicite:", searchData); await addMessageToChat('ai', "Désolé, je n'ai pas pu obtenir de résultats pour cette demande.", false); } } else { await addMessageToChat('ai', "D'accord.", false); } } catch (error) { console.error("Erreur majeure handleUserInput:", error); await addMessageToChat('ai', `Oups ! Erreur technique: ${error.message}.`); resetConversationState(); } finally { componentInputChat.disabled = false; searchButtonChat.disabled = false; loadingIndicatorChat.style.display = 'none'; componentInputChat.focus(); } }
+    async function displayStructuredResults(results) { if (!results || results.length === 0) { await addMessageToChat('ai', "Je n'ai trouvé aucune information pertinente.", false); return; } let responseHTML = `<div class="ai-results-container">`; let foundActionableItem = false; results.forEach((item, index) => { if (item.type === 'error') { console.warn("Affichage de l'erreur standard retournée par l'IA:", item.ref); responseHTML += `<div class="equivalent-item error-message"><strong>Info:</strong> ${escapeHtml(item.ref || "Erreur inconnue.")}</div>`; return; } const isLocal = item.is_local === true; const localQty = item.local_qty; const localDrawer = item.local_drawer; const ref = item.ref || "N/A"; const type = item.type || "Type inconnu"; const reason = item.reason || null; const specs = item.specs || {}; const availability = item.availability || {}; const indicatorHTML = createStockIndicatorHTML(isLocal ? localQty : undefined, isLocal ? item.critical_threshold : undefined); if (index === 0 && ref !== "N/A") { updateSevenSegmentForComponent(ref); } else if (index === 0) { updateSevenSegmentForComponent(null); } responseHTML += `<div class="equivalent-item">`; responseHTML += `<div class="item-header"> ${indicatorHTML} <strong>${escapeHtml(ref)}</strong> ${type !== "Type inconnu" ? `<span class="component-type">${escapeHtml(type)}</span>` : ''} </div>`; if (isLocal) { responseHTML += `<div class="local-info">📍 Stock local: <strong>${localQty}</strong>${localDrawer ? ` (Tiroir: ${escapeHtml(localDrawer)})` : ''}</div>`; } else if (reason) { responseHTML += `<div class="equivalent-reason">${escapeHtml(reason)}</div>`; } else { responseHTML += `<div class="stock-status-info">Non trouvé localement.</div>`; } let specsTableHTML = ''; const specKeys = Object.keys(specs); const hasValidSpecs = specKeys.some(key => specs[key] !== null && specs[key] !== undefined && String(specs[key]).trim() !== ''); if (hasValidSpecs) { specsTableHTML += `<div class="specs-container"> <table class="specs-table"><tbody>`; const specMapping = { 'value': 'Valeur', 'voltage': 'Tension', 'current': 'Courant', 'power': 'Puissance', 'tolerance': 'Tolérance', 'package': 'Boîtier', 'gain': 'Gain (hFE)', 'rds_on': 'Rds(on)', 'vgs_th': 'Vgs(th)', 'capacity': 'Capacité', 'frequency': 'Fréquence', 'noise': 'Bruit', 'speed': 'Vitesse', 'temperature': 'Température', 'dielectric': 'Diélectrique' }; for (const key of specKeys) { const value = specs[key]; if (value !== null && value !== undefined && String(value).trim() !== '') { const displayName = specMapping[key] || key.charAt(0).toUpperCase() + key.slice(1); specsTableHTML += `<tr> <td class="spec-key">${escapeHtml(displayName)}:</td> <td class="spec-value">${escapeHtml(value)}</td> </tr>`; } } specsTableHTML += `</tbody></table></div>`; responseHTML += specsTableHTML; } let linksHTML = ''; if (availability.digikey) linksHTML += `<a href="${escapeHtml(availability.digikey)}" target="_blank" rel="noopener noreferrer" class="external-link digikey" title="Chercher ${escapeHtml(ref)} sur Digi-Key.ca">Digi-Key</a>`; if (availability.mouser) linksHTML += `<a href="${escapeHtml(availability.mouser)}" target="_blank" rel="noopener noreferrer" class="external-link mouser" title="Chercher ${escapeHtml(ref)} sur Mouser.ca">Mouser</a>`; if (availability.aliexpress) linksHTML += `<a href="${escapeHtml(availability.aliexpress)}" target="_blank" rel="noopener noreferrer" class="external-link aliexpress" title="Chercher ${escapeHtml(ref)} sur AliExpress">AliExpress</a>`; if (linksHTML) { responseHTML += `<div class="external-links-block">${linksHTML}</div>`; } if (isLocal && localQty > 0 && currentUser) { const itemDataForModal = { ref: ref, local_qty: localQty, specs: specs }; const itemDataStr = JSON.stringify(itemDataForModal); responseHTML += `<div class="action-container">`; responseHTML += `<button class="choice-button take-button" data-item-data='${escapeHtml(itemDataStr)}' title="Prendre ${escapeHtml(ref)}">Prendre</button>`; responseHTML += `</div>`; foundActionableItem = true; } else if (isLocal && localQty <= 0) { responseHTML += `<div class="stock-status-info"><i>(Stock épuisé)</i></div>`; } else if (isLocal && !currentUser) { responseHTML += `<div class="stock-status-info"><i>(Connectez-vous pour prendre)</i></div>`; } responseHTML += `</div>`; }); responseHTML += `</div>`; if (!foundActionableItem && results.some(item => item.is_local && item.local_qty > 0) && !currentUser) { responseHTML += "<br/><i>Connectez-vous pour pouvoir prendre les composants disponibles localement.</i>"; } await addMessageToChat('ai', responseHTML, true); }
     async function promptLoginBeforeAction(actionDesc) { await addMessageToChat('ai', `Vous devez être connecté pour ${actionDesc}.`); loginCodeInput?.focus(); }
-
-    // handleQuantityResponse (devient moins utilisée, mais gardée pour le moment)
-    async function handleQuantityResponse(userInput) {
-        const ref = conversationState.chosenRefForStockCheck;
-        const maxQty = conversationState.availableQuantity;
-        const threshold = conversationState.criticalThreshold;
-
-        // --- MODIFIED: Vérifier si on est bien dans cet état (au cas où) ---
-        if (!conversationState.awaitingQuantityConfirmation || !ref || !currentUser) {
-            console.warn("handleQuantityResponse appelé hors contexte (peut-être normal si la modale est utilisée maintenant).");
-            resetConversationState();
-            // Ne pas envoyer de message d'erreur ici, car c'est potentiellement le flux normal via la modale
-            return;
-        }
-        console.log(`[handleQuantityResponse] Réponse reçue pour ${ref}: "${userInput}"`); // Log si appelée
-
-        const lowerInput = userInput.toLowerCase();
-
-        if (lowerInput === 'non' || lowerInput === 'annuler' || lowerInput === '0' || lowerInput === 'cancel' || lowerInput === 'no') {
-            await addMessageToChat('ai', "Ok, opération annulée.");
-            resetConversationState();
-            updateSevenSegmentForComponent(null);
-            await delay(300);
-            await addMessageToChat('ai', "Autre chose ?");
-            return;
-        }
-
-        const match = userInput.match(/\d+/);
-        const quantityToTake = match ? parseInt(match[0], 10) : NaN;
-
-        if (isNaN(quantityToTake) || quantityToTake <= 0) {
-            await addMessageToChat('ai', "Quantité non comprise. Veuillez entrer un nombre positif, ou 'non' pour annuler.");
-            return;
-        }
-
-        if (quantityToTake > maxQty) {
-            await addMessageToChat('ai', `Stock insuffisant. Il ne reste que ${maxQty} ${escapeHtml(ref)}. Combien voulez-vous en prendre (max ${maxQty}) ? Ou entrez 'non' pour annuler.`);
-            return;
-        }
-
-        await addMessageToChat('ai', `Ok, enregistrement de la sortie de ${quantityToTake} x ${escapeHtml(ref)}...`);
-        loadingIndicatorChat.style.display = 'block';
-        loadingIndicatorChat.querySelector('i').textContent = `Mise à jour stock ${escapeHtml(ref)}...`;
-        const change = -quantityToTake;
-
-        try {
-            console.log(`Calling RPC update_stock_and_log from Chat (handleQuantityResponse) for ${ref}, change: ${change}`);
-            const { data: newQuantity, error: rpcError } = await supabase.rpc('update_stock_and_log', {
-                p_ref: ref, p_quantity_change: change, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Chat Take Qty'
-            });
-
-            if (rpcError) {
-                if (rpcError.message.includes('new_quantity_below_zero')) throw new Error("Stock devenu insuffisant (vérification RPC).");
-                if (rpcError.message.includes('component_not_found')) throw new Error("Composant non trouvé lors de la mise à jour.");
-                throw new Error(`Erreur RPC: ${rpcError.message}`);
-            }
-
-            const statusIndicatorHTML = createStockIndicatorHTML(newQuantity, threshold);
-            await addMessageToChat('ai', `${statusIndicatorHTML} Sortie enregistrée ! Stock restant pour <strong>${escapeHtml(ref)}</strong> : ${newQuantity}.`);
-
-            if (inventoryView.classList.contains('active-view')) await displayInventory(currentInventoryPage);
-            if (auditView.classList.contains('active-view')) await displayAudit();
-            if (logView.classList.contains('active-view')) await displayLog(1);
-            await updateSevenSegmentForComponent(ref);
-
-            const kitIndex = currentKitSelection.findIndex(k => k.ref === ref);
-            if (kitIndex > -1) {
-                currentKitSelection[kitIndex].quantity = newQuantity;
-                await saveKitToSupabase();
-                if (kitView.classList.contains('active-view')) displayCurrentKitDrawers();
-            }
-
-        } catch (err) {
-            console.error("Erreur lors de la mise à jour du stock via handleQuantityResponse:", err);
-            await addMessageToChat('ai', `Désolé, une erreur est survenue : ${err.message}. L'opération a échoué.`);
-        } finally {
-            loadingIndicatorChat.style.display = 'none';
-            resetConversationState();
-            await delay(300);
-            await addMessageToChat('ai', "Besoin d'autre chose ?");
-        }
-    }
-
-    // resetConversationState (inchangée)
-    function resetConversationState() {
-        conversationState = { awaitingQuantityConfirmation: false, chosenRefForStockCheck: null, availableQuantity: 0, criticalThreshold: null };
-        console.log("Conversation state reset.");
-    }
-
-    // getStockInfoFromSupabase (inchangée)
+    async function handleQuantityResponse(userInput) { const ref = conversationState.chosenRefForStockCheck; const maxQty = conversationState.availableQuantity; const threshold = conversationState.criticalThreshold; if (!conversationState.awaitingQuantityConfirmation || !ref || !currentUser) { console.warn("handleQuantityResponse appelé hors contexte (peut-être normal si la modale est utilisée maintenant)."); resetConversationState(); return; } console.log(`[handleQuantityResponse] Réponse reçue pour ${ref}: "${userInput}"`); const lowerInput = userInput.toLowerCase(); if (lowerInput === 'non' || lowerInput === 'annuler' || lowerInput === '0' || lowerInput === 'cancel' || lowerInput === 'no') { await addMessageToChat('ai', "Ok, opération annulée."); resetConversationState(); updateSevenSegmentForComponent(null); await delay(300); await addMessageToChat('ai', "Autre chose ?"); return; } const match = userInput.match(/\d+/); const quantityToTake = match ? parseInt(match[0], 10) : NaN; if (isNaN(quantityToTake) || quantityToTake <= 0) { await addMessageToChat('ai', "Quantité non comprise. Veuillez entrer un nombre positif, ou 'non' pour annuler."); return; } if (quantityToTake > maxQty) { await addMessageToChat('ai', `Stock insuffisant. Il ne reste que ${maxQty} ${escapeHtml(ref)}. Combien voulez-vous en prendre (max ${maxQty}) ? Ou entrez 'non' pour annuler.`); return; } await addMessageToChat('ai', `Ok, enregistrement de la sortie de ${quantityToTake} x ${escapeHtml(ref)}...`); loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Mise à jour stock ${escapeHtml(ref)}...`; const change = -quantityToTake; try { console.log(`Calling RPC update_stock_and_log from Chat (handleQuantityResponse) for ${ref}, change: ${change}`); const { data: newQuantity, error: rpcError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: change, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Chat Take Qty' }); if (rpcError) { if (rpcError.message.includes('new_quantity_below_zero')) throw new Error("Stock devenu insuffisant (vérification RPC)."); if (rpcError.message.includes('component_not_found')) throw new Error("Composant non trouvé lors de la mise à jour."); throw new Error(`Erreur RPC: ${rpcError.message}`); } const statusIndicatorHTML = createStockIndicatorHTML(newQuantity, threshold); await addMessageToChat('ai', `${statusIndicatorHTML} Sortie enregistrée ! Stock restant pour <strong>${escapeHtml(ref)}</strong> : ${newQuantity}.`); if (inventoryView.classList.contains('active-view')) await displayInventory(currentInventoryPage); if (auditView.classList.contains('active-view')) await displayAudit(); if (logView.classList.contains('active-view')) await displayLog(1); await updateSevenSegmentForComponent(ref); const kitIndex = currentKitSelection.findIndex(k => k.ref === ref); if (kitIndex > -1) { currentKitSelection[kitIndex].quantity = newQuantity; await saveKitToSupabase(); if (kitView.classList.contains('active-view')) displayCurrentKitDrawers(); } } catch (err) { console.error("Erreur lors de la mise à jour du stock via handleQuantityResponse:", err); await addMessageToChat('ai', `Désolé, une erreur est survenue : ${err.message}. L'opération a échoué.`); } finally { loadingIndicatorChat.style.display = 'none'; resetConversationState(); await delay(300); await addMessageToChat('ai', "Besoin d'autre chose ?"); } }
+    function resetConversationState() { conversationState = { awaitingQuantityConfirmation: false, chosenRefForStockCheck: null, availableQuantity: 0, criticalThreshold: null }; console.log("Conversation state reset."); }
     async function getStockInfoFromSupabase(ref) { if (!supabase) { console.error("getStockInfoFromSupabase: Supabase non initialisé."); return null; } if (!ref) { console.warn("getStockInfoFromSupabase: Référence manquante."); return null; } const upperRef = ref.toUpperCase(); try { console.log(`getStockInfoFromSupabase: Fetching details for ${upperRef}...`); const { data, error } = await supabase .from('inventory') .select(`*, categories ( name )`) .eq('ref', upperRef) .maybeSingle(); if (error && error.code !== 'PGRST116') { throw new Error(`Erreur base de données getStockInfo: ${error.message}`); } if (data) { data.category_name = data.categories?.name || null; if (data.category_id) data.category_id = String(data.category_id); delete data.categories; console.log(`getStockInfoFromSupabase: Data found for ${upperRef}:`, data); } return data; } catch (err) { console.error(`Erreur JS dans getStockInfoFromSupabase pour ${upperRef}:`, err); return null; } }
 
-    // --- Gestion Modale Quantité (+/-) (inchangée - appelée depuis le chat maintenant) ---
+    // --- Gestion Modale Quantité (+/-) (inchangée) ---
     // ... (handleInventoryRowClick, getBadgeClassForKey, showQuantityModal, hideQuantityModal, updateModalButtonStates, listeners boutons modale) ...
     async function handleInventoryRowClick(event) { const row = event.target.closest('tr.inventory-item-row'); if (!row) return; if (row.classList.contains('drawer-collected-in-bom')) { console.log("Clic sur ligne collectée, modale non ouverte."); return; } if (event.target.classList.contains('kit-select-checkbox')) return; if (event.target.closest('a')) return; if (!currentUser) { showGenericError("Connectez-vous pour modifier les quantités."); loginCodeInput?.focus(); return; } const ref = row.dataset.ref; if (!ref) { console.error("Référence manquante sur la ligne d'inventaire:", row); showGenericError("Erreur: Référence interne manquante."); return; } console.log(`Clic sur ligne inventaire pour ouvrir modale: ${ref}`); row.style.cursor = 'wait'; try { let itemData = null; if (row.dataset.itemData) { try { itemData = JSON.parse(row.dataset.itemData); if (!itemData || typeof itemData.quantity === 'undefined') { console.warn("Données partielles dans data-item-data, refetching...", itemData); itemData = null; } } catch(e) { console.warn("Erreur parsing itemData depuis l'attribut data-item-data:", e); itemData = null; } } if (!itemData) { console.log(`Données non trouvées ou incomplètes dans data-item-data pour ${ref}, refetching from Supabase...`); itemData = await getStockInfoFromSupabase(ref); } if (itemData) { updateSevenSegmentForComponent(itemData.ref); showQuantityModal(itemData.ref, itemData.quantity, itemData.attributes || {}); } else { console.error(`Impossible de récupérer les détails pour le composant ${ref}.`); showGenericError(`Erreur: Impossible de charger les détails pour ${ref}. L'inventaire va être rafraîchi.`); await displayInventory(currentInventoryPage); updateSevenSegmentForComponent(null); } } catch (error) { console.error(`Erreur lors du traitement du clic sur la ligne ${ref}:`, error); showGenericError(`Erreur lors de l'ouverture des détails de ${ref}: ${error.message}`); updateSevenSegmentForComponent(null); } finally { row.style.cursor = ''; } }
     function getBadgeClassForKey(key) { if (!key) return 'badge-color-default'; const lowerKey = key.toLowerCase(); if (lowerKey.includes('volt') || lowerKey.includes('tension')) return 'badge-color-red'; if (lowerKey.includes('package') || lowerKey.includes('boitier') || lowerKey.includes('format')) return 'badge-color-gray'; if (lowerKey.includes('type')) return 'badge-color-blue'; if (lowerKey.includes('capacit') || lowerKey.includes('valeur') || lowerKey.includes('r_sistance') || lowerKey.includes('inductance')) return 'badge-color-green'; if (lowerKey.includes('tol_rance')) return 'badge-color-yellow'; if (lowerKey.includes('puissance')) return 'badge-color-orange'; return 'badge-color-default'; }
@@ -727,39 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modalIncreaseButton?.addEventListener('click', () => { currentModalChange++; modalChangeAmountDisplay.textContent = currentModalChange; updateModalButtonStates(); });
     modalCancelButton?.addEventListener('click', hideQuantityModal);
     modalOverlay?.addEventListener('click', (event) => { if(event.target === modalOverlay) { hideQuantityModal(); } });
-    modalConfirmButton?.addEventListener('click', async () => { if (!modalCurrentRef || currentModalChange === 0 || !currentUser) { console.warn("Conditions non remplies pour confirmer la modale."); return; } const ref = modalCurrentRef; const change = currentModalChange; const initialQtyBeforeUpdate = modalInitialQuantity; if (modalFeedback) { modalFeedback.textContent = `Mise à jour du stock pour ${ref} (${change > 0 ? '+' : ''}${change})...`; modalFeedback.className = 'modal-feedback info'; modalFeedback.style.display = 'block'; } modalConfirmButton.disabled = true; modalCancelButton.disabled = true; modalDecreaseButton.disabled = true; modalIncreaseButton.disabled = true; try { console.log(`Calling RPC update_stock_and_log from modal for ${ref}, change: ${change}`); const { data: newQuantity, error: rpcError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: change, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Modal Adjust' }); if (rpcError) { if (rpcError.message.includes('new_quantity_below_zero')) throw new Error("Stock insuffisant (vérification RPC)."); if (rpcError.message.includes('component_not_found')) throw new Error("Composant non trouvé (peut-être supprimé ?)."); throw new Error(`Erreur RPC: ${rpcError.message}`); } if (modalFeedback) { modalFeedback.textContent = `Stock mis à jour: ${initialQtyBeforeUpdate} -> ${newQuantity}. Fermeture...`; modalFeedback.className = 'modal-feedback success'; } modalQtySpan.textContent = newQuantity; // Mettre à jour la quantité dans la modale (même si elle va fermer)
-        // --- MODIFIED: Fermer la modale après succès ---
-        setTimeout(() => { hideQuantityModal(); }, 1200); // Ferme après 1.2s pour voir le message succès
-
-        // Mettre à jour les autres vues et état
-        if (inventoryView.classList.contains('active-view')) await displayInventory(currentInventoryPage);
-        if (auditView.classList.contains('active-view')) await displayAudit();
-        if (logView.classList.contains('active-view')) await displayLog(1);
-        if (lastDisplayedDrawerRef === ref) await updateSevenSegmentForComponent(ref);
-        const kitIndex = currentKitSelection.findIndex(k => k.ref === ref);
-        if (kitIndex > -1) {
-            currentKitSelection[kitIndex].quantity = newQuantity;
-            await saveKitToSupabase();
-            if (kitView.classList.contains('active-view')) displayCurrentKitDrawers();
-        }
-        // --- FIN MODIFIED ---
-    } catch (err) {
-        console.error("Erreur lors de la confirmation de la modale:", err);
-        if (modalFeedback) {
-            modalFeedback.textContent = `Erreur: ${err.message}`;
-            modalFeedback.className = 'modal-feedback error';
-        } else {
-            showGenericError(`Erreur modale (${ref}): ${err.message}`);
-        }
-        // Réactiver les boutons en cas d'erreur
-        modalConfirmButton.disabled = (currentModalChange === 0);
-        modalCancelButton.disabled = false;
-        const potentialQtyBeforeError = modalInitialQuantity + currentModalChange;
-        modalDecreaseButton.disabled = potentialQtyBeforeError <= 0;
-        modalIncreaseButton.disabled = false;
-    }
-});
-
+    modalConfirmButton?.addEventListener('click', async () => { if (!modalCurrentRef || currentModalChange === 0 || !currentUser) { console.warn("Conditions non remplies pour confirmer la modale."); return; } const ref = modalCurrentRef; const change = currentModalChange; const initialQtyBeforeUpdate = modalInitialQuantity; if (modalFeedback) { modalFeedback.textContent = `Mise à jour du stock pour ${ref} (${change > 0 ? '+' : ''}${change})...`; modalFeedback.className = 'modal-feedback info'; modalFeedback.style.display = 'block'; } modalConfirmButton.disabled = true; modalCancelButton.disabled = true; modalDecreaseButton.disabled = true; modalIncreaseButton.disabled = true; try { console.log(`Calling RPC update_stock_and_log from modal for ${ref}, change: ${change}`); const { data: newQuantity, error: rpcError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: change, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Modal Adjust' }); if (rpcError) { if (rpcError.message.includes('new_quantity_below_zero')) throw new Error("Stock insuffisant (vérification RPC)."); if (rpcError.message.includes('component_not_found')) throw new Error("Composant non trouvé (peut-être supprimé ?)."); throw new Error(`Erreur RPC: ${rpcError.message}`); } if (modalFeedback) { modalFeedback.textContent = `Stock mis à jour: ${initialQtyBeforeUpdate} -> ${newQuantity}. Fermeture...`; modalFeedback.className = 'modal-feedback success'; } modalQtySpan.textContent = newQuantity; setTimeout(() => { hideQuantityModal(); }, 1200); if (inventoryView.classList.contains('active-view')) await displayInventory(currentInventoryPage); if (auditView.classList.contains('active-view')) await displayAudit(); if (logView.classList.contains('active-view')) await displayLog(1); if (lastDisplayedDrawerRef === ref) await updateSevenSegmentForComponent(ref); const kitIndex = currentKitSelection.findIndex(k => k.ref === ref); if (kitIndex > -1) { currentKitSelection[kitIndex].quantity = newQuantity; await saveKitToSupabase(); if (kitView.classList.contains('active-view')) displayCurrentKitDrawers(); } } catch (err) { console.error("Erreur lors de la confirmation de la modale:", err); if (modalFeedback) { modalFeedback.textContent = `Erreur: ${err.message}`; modalFeedback.className = 'modal-feedback error'; } else { showGenericError(`Erreur modale (${ref}): ${err.message}`); } modalConfirmButton.disabled = (currentModalChange === 0); modalCancelButton.disabled = false; const potentialQtyBeforeError = modalInitialQuantity + currentModalChange; modalDecreaseButton.disabled = potentialQtyBeforeError <= 0; modalIncreaseButton.disabled = false; } });
 
     // --- Gestion Afficheur 7 Segments (inchangée) ---
     // ... (segmentMap, updateSevenSegmentForComponent, updateSevenSegmentDisplayVisuals) ...
@@ -800,6 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function removeUserKitRealtimeListener() { if (!userKitRealtimeSubscription) { return; } console.log(`>>> Realtime: Tentative de suppression du canal ${userKitRealtimeSubscription.channelName}...`); try { const removeStatus = await supabase.removeChannel(userKitRealtimeSubscription); console.log(`   Realtime: Statut suppression canal: ${removeStatus}`); } catch (error) { console.error("   Realtime: Erreur lors de la suppression du canal:", error); } finally { userKitRealtimeSubscription = null; console.log("   Realtime: Abonnement local nettoyé."); } }
 
     // --- Initialisation Générale (inchangée) ---
+    // ... (initializeApp et appel) ...
     function initializeApp() {
         console.log("Initialisation StockAV...");
 
@@ -807,11 +762,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try { const userItemsPerPage = parseInt(localStorage.getItem('stockav_itemsPerPage') || '15', 10); ITEMS_PER_PAGE = (userItemsPerPage > 0 && userItemsPerPage <= 100) ? userItemsPerPage : 15; console.log(`Items par page chargés: ${ITEMS_PER_PAGE}`); if (itemsPerPageSelect) { itemsPerPageSelect.value = ITEMS_PER_PAGE; itemsPerPageSelect.addEventListener('change', (e) => { const newIPP = parseInt(e.target.value, 10); if (newIPP > 0 && newIPP <= 100) { ITEMS_PER_PAGE = newIPP; localStorage.setItem('stockav_itemsPerPage', ITEMS_PER_PAGE); console.log(`Items par page mis à jour: ${ITEMS_PER_PAGE}`); const activeView = document.querySelector('main.view-section.active-view'); if (activeView && (activeView.id === 'inventory-view' || activeView.id === 'log-view')) { if (activeView.id === 'inventory-view') currentInventoryPage = 1; if (activeView.id === 'log-view') currentLogPage = 1; reloadActiveViewData(activeView); } } }); } } catch (e) { console.warn("Erreur lecture/configuration items par page:", e); ITEMS_PER_PAGE = 15; }
 
         // Vérification IDs HTML
-        const requiredIds = [ 'login-area', 'login-code', 'login-password', 'login-button', 'login-error', 'user-info-area', 'user-display', 'logout-button', 'main-navigation', 'show-search-view', 'show-inventory-view', 'show-log-view', 'show-admin-view', 'show-settings-view', 'show-audit-view', 'show-bom-view', 'search-view', 'inventory-view', 'log-view', 'admin-view', 'settings-view', 'audit-view', 'bom-view', 'quantity-change-modal', 'modal-overlay', 'modal-component-ref', 'modal-current-quantity', 'modal-decrease-button', 'modal-increase-button', 'modal-change-amount', 'modal-confirm-button', 'modal-cancel-button', 'modal-feedback', 'modal-current-attributes', 'modal-attributes-list', 'seven-segment-display', 'inventory-table-body', 'inventory-category-filter', 'inventory-search-filter', 'apply-inventory-filter-button', 'inventory-prev-page', 'inventory-next-page', 'inventory-page-info', 'inventory-no-results', 'inventory-attribute-filters', 'log-table-body', 'log-prev-page', 'log-next-page', 'log-page-info', 'log-no-results', 'category-list', 'category-form', 'category-name', 'category-attributes', 'category-id-edit', 'cancel-edit-button', 'category-form-title', 'admin-feedback', 'stock-form', 'component-ref-admin', 'check-stock-button', 'component-actions', 'current-quantity', 'update-quantity-button', 'quantity-change', 'delete-component-button', 'component-category-select', 'category-specific-attributes', 'component-desc', 'component-mfg', 'component-datasheet', 'component-initial-quantity', 'component-drawer-admin', 'component-threshold', 'save-component-button', 'export-critical-txt-button', 'export-critical-feedback', 'component-details', 'search-button', 'component-input', 'response-output', 'loading-indicator', 'export-inventory-csv-button', 'export-log-txt-button', 'export-feedback', 'import-csv-file', 'import-inventory-csv-button', 'import-feedback', 'audit-category-filter', 'audit-drawer-filter', 'apply-audit-filter-button', 'audit-table-body', 'audit-no-results', 'audit-feedback', 'bom-feedback', 'current-kit-drawers', 'clear-kit-button', 'generic-feedback', 'items-per-page-select'];
+        const requiredIds = [ 'login-area', 'login-code', 'login-password', 'login-button', 'login-error', 'user-info-area', 'user-display', 'logout-button', 'main-navigation', 'show-search-view', 'show-inventory-view', 'show-log-view', 'show-admin-view', 'show-settings-view', 'show-audit-view', 'show-bom-view', 'search-view', 'inventory-view', 'log-view', 'admin-view', 'settings-view', 'audit-view', 'bom-view', 'quantity-change-modal', 'modal-overlay', 'modal-component-ref', 'modal-current-quantity', 'modal-decrease-button', 'modal-increase-button', 'modal-change-amount', 'modal-confirm-button', 'modal-cancel-button', 'modal-feedback', 'modal-current-attributes', 'modal-attributes-list', 'seven-segment-display', 'inventory-table-body', 'inventory-category-filter', 'inventory-search-filter', 'apply-inventory-filter-button', 'inventory-prev-page', 'inventory-next-page', 'inventory-page-info', 'inventory-no-results', 'inventory-attribute-filters', 'log-table-body', 'log-prev-page', 'log-next-page', 'log-page-info', 'log-no-results', 'category-list', 'category-form', 'category-name', 'category-attributes', 'category-id-edit', 'cancel-edit-button', 'category-form-title', 'admin-feedback', 'stock-form', 'component-ref-admin', 'check-stock-button', 'component-actions', 'current-quantity', 'update-quantity-button', 'quantity-change', 'delete-component-button', 'component-category-select', 'category-specific-attributes', 'component-desc', 'component-mfg', 'component-datasheet', 'component-initial-quantity', 'component-drawer-admin', 'component-threshold', 'save-component-button', 'export-critical-txt-button', 'export-critical-feedback', 'component-details', 'search-button', 'component-input', 'response-output', 'loading-indicator', 'export-inventory-csv-button', 'export-log-txt-button', 'export-feedback', 'import-csv-file', 'import-inventory-csv-button', 'import-feedback', 'audit-category-filter', 'audit-drawer-filter', 'apply-audit-filter-button', 'audit-table-body', 'audit-no-results', 'audit-feedback', 'bom-feedback', 'current-kit-drawers', 'clear-kit-button', 'generic-feedback', 'items-per-page-select', 'export-qr-button' ];
         const missingIds = requiredIds.filter(id => !document.getElementById(id));
         if (missingIds.length > 0) { const errorMsg = `Erreur critique d'initialisation: Éléments HTML manquants: ${missingIds.join(', ')}.`; console.error(errorMsg); document.body.innerHTML = `<div style="padding:20px; background-color:#f8d7da; color:#721c24; border: 1px solid #f5c6cb; border-radius: 5px;"><h2>Erreur Critique</h2><p>${errorMsg}</p></div>`; return; }
 
-        // Écouteurs Événements (inchangés)
+        // Écouteurs Événements
         searchTabButton?.addEventListener('click', () => setActiveView(searchView, searchTabButton));
         inventoryTabButton?.addEventListener('click', () => setActiveView(inventoryView, inventoryTabButton));
         logTabButton?.addEventListener('click', () => setActiveView(logView, logTabButton));
@@ -842,34 +797,25 @@ document.addEventListener('DOMContentLoaded', () => {
         currentKitDrawersDiv?.addEventListener('click', handleDrawerButtonClick);
         clearKitButton?.addEventListener('click', handleClearKit);
 
-        // Listener global chat (inchangé pour liens)
+        // Listener global chat (inchangé)
         responseOutputChat?.addEventListener('click', (event) => {
              if (event.target.tagName === 'A' && (event.target.classList.contains('external-link') || event.target.classList.contains('external-link-inline'))) {
                  event.preventDefault();
                  window.open(event.target.href, '_blank', 'noopener,noreferrer');
              }
-             // --- MODIFIED (Goal 3): Délégation pour les boutons "Prendre" ajoutés directement ---
              else if (event.target.classList.contains('direct-take-button')) {
                  const targetButton = event.target;
                  const itemDataStr = targetButton.dataset.itemData;
-                 if (!itemDataStr) {
-                     console.error("Erreur: data-item-data manquant sur le bouton direct-take-button", targetButton);
-                     addMessageToChat('ai', "Erreur interne lors de la tentative de prise directe.");
-                     return;
-                 }
+                 if (!itemDataStr) { console.error("Erreur: data-item-data manquant sur le bouton direct-take-button", targetButton); addMessageToChat('ai', "Erreur interne lors de la tentative de prise directe."); return; }
                  if (!currentUser) { promptLoginBeforeAction("prendre ce composant"); return; }
                  try {
                      const itemData = JSON.parse(itemDataStr);
                      console.log(`Clic sur bouton direct "Prendre" pour ${itemData.ref}. Ouverture modale.`);
-                     targetButton.disabled = true; // Désactiver après clic
+                     targetButton.disabled = true;
                      updateSevenSegmentForComponent(itemData.ref);
                      showQuantityModal(itemData.ref, itemData.local_qty, itemData.specs || {});
-                 } catch (e) {
-                     console.error("Erreur parsing/traitement bouton direct-take-button:", e, itemDataStr);
-                     addMessageToChat('ai', "Erreur lors du traitement de la prise directe.");
-                 }
+                 } catch (e) { console.error("Erreur parsing/traitement bouton direct-take-button:", e, itemDataStr); addMessageToChat('ai', "Erreur lors du traitement de la prise directe."); }
              }
-             // --- FIN MODIFIED ---
         });
 
         // Démarrer Auth et état initial
@@ -884,4 +830,4 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 
 }); // Fin DOMContentLoaded
-// --- END OF FILE script.js (V10 - Chat Modal Trigger + Direct Answer Attempt) ---
+// --- END OF FILE script.js (avec export QR révisé) ---
