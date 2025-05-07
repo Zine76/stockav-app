@@ -1,13 +1,13 @@
-// --- START OF FILE script.js (avec export QR révisé) ---
+// --- START OF FILE script.js (avec corrections ciblées v4 - Attributs Debug + Import CSV Batching/Map) ---
 
 document.addEventListener('DOMContentLoaded', () => {
-    "use strict"; // Active le mode strict
+    "use strict";
 
     // --- Configuration et Variables Globales ---
-    // ... (Variables globales inchangées) ...
+    // ... (inchangé)
     let currentUser = null;
     let currentUserCode = null;
-    let ITEMS_PER_PAGE = 15;
+    let ITEMS_PER_PAGE = 15; // Default, sera écrasé par localStorage si dispo
     let isInitialAuthCheckComplete = false;
     let activeSession = null;
     let lastDisplayedDrawerRef = null;
@@ -18,26 +18,30 @@ document.addEventListener('DOMContentLoaded', () => {
     let userKitRealtimeSubscription = null;
 
     // --- Configuration Supabase ---
-    // ... (Configuration Supabase inchangée) ...
+    // ... (inchangé)
     const SUPABASE_URL = 'https://tjdergojgghzmopuuley.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqZGVyZ29qZ2doem1vcHV1bGV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4MTU0OTUsImV4cCI6MjA1OTM5MTQ5NX0.XejQYEPYoCrgYOwW4T9g2VcmohCdLLndDdwpSYXAwPA';
     const FAKE_EMAIL_DOMAIN = '@stockav.local';
     let supabase = null;
 
     // --- Initialisation des Clients et Vérifications ---
-    // ... (Code d'initialisation inchangé) ...
+    // ... (inchangé)
     try {
         if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !FAKE_EMAIL_DOMAIN) {
             throw new Error("Configuration Supabase manquante ! Vérifiez les constantes SUPABASE_URL, SUPABASE_ANON_KEY, FAKE_EMAIL_DOMAIN.");
         }
         if (window.supabase && typeof window.supabase.createClient === 'function') {
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            console.log("Client Supabase initialisé.");
+            // console.log("Client Supabase initialisé."); // Log commenté
         } else {
             throw new Error("Librairie Supabase (supabase-js v2) non chargée. Vérifiez l'inclusion dans index.html.");
         }
         if (typeof Papa === 'undefined') {
             console.warn("Librairie PapaParse non chargée. L'import/export CSV pourrait ne pas fonctionner.");
+        }
+        // Vérification FileSaver optionnelle car utilisée via CDN dans index.html
+        if (typeof saveAs === 'undefined') {
+            console.warn("Librairie FileSaver.js non chargée (saveAs). Le téléchargement direct pourrait ne pas fonctionner sur tous les navigateurs.");
         }
     } catch (error) {
         console.error("Erreur critique lors de l'initialisation:", error);
@@ -51,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Récupération des Éléments DOM ---
-    // ... (Récupération DOM inchangée, incluant exportQrButton) ...
+    // ... (inchangé)
     const loginArea = document.getElementById('login-area');
     const loginCodeInput = document.getElementById('login-code');
     const loginPasswordInput = document.getElementById('login-password');
@@ -130,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const quantityChangeInput = document.getElementById('quantity-change');
     const deleteComponentButton = document.getElementById('delete-component-button');
     const componentCategorySelectAdmin = document.getElementById('component-category-select');
-    const specificAttributesDiv = document.getElementById('category-specific-attributes');
+    const specificAttributesDiv = document.getElementById('category-specific-attributes'); // Cible correcte
     const componentDescInput = document.getElementById('component-desc');
     const componentMfgInput = document.getElementById('component-mfg');
     const componentDatasheetInput = document.getElementById('component-datasheet');
@@ -164,8 +168,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const itemsPerPageSelect = document.getElementById('items-per-page-select');
     const exportQrButton = document.getElementById('export-qr-button');
 
+
     // --- État et Historique du Chat ---
-    // ... (État chat inchangé) ...
+    // ... (inchangé)
     let chatHistory = [];
     let conversationState = { awaitingQuantityConfirmation: false, chosenRefForStockCheck: null, availableQuantity: 0, criticalThreshold: null };
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -183,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function updateInventoryRowStyles() { if (!inventoryTableBody || !inventoryView.classList.contains('active-view')) { return; } console.log("Mise à jour des styles des lignes d'inventaire..."); const rows = inventoryTableBody.querySelectorAll('tr.inventory-item-row'); let changedCount = 0; rows.forEach(row => { const itemDataStr = row.dataset.itemData; if (itemDataStr) { try { const itemData = JSON.parse(itemDataStr); const drawerKey = itemData.drawer; const isCollected = drawerKey && collectedDrawersSet.has(drawerKey); const hasClass = row.classList.contains('drawer-collected-in-bom'); if (isCollected && !hasClass) { row.classList.add('drawer-collected-in-bom'); const checkbox = row.querySelector('.kit-select-checkbox'); if (checkbox) checkbox.disabled = true; changedCount++; } else if (!isCollected && hasClass) { row.classList.remove('drawer-collected-in-bom'); const checkbox = row.querySelector('.kit-select-checkbox'); if (checkbox && itemData.quantity > 0) checkbox.disabled = false; changedCount++; } const isSelected = currentUser && currentKitSelection.some(kitItem => kitItem.ref === itemData.ref); const kitCheckbox = row.querySelector('.kit-select-checkbox'); if (kitCheckbox) { const wasChecked = kitCheckbox.checked; if (isSelected !== wasChecked) { kitCheckbox.checked = isSelected; changedCount++; } if (isSelected !== row.classList.contains('kit-selected')) { row.classList.toggle('kit-selected', isSelected); } kitCheckbox.disabled = isCollected || itemData.quantity <= 0; } } catch (e) { console.warn(`Erreur parsing itemData pour la ligne ${row.dataset.ref} lors de la mise à jour des styles`, e); } } }); console.log(`Styles mis à jour pour ${changedCount} lignes d'inventaire.`); }
 
     // --- Helpers Généraux (Stock Status, Indicator, HTML Escape) ---
-    // ... (Code inchangé) ...
+    // ... (inchangé)
     function getStockStatus(quantity, threshold) { if (quantity === undefined || quantity === null || isNaN(quantity)) return 'unknown'; quantity = Number(quantity); threshold = (threshold === undefined || threshold === null || isNaN(threshold) || threshold < 0) ? -1 : Number(threshold); if (quantity <= 0) return 'critical'; if (threshold !== -1 && quantity <= threshold) return 'warning'; return 'ok'; }
     function createStockIndicatorHTML(quantity, threshold) { const status = getStockStatus(quantity, threshold); const qtyText = (quantity === undefined || quantity === null) ? 'N/A' : quantity; const thresholdText = (threshold === undefined || threshold === null || threshold < 0) ? 'N/A' : threshold; return `<span class="stock-indicator-chat level-${status}" title="Stock: ${status.toUpperCase()} (Qté: ${qtyText}, Seuil: ${thresholdText ?? 'N/A'})"></span>`; }
     function escapeHtml(unsafe) { if (typeof unsafe !== 'string') return unsafe; return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
@@ -196,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleUserConnected(user, isInitialLoad) { const userChanged = !currentUser || user.id !== currentUser.id; const previousUserCode = currentUserCode; if (userChanged) { await removeUserKitRealtimeListener(); } currentUser = user; currentUserCode = currentUser.email.split('@')[0].toLowerCase(); console.log(`Utilisateur connecté: ${currentUserCode} (ID: ${currentUser.id})${isInitialLoad ? ' [Initial]' : ''}${userChanged ? ' [Changed]' : ''}`); document.body.classList.add('user-logged-in'); if(loginArea) loginArea.style.display = 'none'; if(userInfoArea) userInfoArea.style.display = 'flex'; if(userDisplay) userDisplay.textContent = currentUserCode.toUpperCase(); if(loginError) loginError.style.display = 'none'; protectedButtons.forEach(btn => { if (btn) { const isSettingsButton = btn.id === 'show-settings-view'; const canAccessSettings = currentUserCode === 'zine'; if (isSettingsButton) { btn.style.display = canAccessSettings ? 'inline-block' : 'none'; btn.disabled = !canAccessSettings; btn.title = canAccessSettings ? '' : 'Accès réservé à l\'administrateur'; } else { btn.style.display = 'inline-block'; btn.disabled = false; btn.title = ''; } } }); const canAccessSettings = currentUserCode === 'zine'; const activeView = document.querySelector('main.view-section.active-view'); if (!canAccessSettings && activeView === settingsView) { console.log("Redirection depuis Paramètres car utilisateur non autorisé."); await setActiveView(searchView, searchTabButton); return; } if (userChanged || isInitialLoad) { console.log("Chargement données/caches suite à connexion/changement user..."); await loadKitFromSupabase(); if (userChanged || categoriesCache.length === 0) { invalidateCategoriesCache(); if(categoriesCache.length === 0) { try { await getCategories(); } catch (e) { console.error("Erreur chargement catégories:", e); } } } if (userChanged && !isInitialLoad && searchView?.classList.contains('active-view')) { displayWelcomeMessage(); } const currentActiveView = activeView || document.querySelector('main.view-section.active-view'); if (currentActiveView) { await reloadActiveViewData(currentActiveView); } else { await setActiveView(searchView, searchTabButton); } } else { console.log("Utilisateur déjà connecté et état stable, pas de rechargement de données complet."); await refreshKitRelatedUI(); } await setupUserKitRealtimeListener(); }
     async function handleUserDisconnected(isInitialLoad) { const wasConnected = !!currentUser; console.log(`Utilisateur déconnecté.${isInitialLoad ? ' [Initial]' : ''}`); await removeUserKitRealtimeListener(); currentUser = null; currentUserCode = null; activeSession = null; document.body.classList.remove('user-logged-in'); if(userInfoArea) userInfoArea.style.display = 'none'; if(loginArea) loginArea.style.display = 'flex'; protectedButtons.forEach(btn => { if (btn) { btn.style.display = 'none'; btn.disabled = true; btn.title = 'Connexion requise'; }}); hideQuantityModal(); updateSevenSegmentForComponent(null); currentKitSelection = []; collectedDrawersSet = new Set(); if (wasConnected || isInitialLoad) { console.log("Nettoyage données protégées et état..."); invalidateCategoriesCache(); clearProtectedViewData(); if (searchView?.classList.contains('active-view') && chatHistory.length > 0) { displayWelcomeMessage(); } } const activeView = document.querySelector('main.view-section.active-view'); const isProtectedViewActive = activeView && ['log-view', 'admin-view', 'settings-view', 'audit-view', 'bom-view'].includes(activeView.id); if (isProtectedViewActive) { setActiveView(searchView, searchTabButton); } else if (!activeView && isInitialLoad) { setActiveView(searchView, searchTabButton); } else if (activeView?.id === 'inventory-view') { setActiveView(inventoryView, inventoryTabButton); } else if (!activeView && !isInitialLoad) { setActiveView(searchView, searchTabButton); } }
 
-    // --- Mise à jour UI/État pour Authentification (inchangé) ---
+    // --- Mise à jour UI/État pour Authentification (inchangée) ---
     // ... (reloadActiveViewData, showGenericError, clearProtectedViewData, setActiveView) ...
     async function reloadActiveViewData(viewElement) { if (!viewElement) return; const viewId = viewElement.id; const canAccessSettings = currentUser && currentUserCode === 'zine'; console.log(`Reloading data for active view: ${viewId}`); try { switch(viewId) { case 'inventory-view': if (categoriesCache.length === 0 && currentUser) await getCategories(); await populateInventoryFilters(); await displayInventory(currentInventoryPage); break; case 'log-view': if (currentUser) await displayLog(currentLogPage); break; case 'admin-view': if (currentUser) await loadAdminData(); break; case 'settings-view': if (canAccessSettings) loadSettingsData(); break; case 'audit-view': if (currentUser) { await populateAuditFilters(); await displayAudit(); } break; case 'bom-view': if (currentUser) displayCurrentKitDrawers(); else currentKitDrawersDiv.innerHTML = '<p><i>Connectez-vous pour voir le kit.</i></p>'; break; case 'search-view': /* if (chatHistory.length === 0) displayWelcomeMessage(); */ break; } } catch (error) { console.error(`Erreur rechargement ${viewId}:`, error); showGenericError(`Erreur chargement ${viewId}. Détails: ${error.message}`); } }
     function showGenericError(message) { if (genericFeedbackDiv) { genericFeedbackDiv.textContent = `Erreur: ${message}`; genericFeedbackDiv.className = 'feedback-area error'; genericFeedbackDiv.style.display = 'block'; } else { console.error("Erreur (genericFeedbackDiv manquant):", message); const activeFeedback = document.querySelector('.feedback-area:not(#login-error)'); if (activeFeedback) { activeFeedback.textContent = `Erreur: ${message}`; activeFeedback.className = 'feedback-area error'; activeFeedback.style.display = 'block'; } else { alert(`Erreur: ${message}`); } } }
@@ -215,21 +220,119 @@ document.addEventListener('DOMContentLoaded', () => {
     async function displayLog(page = 1) { currentLogPage = page; if (!logTableBody || !supabase || !currentUser) { if(logTableBody) logTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">${currentUser ? 'Erreur interne ou DOM.' : 'Connexion requise.'}</td></tr>`; console.warn("displayLog: Prérequis manquants (DOM, Supabase ou User)."); return; } logTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;"><i>Chargement...</i></td></tr>`; if(logNoResults) logNoResults.style.display = 'none'; if(logPrevPageButton) logPrevPageButton.disabled = true; if(logNextPageButton) logNextPageButton.disabled = true; if(logPageInfo) logPageInfo.textContent = 'Chargement...'; const itemsPerPage = ITEMS_PER_PAGE; const startIndex = (currentLogPage - 1) * itemsPerPage; const endIndex = startIndex + itemsPerPage - 1; try { console.log(`Fetching log data for page ${currentLogPage} (Range: ${startIndex}-${endIndex})`); let query = supabase.from('log').select('created_at, user_code, action, item_ref, quantity_change, final_quantity', { count: 'exact' }).order('created_at', { ascending: false }).range(startIndex, endIndex); const { data, error, count } = await query; console.log(`Log query returned. Error: ${error ? error.message : 'null'}, Count: ${count}`); logTableBody.innerHTML = ''; if (error) { throw new Error(`Erreur DB log: ${error.message}`); } const totalItems = count || 0; const totalPages = Math.ceil(totalItems / itemsPerPage); if (totalItems === 0) { if(logNoResults) { logNoResults.textContent = "L'historique est vide."; logTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">${logNoResults.textContent}</td></tr>`; logNoResults.style.display = 'none'; } if(logPageInfo) logPageInfo.textContent = 'Page 0 / 0'; if(logPrevPageButton) logPrevPageButton.disabled = true; if(logNextPageButton) logNextPageButton.disabled = true; console.log("Log is empty."); } else { if(logNoResults) logNoResults.style.display = 'none'; console.log(`Displaying ${data.length} log entries.`); data.forEach(entry => { const row = logTableBody.insertRow(); row.insertCell().textContent = formatLogTimestamp(entry.created_at); row.insertCell().textContent = entry.user_code ? entry.user_code.toUpperCase() : 'Système'; row.insertCell().textContent = entry.action || 'Inconnue'; row.insertCell().textContent = entry.item_ref || 'N/A'; const changeCell = row.insertCell(); const change = entry.quantity_change ?? 0; changeCell.textContent = change > 0 ? `+${change}` : (change < 0 ? `${change}` : '0'); changeCell.classList.add(change > 0 ? 'positive' : (change < 0 ? 'negative' : '')); changeCell.style.textAlign = 'center'; const finalQtyCell = row.insertCell(); finalQtyCell.textContent = entry.final_quantity ?? 'N/A'; finalQtyCell.style.textAlign = 'center'; }); currentLogPage = Math.max(1, Math.min(currentLogPage, totalPages || 1)); if(logPageInfo) logPageInfo.textContent = `Page ${currentLogPage} / ${totalPages || 1}`; if(logPrevPageButton) logPrevPageButton.disabled = currentLogPage === 1; if(logNextPageButton) logNextPageButton.disabled = currentLogPage >= totalPages; } } catch (err) { console.error("Erreur displayLog:", err); const errorMsg = `Erreur chargement historique: ${err.message}`; logTableBody.innerHTML = `<tr><td colspan="6" class="error-message" style="text-align:center; color: var(--error-color);">${errorMsg}</td></tr>`; if(logPageInfo) logPageInfo.textContent = 'Erreur'; if(logNoResults) { logNoResults.textContent = errorMsg; logNoResults.style.display = 'block'; } if(logPrevPageButton) logPrevPageButton.disabled = true; if(logNextPageButton) logNextPageButton.disabled = true; } }
     function formatLogTimestamp(dateString) { if (!dateString) return 'Date inconnue'; try { const date = new Date(dateString); if (isNaN(date.getTime())) return 'Date invalide'; const year = date.getFullYear(); const month = (date.getMonth() + 1).toString().padStart(2, '0'); const day = date.getDate().toString().padStart(2, '0'); const hours = date.getHours().toString().padStart(2, '0'); const minutes = date.getMinutes().toString().padStart(2, '0'); const seconds = date.getSeconds().toString().padStart(2, '0'); return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`; } catch (e) { console.warn("Erreur formatage date:", e); return dateString; } }
 
-    // --- VUE ADMIN (Modification pour gestion affichage et activation bouton QR) ---
-    // ... (fonctions inchangées sauf resetStockForm, addStockEventListeners) ...
-    async function getCategories() { if (!supabase) { console.error("getCategories: Supabase non initialisé."); return []; } console.log("Récupération catégories..."); try { const { data, error } = await supabase.from('categories').select('id, name, attributes').order('name', { ascending: true }); if (error) throw new Error(`Erreur DB catégories: ${error.message}`); categoriesCache = (data || []).map(cat => { if (cat.attributes && !Array.isArray(cat.attributes)) { console.warn(`Attributs catégorie ${cat.name} (ID: ${cat.id}) ne sont pas un Array:`, cat.attributes); if (typeof cat.attributes === 'string') { try { const parsed = JSON.parse(cat.attributes); if (Array.isArray(parsed)) { cat.attributes = parsed.map(String); } else { throw new Error("JSON parsed is not an array"); } } catch (e) { cat.attributes = cat.attributes.split(',').map(s => s.trim()).filter(Boolean); } } else { cat.attributes = []; } } else if (!cat.attributes) { cat.attributes = []; } cat.attributes = cat.attributes.map(attr => String(attr).trim()).filter(Boolean); cat.id = String(cat.id); return cat; }); console.log("Catégories récupérées et formatées:", categoriesCache.length); return categoriesCache; } catch (err) { console.error("Erreur récupération catégories:", err); categoriesCache = []; showAdminFeedback("Erreur chargement catégories.", 'error'); return []; } }
+    // --- VUE ADMIN ---
+    // ... (fonctions getCategories, invalidateCategoriesCache, loadAdminData, loadCategoriesAdmin, addCategoryEventListeners, resetCategoryForm, populateComponentCategorySelectAdmin, renderSpecificAttributes, addComponentCategorySelectListener, showAdminFeedback, resetStockForm INCHANGÉES) ...
+
+    // getCategories: Vérification que la logique de parsing des attributs est correcte (aucune modif fonctionnelle)
+    async function getCategories() {
+        if (!supabase) { console.error("getCategories: Supabase non initialisé."); return []; }
+        console.log("Récupération catégories...");
+        try {
+            const { data, error } = await supabase.from('categories').select('id, name, attributes').order('name', { ascending: true });
+            if (error) throw new Error(`Erreur DB catégories: ${error.message}`);
+
+            categoriesCache = (data || []).map(cat => {
+                let finalAttributes = []; // Initialiser comme tableau vide
+                if (cat.attributes) {
+                    if (Array.isArray(cat.attributes)) {
+                        finalAttributes = cat.attributes;
+                    } else if (typeof cat.attributes === 'string') {
+                        const trimmedAttrs = cat.attributes.trim();
+                        if (trimmedAttrs.startsWith('[') && trimmedAttrs.endsWith(']')) {
+                            try {
+                                const parsed = JSON.parse(trimmedAttrs);
+                                if (Array.isArray(parsed)) {
+                                    finalAttributes = parsed;
+                                } else {
+                                    console.warn(`Attributs catégorie ${cat.name} (ID: ${cat.id}): String JSON parsé mais n'est pas un tableau:`, cat.attributes);
+                                    finalAttributes = []; // Échec -> tableau vide
+                                }
+                            } catch (e) {
+                                console.warn(`Attributs catégorie ${cat.name} (ID: ${cat.id}): Échec parsing JSON (fallback vers split):`, cat.attributes, e.message);
+                                finalAttributes = trimmedAttrs.split(',').map(s => s.trim()).filter(Boolean);
+                            }
+                        } else {
+                            finalAttributes = trimmedAttrs.split(',').map(s => s.trim()).filter(Boolean);
+                        }
+                    } else {
+                        console.warn(`Attributs catégorie ${cat.name} (ID: ${cat.id}): Format inattendu:`, cat.attributes);
+                        finalAttributes = [];
+                    }
+                } else {
+                    finalAttributes = [];
+                }
+                cat.attributes = finalAttributes.map(attr => String(attr).trim()).filter(Boolean);
+                cat.id = String(cat.id); // Assurer ID comme string
+                return cat;
+            });
+
+            // console.log("Catégories récupérées et formatées:", categoriesCache.length); // Log commenté
+            return categoriesCache;
+        } catch (err) {
+            console.error("Erreur récupération catégories:", err);
+            categoriesCache = []; // Vider le cache en cas d'erreur majeure
+            showAdminFeedback("Erreur chargement catégories.", 'error');
+            return []; // Retourner tableau vide
+        }
+    }
     function invalidateCategoriesCache() { console.log("Cache catégories invalidé."); categoriesCache = []; [inventoryCategoryFilter, componentCategorySelectAdmin, auditCategoryFilter].forEach(select => { if (select) { const currentValue = select.value; select.innerHTML = '<option value="">Chargement...</option>'; if (select === inventoryCategoryFilter || select === auditCategoryFilter) { select.innerHTML = '<option value="all">Toutes</option>' + select.innerHTML; select.value = (currentValue === 'all') ? 'all' : ''; } } }); if(attributeFiltersContainer) attributeFiltersContainer.innerHTML = ''; if(specificAttributesDiv) specificAttributesDiv.style.display = 'none'; }
     async function loadAdminData() { if (!adminView.classList.contains('active-view') || !currentUser) return; console.log("Chargement données Admin..."); showAdminFeedback("Chargement...", 'info'); resetStockForm(); resetCategoryForm(); try { if (categoriesCache.length === 0) await getCategories(); await loadCategoriesAdmin(); await populateComponentCategorySelectAdmin(); showAdminFeedback("", 'info', true); } catch (err) { console.error("Erreur chargement admin:", err); showAdminFeedback(`Erreur chargement admin: ${err.message}`, 'error'); } }
     async function loadCategoriesAdmin() { if (!categoryList) return; categoryList.innerHTML = '<li><i>Chargement...</i></li>'; try { if (categoriesCache.length === 0 && currentUser) { await getCategories(); } categoryList.innerHTML = ''; if (categoriesCache.length === 0) { categoryList.innerHTML = '<li>Aucune catégorie définie.</li>'; return; } categoriesCache.forEach(cat => { const li = document.createElement('li'); li.dataset.categoryId = cat.id; const nameSpan = document.createElement('span'); nameSpan.textContent = cat.name; li.appendChild(nameSpan); const actionsSpan = document.createElement('span'); actionsSpan.classList.add('category-actions'); const editButton = document.createElement('button'); editButton.textContent = 'Modifier'; editButton.classList.add('edit-cat', 'action-button', 'secondary'); editButton.dataset.categoryId = cat.id; editButton.addEventListener('click', () => { if (!categoryFormTitle || !categoryIdEditInput || !categoryNameInput || !categoryAttributesInput || !cancelEditButton) return; categoryFormTitle.textContent = `Modifier la catégorie: ${cat.name}`; categoryIdEditInput.value = cat.id; categoryNameInput.value = cat.name; const attributesString = Array.isArray(cat.attributes) ? cat.attributes.join(', ') : ''; categoryAttributesInput.value = attributesString; cancelEditButton.style.display = 'inline-block'; categoryForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); categoryNameInput.focus(); }); actionsSpan.appendChild(editButton); const deleteButton = document.createElement('button'); deleteButton.textContent = 'Suppr.'; deleteButton.classList.add('delete-cat', 'action-button', 'danger'); deleteButton.dataset.categoryId = cat.id; deleteButton.addEventListener('click', async () => { if (!confirm(`Êtes-vous sûr de vouloir supprimer la catégorie "${cat.name}" ?\nCeci mettra la catégorie à 'NULL' pour tous les composants associés.`)) return; showAdminFeedback(`Suppression de "${cat.name}"...`, 'info'); deleteButton.disabled = true; editButton.disabled = true; try { console.log(`Mise à jour des composants associés à la catégorie ${cat.id} avant suppression...`); const { error: updateError } = await supabase.from('inventory').update({ category_id: null }).eq('category_id', cat.id); if (updateError && updateError.code !== 'PGRST116') { console.warn(`Erreur (non bloquante) lors de la mise à jour des composants associés: ${updateError.message}`); } else if (updateError?.code === 'PGRST116') { console.log(`Aucun composant trouvé pour la catégorie ${cat.id}, mise à jour non nécessaire.`); } else { console.log(`Composants associés à ${cat.id} mis à jour (category_id = NULL).`); } console.log(`Suppression de la catégorie ${cat.id} (${cat.name})...`); const { error: deleteError } = await supabase.from('categories').delete().eq('id', cat.id); if (deleteError) { if (deleteError.message.includes('foreign key constraint')) { throw new Error(`Impossible de supprimer : des composants sont toujours associés (échec de la mise à jour précédente?). Détails DB: ${deleteError.message}`); } throw new Error(`Erreur lors de la suppression dans la base de données: ${deleteError.message}`); } showAdminFeedback(`Catégorie "${cat.name}" supprimée avec succès.`, 'success'); invalidateCategoriesCache(); await loadAdminData(); if (inventoryView.classList.contains('active-view')) await populateInventoryFilters(); if (auditView.classList.contains('active-view')) await populateAuditFilters(); } catch (err) { console.error("Erreur lors de la suppression de la catégorie:", err); showAdminFeedback(`Erreur lors de la suppression de ${cat.name}: ${err.message}`, 'error'); deleteButton.disabled = false; editButton.disabled = false; } }); actionsSpan.appendChild(deleteButton); li.appendChild(actionsSpan); categoryList.appendChild(li); }); } catch (err) { console.error("Erreur chargement catégories admin:", err); categoryList.innerHTML = `<li style="color: var(--error-color);">Erreur lors du chargement des catégories.</li>`; showAdminFeedback(`Erreur chargement catégories: ${err.message}`, 'error'); } }
     function addCategoryEventListeners() { categoryForm?.addEventListener('submit', async (event) => { event.preventDefault(); if (!categoryNameInput || !categoryAttributesInput || !categoryIdEditInput || !currentUser) { showAdminFeedback("Erreur interne ou connexion requise.", 'error'); return; } const name = categoryNameInput.value.trim(); const attributesRaw = categoryAttributesInput.value.trim(); const attributesSet = new Set(attributesRaw ? attributesRaw.split(',').map(attr => attr.trim()).filter(Boolean) : []); const attributes = [...attributesSet]; const id = categoryIdEditInput.value; const isEditing = !!id; if (!name) { showAdminFeedback("Le nom de la catégorie est requis.", 'error'); categoryNameInput.focus(); return; } showAdminFeedback(`Enregistrement de "${name}"...`, 'info'); const saveButton = categoryForm.querySelector('button[type="submit"]'); if(saveButton) saveButton.disabled = true; if(cancelEditButton) cancelEditButton.disabled = true; try { let result; const categoryData = { name, attributes }; if (isEditing) { result = await supabase.from('categories').update(categoryData).eq('id', id).select().single(); } else { result = await supabase.from('categories').insert(categoryData).select().single(); } const { data: savedData, error } = result; if (error) { if (error.code === '23505') { throw new Error(`Le nom de catégorie "${name}" existe déjà.`); } else { throw new Error(`Erreur base de données: ${error.message} (Code: ${error.code})`); } } showAdminFeedback(`Catégorie "${savedData.name}" ${isEditing ? 'mise à jour' : 'ajoutée'} avec succès.`, 'success'); invalidateCategoriesCache(); resetCategoryForm(); await loadAdminData(); if(inventoryView.classList.contains('active-view')) await populateInventoryFilters(); if(auditView.classList.contains('active-view')) await populateAuditFilters(); } catch (err) { console.error("Erreur lors de l'enregistrement de la catégorie:", err); showAdminFeedback(`Erreur: ${err.message}`, 'error'); } finally { if(saveButton) saveButton.disabled = false; if(cancelEditButton) { cancelEditButton.disabled = !isEditing; if (!isEditing) cancelEditButton.style.display = 'none'; } } }); cancelEditButton?.addEventListener('click', resetCategoryForm); }
     function resetCategoryForm(){ if (!categoryForm) return; categoryForm.reset(); if(categoryIdEditInput) categoryIdEditInput.value = ''; if(categoryFormTitle) categoryFormTitle.textContent = 'Ajouter une Catégorie'; if(cancelEditButton) cancelEditButton.style.display = 'none'; if (adminFeedbackDiv && !adminFeedbackDiv.classList.contains('error')) { showAdminFeedback('', 'info', true); } }
     async function populateComponentCategorySelectAdmin() { if (!componentCategorySelectAdmin) return; const currentVal = componentCategorySelectAdmin.value; componentCategorySelectAdmin.innerHTML = '<option value="">-- Sélectionner une catégorie --</option>'; try { if (categoriesCache.length === 0 && currentUser) await getCategories(); categoriesCache.forEach(cat => { const option = document.createElement('option'); option.value = cat.id; option.textContent = escapeHtml(cat.name); componentCategorySelectAdmin.appendChild(option); }); if (categoriesCache.some(c => String(c.id) === String(currentVal))) { componentCategorySelectAdmin.value = currentVal; } else { componentCategorySelectAdmin.value = ""; if (specificAttributesDiv) specificAttributesDiv.style.display = 'none'; } } catch (err) { console.error("Erreur lors du remplissage du select catégorie admin:", err); componentCategorySelectAdmin.innerHTML = '<option value="" disabled>Erreur chargement</option>'; } }
-    function renderSpecificAttributes(attributesArray, categoryName, existingValues = {}) { if (!specificAttributesDiv || !Array.isArray(attributesArray)) { if (specificAttributesDiv) { specificAttributesDiv.innerHTML = ''; specificAttributesDiv.style.display = 'none'; } console.log("Pas d'attributs à afficher pour", categoryName); return; } console.log(`Rendu des attributs spécifiques pour ${categoryName}:`, attributesArray, "Valeurs existantes:", existingValues); specificAttributesDiv.innerHTML = `<h4>Attributs Spécifiques (${escapeHtml(categoryName)})</h4>`; if (attributesArray.length === 0) { specificAttributesDiv.innerHTML += '<p><i>Aucun attribut spécifique défini pour cette catégorie.</i></p>'; } else { attributesArray.forEach(attrName => { if (!attrName || typeof attrName !== 'string' || attrName.trim() === '') return; const cleanAttrName = attrName.trim(); const formGroup = document.createElement('div'); formGroup.classList.add('form-group'); const label = document.createElement('label'); const inputId = `attr-${cleanAttrName.replace(/[^a-zA-Z0-9-_]/g, '-')}`; label.htmlFor = inputId; label.textContent = `${cleanAttrName}:`; const input = document.createElement('input'); input.type = 'text'; input.id = inputId; input.name = `attribute_${cleanAttrName}`; input.dataset.attributeName = cleanAttrName; input.placeholder = `Valeur pour ${cleanAttrName}`; if (existingValues && existingValues.hasOwnProperty(cleanAttrName)) { const value = existingValues[cleanAttrName]; input.value = (value !== null && value !== undefined) ? String(value) : ''; } formGroup.appendChild(label); formGroup.appendChild(input); specificAttributesDiv.appendChild(formGroup); }); } specificAttributesDiv.style.display = 'block'; }
+    function renderSpecificAttributes(attributesArray, categoryName, existingValues = {}) {
+        if (!specificAttributesDiv || !Array.isArray(attributesArray)) {
+            if (specificAttributesDiv) {
+                specificAttributesDiv.innerHTML = '';
+                specificAttributesDiv.style.display = 'none';
+            }
+            console.log("Pas d'attributs à afficher pour", categoryName);
+            return;
+        }
+        // console.log(`Rendu des attributs spécifiques pour ${categoryName}:`, attributesArray, "Valeurs existantes:", existingValues); // Log commenté (utile pour débogage)
+        specificAttributesDiv.innerHTML = `<h4>Attributs Spécifiques (${escapeHtml(categoryName)})</h4>`;
+        if (attributesArray.length === 0) {
+            specificAttributesDiv.innerHTML += '<p><i>Aucun attribut spécifique défini pour cette catégorie.</i></p>';
+        } else {
+            attributesArray.forEach(attrName => {
+                if (!attrName || typeof attrName !== 'string' || attrName.trim() === '') return;
+                const cleanAttrName = attrName.trim();
+                const formGroup = document.createElement('div');
+                formGroup.classList.add('form-group');
+                const label = document.createElement('label');
+                const inputId = `attr-${cleanAttrName.replace(/[^a-zA-Z0-9-_]/g, '-')}`;
+                label.htmlFor = inputId;
+                label.textContent = `${cleanAttrName}:`;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.id = inputId;
+                input.name = `attribute_${cleanAttrName}`;
+                input.dataset.attributeName = cleanAttrName;
+                input.placeholder = `Valeur pour ${cleanAttrName}`;
+
+                // Cette partie peuple la valeur si elle existe dans existingValues
+                if (existingValues && existingValues.hasOwnProperty(cleanAttrName)) {
+                    const value = existingValues[cleanAttrName];
+                    input.value = (value !== null && value !== undefined) ? String(value) : '';
+                    // console.log(`   -> Attribut '${cleanAttrName}': Trouvé dans existingValues, valeur mise à '${input.value}'`); // Log commenté
+                } else {
+                    // console.log(`   -> Attribut '${cleanAttrName}': Non trouvé dans existingValues.`); // Log commenté
+                }
+
+                formGroup.appendChild(label);
+                formGroup.appendChild(input);
+                specificAttributesDiv.appendChild(formGroup);
+            });
+        }
+        specificAttributesDiv.style.display = 'block';
+    }
     function addComponentCategorySelectListener() { componentCategorySelectAdmin?.addEventListener('change', () => { const categoryId = componentCategorySelectAdmin.value; const existingAttributes = {}; if (!categoryId) { if (specificAttributesDiv) specificAttributesDiv.style.display = 'none'; return; } const category = categoriesCache.find(cat => String(cat.id) === String(categoryId)); if (category && Array.isArray(category.attributes)) { renderSpecificAttributes(category.attributes, category.name, existingAttributes); } else { if (specificAttributesDiv) specificAttributesDiv.style.display = 'none'; if (category && !Array.isArray(category.attributes)) { console.warn("Format des attributs invalide pour la catégorie:", categoryId, category.attributes); } else if (!category) { console.warn("Catégorie sélectionnée non trouvée dans le cache:", categoryId); } } }); }
     function showAdminFeedback(message, type = 'info', instantHide = false){ if(!adminFeedbackDiv) { console.log(`Admin Feedback (${type}): ${message}`); return; } adminFeedbackDiv.textContent = message; adminFeedbackDiv.className = `feedback-area ${type}`; adminFeedbackDiv.style.display = message ? 'block' : 'none'; if (type !== 'error') { const delay = instantHide ? 0 : (type === 'info' ? 2500 : 4000); setTimeout(() => { if (adminFeedbackDiv.textContent === message) { adminFeedbackDiv.style.display = 'none'; } }, delay); } }
-    function resetStockForm() { if (!stockForm) return; stockForm.reset(); if(componentRefAdminInput) { componentRefAdminInput.disabled = false; componentRefAdminInput.value = ''; } if(checkStockButton) checkStockButton.disabled = false; if(componentActionsWrapper) componentActionsWrapper.style.display = 'none'; if(componentDetails) componentDetails.style.display = 'block'; const refDisplay = document.getElementById('component-ref-display'); if (refDisplay) refDisplay.textContent = 'N/A'; if(currentQuantitySpan) currentQuantitySpan.textContent = 'N/A'; if(quantityChangeInput) quantityChangeInput.value = '0'; if(updateQuantityButton) updateQuantityButton.disabled = true; if(deleteComponentButton) { deleteComponentButton.style.display = 'none'; deleteComponentButton.disabled = true; } if(specificAttributesDiv) { specificAttributesDiv.innerHTML = ''; specificAttributesDiv.style.display = 'none'; } if(saveComponentButton) { saveComponentButton.disabled = false; saveComponentButton.textContent = 'Enregistrer Nouveau Composant'; } if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; } // <<< CACHER ET DÉSACTIVER BOUTON QR
+    function resetStockForm() { if (!stockForm) return; stockForm.reset(); if(componentRefAdminInput) { componentRefAdminInput.disabled = false; componentRefAdminInput.value = ''; } if(checkStockButton) checkStockButton.disabled = false; if(componentActionsWrapper) componentActionsWrapper.style.display = 'none'; if(componentDetails) componentDetails.style.display = 'block'; const refDisplay = document.getElementById('component-ref-display'); if (refDisplay) refDisplay.textContent = 'N/A'; if(currentQuantitySpan) currentQuantitySpan.textContent = 'N/A'; if(quantityChangeInput) quantityChangeInput.value = '0'; if(updateQuantityButton) updateQuantityButton.disabled = true; if(deleteComponentButton) { deleteComponentButton.style.display = 'none'; deleteComponentButton.disabled = true; } if(specificAttributesDiv) { specificAttributesDiv.innerHTML = ''; specificAttributesDiv.style.display = 'none'; } if(saveComponentButton) { saveComponentButton.disabled = false; saveComponentButton.textContent = 'Enregistrer Nouveau Composant'; } if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; }
         if (adminFeedbackDiv && !adminFeedbackDiv.classList.contains('error')) { showAdminFeedback('', 'info', true); } componentRefAdminInput?.focus(); }
 
+    // addStockEventListeners: Ajout de logs (commentés) pour vérifier item.attributes
     function addStockEventListeners() {
         checkStockButton?.addEventListener('click', async () => {
             const ref = componentRefAdminInput?.value.trim().toUpperCase();
@@ -238,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
             componentRefAdminInput.disabled = true; checkStockButton.disabled = true;
             componentActionsWrapper.style.display = 'none'; componentDetails.style.display = 'block';
             saveComponentButton.disabled = true;
-            if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; } // <<< Cacher/Désactiver pendant vérif
+            if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; }
             try {
                 const item = await getStockInfoFromSupabase(ref);
                 if (item) {
@@ -253,12 +356,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     componentDescInput.value = item.description || ""; componentMfgInput.value = item.manufacturer || "";
                     componentDatasheetInput.value = item.datasheet || ""; componentDrawerAdminInput.value = item.drawer || "";
                     componentInitialQuantityInput.value = item.quantity; componentThresholdInput.value = item.critical_threshold ?? "";
+
+                    // --- Vérification des attributs récupérés (Logs commentés pour débogage) ---
+                    // console.log("----- Vérification Attributs Chargement -----");
+                    // console.log("Item complet reçu de Supabase:", JSON.stringify(item, null, 2));
+                    // console.log("Type de item.attributes:", typeof item.attributes);
+                    // console.log("Valeur de item.attributes:", item.attributes);
+                    // -----------------------------------------------
+
                     const category = categoriesCache.find(c => String(c.id) === String(item.category_id));
-                    if (category && Array.isArray(category.attributes)) { renderSpecificAttributes(category.attributes, category.name, item.attributes || {}); }
-                    else { if(specificAttributesDiv) specificAttributesDiv.style.display = 'none'; }
+                    if (category && Array.isArray(category.attributes)) {
+                        // console.log(`Appel de renderSpecificAttributes pour Catégorie: ${category.name}, Attributs définis: ${category.attributes.join(', ')}`);
+                        // console.log("Valeurs existantes passées:", item.attributes || {});
+                        renderSpecificAttributes(category.attributes, category.name, item.attributes || {}); // Le item.attributes || {} est la partie clé
+                    } else {
+                        if(specificAttributesDiv) specificAttributesDiv.style.display = 'none';
+                        // console.log("Pas de catégorie valide ou pas d'attributs définis pour cette catégorie trouvée.");
+                    }
                     saveComponentButton.textContent = `Enregistrer Modifications (${ref})`;
                     saveComponentButton.disabled = false;
-                    // <<< Afficher ET Activer/Désactiver le bouton QR selon si un tiroir est défini >>>
                     if (exportQrButton) {
                         const hasDrawer = componentDrawerAdminInput.value.trim() !== '';
                         exportQrButton.style.display = 'inline-block';
@@ -274,19 +390,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (specificAttributesDiv) specificAttributesDiv.style.display = 'none';
                     saveComponentButton.textContent = `Enregistrer Nouveau Composant`;
                     saveComponentButton.disabled = false;
-                    if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; } // <<< Cacher/Désactiver en mode ajout
+                    if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; }
                 }
             } catch (err) {
                 console.error("Erreur lors de la vérification du stock:", err);
                 showAdminFeedback(`Erreur lors de la vérification de "${ref}": ${err.message}`, 'error');
-                resetStockForm(); // S'assure que QR est caché en cas d'erreur
+                resetStockForm();
             } finally {
                 if (componentRefAdminInput && !componentRefAdminInput.disabled) componentRefAdminInput.disabled = false;
                 if (checkStockButton && !checkStockButton.disabled) checkStockButton.disabled = false;
             }
         });
-
-        updateQuantityButton?.addEventListener('click', async () => { /* ... (code inchangé ici, car ne modifie pas le tiroir) ... */
+        updateQuantityButton?.addEventListener('click', async () => { /* ... (inchangé) ... */
             const refElement = document.getElementById('component-ref-display');
             const ref = refElement?.textContent; const changeStr = quantityChangeInput?.value;
             const change = parseInt(changeStr || '0', 10);
@@ -308,7 +423,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentQuantitySpan.textContent = newQuantity;
                 quantityChangeInput.value = 0;
                 if (componentInitialQuantityInput) componentInitialQuantityInput.value = newQuantity;
-                // Le bouton QR doit rester visible et son état (activé/désactivé) ne change pas ici
                 if (inventoryView.classList.contains('active-view')) await displayInventory(currentInventoryPage);
                 if (auditView.classList.contains('active-view')) await displayAudit();
                 if (logView.classList.contains('active-view')) await displayLog(1);
@@ -326,8 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (componentActionsWrapper.style.display !== 'none') { deleteComponentButton.disabled = false; }
             }
         });
-
-        stockForm?.addEventListener('submit', async (event) => { /* ... (code inchangé sauf gestion bouton QR à la fin) ... */
+        stockForm?.addEventListener('submit', async (event) => { /* ... (inchangé) ... */
             event.preventDefault();
             if (!currentUser) { showAdminFeedback("Connexion requise.", 'error'); return; }
             const ref = componentRefAdminInput?.value.trim().toUpperCase();
@@ -355,7 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else { console.log(`Préparation modification composant "${ref}":`, componentData); showAdminFeedback(`Enregistrement des modifications pour "${ref}"...`, 'info'); }
             saveComponentButton.disabled = true; checkStockButton.disabled = true; componentRefAdminInput.disabled = true;
             if(updateQuantityButton) updateQuantityButton.disabled = true; if(deleteComponentButton) deleteComponentButton.disabled = true;
-            if (exportQrButton) exportQrButton.disabled = true; // <<< Désactiver pendant l'enregistrement
+            if (exportQrButton) exportQrButton.disabled = true;
 
             try {
                 const { data: upsertedData, error: upsertError } = await supabase.from('inventory').upsert(componentData, { onConflict: 'ref' }).select().single();
@@ -388,7 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         finalQuantity = currentDbQuantity;
                     }
-                } else { // C'est un ajout
+                } else {
                     if (finalQuantity > 0) {
                         console.log(`Log manuel de l'ajout initial de ${finalQuantity} pour ${ref} via RPC...`);
                         const { error: logError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: 0, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Admin Initial Add', p_force_log: true, p_initial_quantity: finalQuantity });
@@ -399,7 +512,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const operationType = isEditing ? 'Modifié' : 'Ajouté';
                 showAdminFeedback(`Composant "${ref}" ${operationType} avec succès.`, 'success');
 
-                // Mise à jour UI après succès
                 componentRefAdminInput.disabled = false;
                 checkStockButton.disabled = false;
                 saveComponentButton.disabled = false;
@@ -418,15 +530,13 @@ document.addEventListener('DOMContentLoaded', () => {
                  }
                  saveComponentButton.textContent = `Enregistrer Modifications (${ref})`;
 
-                // <<< Gérer le bouton QR après enregistrement >>>
                 if (exportQrButton) {
-                    const hasDrawer = componentDrawerAdminInput.value.trim() !== ''; // Vérifier la valeur *actuelle* du champ
-                    exportQrButton.style.display = 'inline-block'; // Afficher
-                    exportQrButton.disabled = !hasDrawer;         // Activer/Désactiver
+                    const hasDrawer = componentDrawerAdminInput.value.trim() !== '';
+                    exportQrButton.style.display = 'inline-block';
+                    exportQrButton.disabled = !hasDrawer;
                     exportQrButton.title = hasDrawer ? `Exporter l'étiquette QR pour le tiroir ${componentDrawerAdminInput.value}` : "Exporter l'étiquette QR (un tiroir doit être défini)";
                 }
 
-                // Recharger les vues si nécessaire
                 if (inventoryView.classList.contains('active-view')) await displayInventory(1);
                 if (auditView.classList.contains('active-view')) await displayAudit();
                 if (logView.classList.contains('active-view')) await displayLog(1);
@@ -444,21 +554,19 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error("Erreur lors de l'enregistrement du composant:", err);
                 showAdminFeedback(`Erreur enregistrement "${ref}": ${err.message}`, 'error');
-                // Réactiver les boutons en cas d'erreur
                 saveComponentButton.disabled = false;
                 checkStockButton.disabled = false;
                 componentRefAdminInput.disabled = false;
-                 if (isEditing || componentActionsWrapper?.style.display === 'block') { // Si on était en mode édition ou si le bloc actions était visible
+                 if (isEditing || componentActionsWrapper?.style.display === 'block') {
                      if(updateQuantityButton) updateQuantityButton.disabled = false;
                      if(deleteComponentButton) deleteComponentButton.disabled = false;
-                     if (exportQrButton) exportQrButton.disabled = !(componentDrawerAdminInput.value.trim() === ''); // Réactiver si tiroir présent
+                     if (exportQrButton) exportQrButton.disabled = !(componentDrawerAdminInput.value.trim() !== '');
                  } else {
-                     if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; } // Cacher si erreur à la création
+                     if (exportQrButton) { exportQrButton.style.display = 'none'; exportQrButton.disabled = true; }
                  }
             }
         });
-
-        deleteComponentButton?.addEventListener('click', async () => { /* ... (code inchangé) ... */
+        deleteComponentButton?.addEventListener('click', async () => { /* ... (inchangé) ... */
             const refElement = document.getElementById('component-ref-display');
             const ref = refElement?.textContent;
             if (!ref || ref === 'N/A') { showAdminFeedback("Référence composant inconnue pour la suppression.", 'error'); return; }
@@ -467,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showAdminFeedback(`Suppression de "${ref}" et de son historique en cours...`, 'info');
             deleteComponentButton.disabled = true; updateQuantityButton.disabled = true; saveComponentButton.disabled = true;
             checkStockButton.disabled = true; componentRefAdminInput.disabled = true;
-            if (exportQrButton) exportQrButton.style.display = 'none'; // <<< Cacher lors suppression
+            if (exportQrButton) exportQrButton.style.display = 'none';
 
             let kitWasModified = false;
             const indexInKit = currentKitSelection.findIndex(k => k.ref === ref);
@@ -486,7 +594,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 else { showAdminFeedback(`Composant "${ref}" et son historique supprimés avec succès.`, 'success'); }
 
                 if (kitWasModified) { await saveKitToSupabase(); }
-                resetStockForm(); // <<< Appelle resetStockForm qui cachera le bouton QR
+                resetStockForm();
                 if(lastDisplayedDrawerRef === ref) updateSevenSegmentForComponent(null);
                 if (inventoryView.classList.contains('active-view')) await displayInventory(1);
                 if (auditView.classList.contains('active-view')) await displayAudit();
@@ -495,39 +603,26 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error("Erreur lors de la suppression du composant:", err);
                 showAdminFeedback(`Erreur lors de la suppression de "${ref}": ${err.message}`, 'error');
-                // Réactiver les boutons sauf delete si erreur
                 checkStockButton.disabled = false; componentRefAdminInput.disabled = false;
-                // Ne pas réactiver QR button ici, car l'état est incertain. Le reset cache déjà.
             }
         });
-
-        // --- Ajout d'un listener pour activer/désactiver le bouton QR quand le champ Tiroir change ---
-        componentDrawerAdminInput?.addEventListener('input', () => {
-            if (exportQrButton && exportQrButton.style.display === 'inline-block') { // Ne change que s'il est déjà visible (mode édition)
+        componentDrawerAdminInput?.addEventListener('input', () => { /* ... (inchangé) ... */
+            if (exportQrButton && exportQrButton.style.display === 'inline-block') {
                 const hasDrawer = componentDrawerAdminInput.value.trim() !== '';
                 exportQrButton.disabled = !hasDrawer;
                 exportQrButton.title = hasDrawer ? `Exporter l'étiquette QR pour le tiroir ${componentDrawerAdminInput.value}` : "Exporter l'étiquette QR (un tiroir doit être défini)";
             }
         });
-
         exportCriticalButton?.addEventListener('click', handleExportCriticalStockTXT);
-        exportQrButton?.addEventListener('click', handleExportQrCode); // Garder l'écouteur existant
-    } // Fin addStockEventListeners
+        exportQrButton?.addEventListener('click', handleExportQrCode);
+    }
 
-
-    // --- MODIFIED: handleExportQrCode (nouvelle version - Affichage Tiroir Uniquement) ---
-    async function handleExportQrCode() {
+    async function handleExportQrCode() { /* ... (inchangé) ... */
         console.log("Export QR Code demandé (version Tiroir Uniquement).");
-        if (!exportQrButton || exportQrButton.disabled) return; // Ne rien faire si désactivé
-
-        // 1. Récupérer les données DEPUIS LES CHAMPS du formulaire Admin
-        const ref = componentRefAdminInput?.value.trim().toUpperCase(); // Récupéré mais ne sera pas affiché
+        if (!exportQrButton || exportQrButton.disabled) return;
+        const ref = componentRefAdminInput?.value.trim().toUpperCase();
         const drawer = componentDrawerAdminInput?.value.trim().toUpperCase();
-        // const quantity = componentInitialQuantityInput?.value || '0'; // Plus nécessaire pour l'affichage
-        // const description = componentDescInput?.value.trim() || 'Pas de description'; // Plus nécessaire pour l'affichage
-
-        // 2. Validation
-        if (!ref) { // Garder la validation sur la réf pour savoir de *quel* composant on parle
+        if (!ref) {
             showAdminFeedback("Impossible de générer le QR Code : Référence manquante.", 'error');
             return;
         }
@@ -535,21 +630,13 @@ document.addEventListener('DOMContentLoaded', () => {
             showAdminFeedback("Impossible de générer le QR Code : Tiroir manquant.", 'error');
             return;
         }
-
-        // 3. Données pour le QR code : UNIQUEMENT le tiroir
         const qrData = drawer;
         console.log("Données QR (brutes):", qrData);
-
-        // 4. URL-encoder ces données
         const encodedQrData = encodeURIComponent(qrData);
         console.log("Données QR (URL encodées):", encodedQrData);
-
-        // 5. Construire l'URL de l'image QR
-        const qrImageSize = 80; // Taille de l'image QR en pixels
+        const qrImageSize = 80;
         const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrImageSize}x${qrImageSize}&data=${encodedQrData}&margin=2`;
         console.log("URL image QR:", qrImageUrl);
-
-        // 6. Générer le contenu HTML avec le nouveau layout et CSS (Tiroir seul, centré, plus grand)
         const qrPageHtml = `
 <!DOCTYPE html>
 <html lang="fr">
@@ -558,149 +645,270 @@ document.addEventListener('DOMContentLoaded', () => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Étiquette Tiroir ${escapeHtml(drawer)} (pour ${escapeHtml(ref)})</title>
     <style>
-        @page {
-            size: 45mm 20mm; /* Taille de la page d'impression */
-            margin: 1mm; /* Très petite marge */
-        }
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            width: 43mm; /* Largeur légèrement inférieure */
-            height: 18mm; /* Hauteur légèrement inférieure */
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .label-item {
-            width: 100%;
-            height: 100%;
-            border: 1px solid #ccc; /* Prévisualisation */
-            display: flex;
-            align-items: center;
-            justify-content: flex-start; /* Aligner QR à gauche */
-            padding: 1mm;
-            box-sizing: border-box;
-            overflow: hidden;
-            background-color: #fff;
-        }
-        .qr-code {
-            flex-shrink: 0;
-            width: 16mm;
-            height: 16mm;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-right: 2mm; /* Espace entre QR et texte */
-        }
-        .qr-code img {
-            display: block;
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-        }
-        .text-info {
-            flex-grow: 1; /* Prend le reste de la place */
-            height: 100%;
-            display: flex; /* Utiliser flex pour centrer */
-            align-items: center; /* Centrer verticalement */
-            justify-content: center; /* Centrer horizontalement */
-            overflow: hidden;
-            text-align: center; /* Assurer centrage texte */
-        }
-        .text-info .drawer-id {
-            font-weight: bold;
-            font-size: 16pt; /* Tiroir plus grand */
-            color: black;
-            white-space: nowrap; /* Empêche le retour à la ligne */
-            line-height: 1; /* Ajuster si nécessaire */
-        }
-        /* Les styles pour .ref et .details sont supprimés car les éléments n'existent plus */
-        .buttons {
-            position: fixed;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10;
-            background: rgba(240, 240, 240, 0.8);
-            padding: 5px;
-            border-radius: 5px;
-            display: flex;
-            gap: 10px;
-        }
+        @page { size: 45mm 20mm; margin: 1mm; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; width: 43mm; height: 18mm; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        .label-item { width: 100%; height: 100%; border: 1px solid #ccc; display: flex; align-items: center; justify-content: flex-start; padding: 1mm; box-sizing: border-box; overflow: hidden; background-color: #fff; }
+        .qr-code { flex-shrink: 0; width: 16mm; height: 16mm; display: flex; justify-content: center; align-items: center; margin-right: 2mm; }
+        .qr-code img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+        .text-info { flex-grow: 1; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; text-align: center; }
+        .text-info .drawer-id { font-weight: bold; font-size: 16pt; color: black; white-space: nowrap; line-height: 1; }
+        .buttons { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 10; background: rgba(240, 240, 240, 0.8); padding: 5px; border-radius: 5px; display: flex; gap: 10px; }
         .buttons button { padding: 5px 10px; font-size: 10pt;}
-
-        @media print {
-            body {
-                width: 45mm;
-                height: 20mm;
-                display: block;
-            }
-            .label-item {
-                border: none;
-                padding: 0;
-                 width: 45mm;
-                 height: 20mm;
-            }
-            .qr-code { width: 18mm; height: 18mm; margin-right: 1mm;}
-            .buttons { display: none; }
-        }
+        @media print { body { width: 45mm; height: 20mm; display: block; } .label-item { border: none; padding: 0; width: 45mm; height: 20mm; } .qr-code { width: 18mm; height: 18mm; margin-right: 1mm;} .buttons { display: none; } }
     </style>
 </head>
 <body>
-    <!-- Contenu principal de l'étiquette (Tiroir seul) -->
     <div class="label-item">
-        <div class="qr-code">
-            <img src="${qrImageUrl}" alt="QR Code pour tiroir ${escapeHtml(drawer)}" width="${qrImageSize}" height="${qrImageSize}">
-        </div>
-        <div class="text-info">
-            <div class="drawer-id">${escapeHtml(drawer)}</div>
-            <!-- Reference, Quantité, Description supprimées de l'affichage -->
-        </div>
+        <div class="qr-code"><img src="${qrImageUrl}" alt="QR Code pour tiroir ${escapeHtml(drawer)}" width="${qrImageSize}" height="${qrImageSize}"></div>
+        <div class="text-info"><div class="drawer-id">${escapeHtml(drawer)}</div></div>
     </div>
-
-    <!-- Boutons pour interaction (masqués à l'impression) -->
-    <div class="buttons">
-        <button onclick="window.print();">Imprimer</button>
-        <button onclick="window.close();">Fermer</button>
-    </div>
+    <div class="buttons"><button onclick="window.print();">Imprimer</button><button onclick="window.close();">Fermer</button></div>
 </body>
 </html>`;
-
-        // 7. Ouvrir cette page HTML dans une nouvelle fenêtre/onglet
         try {
             const qrWindow = window.open("", `Label_Tiroir_${drawer}`, "width=250,height=200,scrollbars=yes,resizable=yes");
             if (qrWindow) {
-                qrWindow.document.open();
-                qrWindow.document.write(qrPageHtml);
-                qrWindow.document.close();
-                qrWindow.focus();
+                qrWindow.document.open(); qrWindow.document.write(qrPageHtml); qrWindow.document.close(); qrWindow.focus();
                 showAdminFeedback(`Fenêtre avec l'étiquette pour tiroir ${drawer} ouverte.`, 'success');
-            } else {
-                throw new Error("Impossible d'ouvrir la nouvelle fenêtre. Vérifiez si votre navigateur bloque les pop-ups.");
-            }
-        } catch (e) {
-            console.error("Erreur lors de l'ouverture de la fenêtre QR:", e);
-            showAdminFeedback(`Erreur génération QR : ${e.message}`, 'error');
-        }
-    } // --- FIN handleExportQrCode (Tiroir Uniquement) ---
-
-    // ... (handleExportCriticalStockTXT inchangée) ...
-    async function handleExportCriticalStockTXT() { if (!exportCriticalFeedbackDiv) return; exportCriticalFeedbackDiv.textContent = 'Export du stock critique en cours...'; exportCriticalFeedbackDiv.className = 'feedback-area info'; exportCriticalFeedbackDiv.style.display = 'block'; try { const { data, error } = await supabase.from('inventory').select('ref, description, quantity, critical_threshold, drawer').order('ref'); if (error) throw new Error(`Erreur fetch inventaire: ${error.message}`); if (!data || data.length === 0) { exportCriticalFeedbackDiv.textContent = 'L\'inventaire est vide.'; exportCriticalFeedbackDiv.className = 'feedback-area warning'; return; } const criticalItems = data.filter(item => { const qty = item.quantity; const threshold = item.critical_threshold; if (qty <= 0) return true; if (threshold !== null && threshold >= 0 && qty <= threshold) return true; return false; }); if (criticalItems.length === 0) { exportCriticalFeedbackDiv.textContent = 'Aucun composant en état critique trouvé.'; exportCriticalFeedbackDiv.className = 'feedback-area info'; return; } let fileContent = `Rapport StockAV - Composants Critiques (${new Date().toLocaleString('fr-FR')})\n`; fileContent += `======================================================================\n\n`; criticalItems.forEach(item => { const status = item.quantity <= 0 ? "!! RUPTURE DE STOCK !!" : "** STOCK FAIBLE **"; fileContent += `Référence:    ${item.ref}\n`; fileContent += `Description:  ${item.description || '-'}\n`; fileContent += `Tiroir:       ${item.drawer || 'N/A'}\n`; fileContent += `Quantité:     ${item.quantity}\n`; fileContent += `Seuil critique: ${item.critical_threshold ?? 'Non défini'}\n`; fileContent += `STATUT:       ${status}\n`; fileContent += `----------------------------------------------------------------------\n`; }); const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-'); const filename = `stockav_critique_${timestamp}.txt`; downloadFile(filename, fileContent, 'text/plain;charset=utf-8'); exportCriticalFeedbackDiv.textContent = `Export TXT (${criticalItems.length} composants critiques) réussi.`; exportCriticalFeedbackDiv.className = 'feedback-area success'; } catch (err) { console.error("Erreur lors de l'export du stock critique:", err); exportCriticalFeedbackDiv.textContent = `Erreur lors de l'export: ${err.message}`; exportCriticalFeedbackDiv.className = 'feedback-area error'; } }
+            } else { throw new Error("Impossible d'ouvrir la nouvelle fenêtre. Vérifiez si votre navigateur bloque les pop-ups."); }
+        } catch (e) { console.error("Erreur lors de l'ouverture de la fenêtre QR:", e); showAdminFeedback(`Erreur génération QR : ${e.message}`, 'error'); }
+    }
+    async function handleExportCriticalStockTXT() { /* ... (inchangé) ... */ if (!exportCriticalFeedbackDiv) return; exportCriticalFeedbackDiv.textContent = 'Export du stock critique en cours...'; exportCriticalFeedbackDiv.className = 'feedback-area info'; exportCriticalFeedbackDiv.style.display = 'block'; try { const { data, error } = await supabase.from('inventory').select('ref, description, quantity, critical_threshold, drawer').order('ref'); if (error) throw new Error(`Erreur fetch inventaire: ${error.message}`); if (!data || data.length === 0) { exportCriticalFeedbackDiv.textContent = 'L\'inventaire est vide.'; exportCriticalFeedbackDiv.className = 'feedback-area warning'; return; } const criticalItems = data.filter(item => { const qty = item.quantity; const threshold = item.critical_threshold; if (qty <= 0) return true; if (threshold !== null && threshold >= 0 && qty <= threshold) return true; return false; }); if (criticalItems.length === 0) { exportCriticalFeedbackDiv.textContent = 'Aucun composant en état critique trouvé.'; exportCriticalFeedbackDiv.className = 'feedback-area info'; return; } let fileContent = `Rapport StockAV - Composants Critiques (${new Date().toLocaleString('fr-FR')})\n`; fileContent += `======================================================================\n\n`; criticalItems.forEach(item => { const status = item.quantity <= 0 ? "!! RUPTURE DE STOCK !!" : "** STOCK FAIBLE **"; fileContent += `Référence:    ${item.ref}\n`; fileContent += `Description:  ${item.description || '-'}\n`; fileContent += `Tiroir:       ${item.drawer || 'N/A'}\n`; fileContent += `Quantité:     ${item.quantity}\n`; fileContent += `Seuil critique: ${item.critical_threshold ?? 'Non défini'}\n`; fileContent += `STATUT:       ${status}\n`; fileContent += `----------------------------------------------------------------------\n`; }); const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-'); const filename = `stockav_critique_${timestamp}.txt`; downloadFile(filename, fileContent, 'text/plain;charset=utf-8'); exportCriticalFeedbackDiv.textContent = `Export TXT (${criticalItems.length} composants critiques) réussi.`; exportCriticalFeedbackDiv.className = 'feedback-area success'; } catch (err) { console.error("Erreur lors de l'export du stock critique:", err); exportCriticalFeedbackDiv.textContent = `Erreur lors de l'export: ${err.message}`; exportCriticalFeedbackDiv.className = 'feedback-area error'; } }
 
     // --- VUE RECHERCHE (CHAT IA) (inchangée) ---
-    // ... (addMessageToChat, attachModalTriggerListeners, displayWelcomeMessage, buildLocalStockContext, handleUserInput, displayStructuredResults, promptLoginBeforeAction, handleQuantityResponse, resetConversationState, getStockInfoFromSupabase) ...
+    // ... (fonctions addMessageToChat, attachModalTriggerListeners, displayWelcomeMessage, buildLocalStockContext, displayStructuredResults, promptLoginBeforeAction, handleQuantityResponse, resetConversationState, getStockInfoFromSupabase, handleUserInput) ...
     async function addMessageToChat(sender, messageContent, isHTML = false) { if (!responseOutputChat) return; const messageDiv = document.createElement('div'); messageDiv.classList.add('message', sender.toLowerCase()); if (isHTML) { try { const range = document.createRange(); const fragment = range.createContextualFragment(messageContent); messageDiv.appendChild(fragment); attachModalTriggerListeners(messageDiv); } catch (e) { console.error("Error parsing chat HTML:", e); messageDiv.textContent = messageContent; } } else { messageDiv.textContent = messageContent; } responseOutputChat.insertBefore(messageDiv, responseOutputChat.firstChild); const role = sender === 'user' ? 'user' : 'assistant'; const textContentForHistory = messageDiv.textContent || messageContent; chatHistory.push({ role: role, content: textContentForHistory.trim() }); if(chatHistory.length > 20) { chatHistory = chatHistory.slice(-20); } const maxMessagesInDOM = 50; while (responseOutputChat.children.length > maxMessagesInDOM) { responseOutputChat.removeChild(responseOutputChat.lastChild); } responseOutputChat.scrollTop = 0; }
     function attachModalTriggerListeners(containerElement) { containerElement.querySelectorAll('button.choice-button.take-button').forEach(button => { if (button.dataset.listenerAttached) return; button.dataset.listenerAttached = "true"; button.addEventListener('click', async (event) => { const targetButton = event.target; const itemDataStr = targetButton.dataset.itemData; if (!itemDataStr) { console.error("Erreur: Attribut data-item-data manquant sur le bouton 'Prendre'.", targetButton); await addMessageToChat('ai', "Oups, problème interne pour sélectionner ce composant."); return; } if (!currentUser) { await promptLoginBeforeAction("prendre un composant"); return; } try { const itemData = JSON.parse(itemDataStr); const chosenRef = itemData.ref; const availableQty = itemData.local_qty; const attributes = itemData.specs || {}; if (!chosenRef || typeof availableQty !== 'number' || availableQty <= 0) { console.warn(`Données invalides ou stock nul pour ${chosenRef} dans data-item-data`, itemData); await addMessageToChat('ai', `Le stock pour ${escapeHtml(chosenRef)} semble être épuisé.`); return; } console.log(`Clic sur "Prendre" pour ${chosenRef}, Qté dispo: ${availableQty}. Ouverture de la modale.`); const parentMessage = targetButton.closest('.message.ai'); if (parentMessage) { parentMessage.querySelectorAll('button.choice-button.take-button').forEach(btn => btn.disabled = true); } updateSevenSegmentForComponent(chosenRef); showQuantityModal(chosenRef, availableQty, attributes); } catch (e) { console.error("Erreur lors du parsing de data-item-data ou de l'ouverture de la modale:", e, itemDataStr); await addMessageToChat('ai', "Une erreur s'est produite lors de la sélection du composant."); } }); }); }
-    function displayWelcomeMessage() { if (!responseOutputChat) return; responseOutputChat.innerHTML = ''; chatHistory = []; resetConversationState(); addMessageToChat('ai', "Bonjour ! Je suis StockAV. Demandez-moi:\n• Si un composant est en stock (ex: 'LM393 dispo ?', 'stock pour 1N4007')\n• Des équivalents (ex: 'équivalent BC547')\n• Une recherche par specs (ex: 'condo 100nF 50V céramique', 'MOSFET 60V 20A TO-220')"); if(componentInputChat) { componentInputChat.value = ''; componentInputChat.focus(); } updateSevenSegmentForComponent(null); }
+    function displayWelcomeMessage() { if (!responseOutputChat) return; responseOutputChat.innerHTML = ''; chatHistory = []; resetConversationState(); addMessageToChat('ai', "Bonjour ! Je suis StockAV. Demandez-moi:\n• Si un composant est en stock (ex: 'LM393 dispo ?', 'stock pour 1N4007')\n• Des équivalents (ex: 'équivalent BC547')\n• Une recherche par specs (ex: 'condo 100nF 50V céramique', 'MOSFET 60V 20A TO-220')\n• Ou posez une question générale sur l'électronique !"); if(componentInputChat) { componentInputChat.value = ''; componentInputChat.focus(); } updateSevenSegmentForComponent(null); }
     async function buildLocalStockContext(limit = 20) { if (!supabase || !currentUser) return null; try { const { data, error } = await supabase .from('inventory') .select('ref, quantity, drawer') .order('updated_at', { ascending: false }) .limit(limit); if (error) { console.warn("Erreur récupération contexte stock local:", error.message); return null; } if (!data || data.length === 0) return {}; const context = data.reduce((acc, item) => { if (item.ref) { acc[item.ref.toUpperCase()] = { qty: item.quantity ?? 0, drawer: item.drawer || null }; } return acc; }, {}); console.log(`[buildLocalStockContext] Contexte généré pour ${Object.keys(context).length} composants.`); return context; } catch (err) { console.error("Erreur JS dans buildLocalStockContext:", err); return null; } }
-    async function handleUserInput() { if (!componentInputChat || !searchButtonChat || !loadingIndicatorChat || !responseOutputChat || !supabase) { console.error("handleUserInput: Un ou plusieurs éléments DOM ou Supabase sont manquants."); return; } const userMessageContent = componentInputChat.value.trim(); if (!userMessageContent) return; addMessageToChat('user', userMessageContent); componentInputChat.value = ''; componentInputChat.disabled = true; searchButtonChat.disabled = true; loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = 'Analyse en cours...'; responseOutputChat.scrollTop = 0; try { const simpleStockQueryRegex = /^(?:stock|dispo(?:nible)?|combien|cherch(?:e|er)|trouve(?:r)?|est-ce que)\s+(?:pour\s+|de\s+)?([\w\-\+]+)\s*(?:en stock|dans le stock)?\??$/i; const match = userMessageContent.match(simpleStockQueryRegex); if (match && match[1]) { const refToCheck = match[1].toUpperCase(); console.log(`[handleUserInput] Détection question simple de stock pour: ${refToCheck}`); loadingIndicatorChat.querySelector('i').textContent = `Vérification stock local pour ${escapeHtml(refToCheck)}...`; await delay(100); const itemInfo = await getStockInfoFromSupabase(refToCheck); if (itemInfo) { const qty = itemInfo.quantity; const drawer = itemInfo.drawer || 'N/A'; const status = getStockStatus(qty, itemInfo.critical_threshold); const indicatorHTML = createStockIndicatorHTML(qty, itemInfo.critical_threshold); let responseText = `${indicatorHTML} Oui, <strong>${escapeHtml(refToCheck)}</strong> est en stock.`; responseText += `\nQuantité: ${qty}`; responseText += `\nTiroir: ${escapeHtml(drawer)}`; if (qty > 0 && currentUser) { const modalItemData = { ref: itemInfo.ref, local_qty: itemInfo.quantity, specs: itemInfo.attributes || {}, }; const itemDataStr = JSON.stringify(modalItemData); responseText += `\n<button class="choice-button take-button direct-take-button" data-item-data='${escapeHtml(itemDataStr)}' title="Prendre ${escapeHtml(refToCheck)}">Prendre</button>`; await addMessageToChat('ai', responseText, true); } else if (qty <= 0) { responseText += "\n(Stock épuisé)"; await addMessageToChat('ai', responseText, false); } else { responseText += "\n<i>(Connectez-vous pour pouvoir prendre)</i>"; await addMessageToChat('ai', responseText, true); } updateSevenSegmentForComponent(refToCheck); } else { await addMessageToChat('ai', `Non, <strong>${escapeHtml(refToCheck)}</strong> n'a pas été trouvé dans le stock local.`); updateSevenSegmentForComponent(null); } return; } if (conversationState.awaitingQuantityConfirmation) { console.log("handleUserInput: Attente de confirmation de quantité détectée (devrait être rare maintenant). Appel de handleQuantityResponse."); await handleQuantityResponse(userMessageContent); return; } resetConversationState(); const isTrivial = /^(ok|merci|oui|non|d'accord|bye|au revoir|a plus)$/i.test(userMessageContent); if (!isTrivial) { console.log("Intention détectée : Recherche Composant/Équivalent (avancée)."); loadingIndicatorChat.querySelector('i').textContent = `Recherche via IA...`; const localStock = await buildLocalStockContext(); const HISTORY_LENGTH_ADVANCED = 4; const recentHistory = chatHistory.slice(-HISTORY_LENGTH_ADVANCED); console.log("Sending query to ai-advanced-search:", userMessageContent, "with context:", localStock ? "Yes" : "No"); const { data: searchData, error: searchError } = await supabase.functions.invoke('ai-advanced-search', { body: { query: userMessageContent, history: recentHistory, localStockContext: localStock } }); if (searchError) { let detail = searchError.message || "Erreur inconnue"; if (searchError instanceof Error && searchError.message) { if (searchError.message.includes("Failed to send")) { detail = "Impossible d'envoyer la requête."; } else if (searchError.message.includes("500") || searchError.message.includes("non-2xx") || searchError.message.includes("non-OK") || searchError.message.includes("Bad Gateway")) { detail = "Le service IA a retourné une erreur serveur (5xx)."; } else if (searchError.message.includes("timeout")) { detail = "Le service IA a mis trop de temps à répondre."; } else if (searchError.message.includes("429")) { detail = "Limite d'appels IA atteinte. Réessayez plus tard."; } } console.error("Erreur brute appel fonction:", searchError); throw new Error(`Erreur appel recherche avancée: ${detail}`); } if (searchData.error) { console.warn("Erreur retournée par la fonction Edge 'ai-advanced-search':", searchData.error); await addMessageToChat('ai', escapeHtml(searchData.error)); } else if (searchData.results && Array.isArray(searchData.results)) { if (searchData.results.length > 0 && searchData.results[0].type !== 'error') { if (userMessageContent.toLowerCase().includes('équivalent')) { await addMessageToChat('ai', `Voici des équivalents possibles pour votre demande :`, false); } else if (simpleStockQueryRegex.test(userMessageContent)) { await addMessageToChat('ai', `Voici ce que j'ai trouvé concernant "${escapeHtml(userMessageContent)}" :`, false); } else { await addMessageToChat('ai', `Voici les résultats pour votre recherche :`, false); } await delay(50); } await displayStructuredResults(searchData.results); } else { console.warn("Réponse valide mais sans résultats ni erreur explicite:", searchData); await addMessageToChat('ai', "Désolé, je n'ai pas pu obtenir de résultats pour cette demande.", false); } } else { await addMessageToChat('ai', "D'accord.", false); } } catch (error) { console.error("Erreur majeure handleUserInput:", error); await addMessageToChat('ai', `Oups ! Erreur technique: ${error.message}.`); resetConversationState(); } finally { componentInputChat.disabled = false; searchButtonChat.disabled = false; loadingIndicatorChat.style.display = 'none'; componentInputChat.focus(); } }
     async function displayStructuredResults(results) { if (!results || results.length === 0) { await addMessageToChat('ai', "Je n'ai trouvé aucune information pertinente.", false); return; } let responseHTML = `<div class="ai-results-container">`; let foundActionableItem = false; results.forEach((item, index) => { if (item.type === 'error') { console.warn("Affichage de l'erreur standard retournée par l'IA:", item.ref); responseHTML += `<div class="equivalent-item error-message"><strong>Info:</strong> ${escapeHtml(item.ref || "Erreur inconnue.")}</div>`; return; } const isLocal = item.is_local === true; const localQty = item.local_qty; const localDrawer = item.local_drawer; const ref = item.ref || "N/A"; const type = item.type || "Type inconnu"; const reason = item.reason || null; const specs = item.specs || {}; const availability = item.availability || {}; const indicatorHTML = createStockIndicatorHTML(isLocal ? localQty : undefined, isLocal ? item.critical_threshold : undefined); if (index === 0 && ref !== "N/A") { updateSevenSegmentForComponent(ref); } else if (index === 0) { updateSevenSegmentForComponent(null); } responseHTML += `<div class="equivalent-item">`; responseHTML += `<div class="item-header"> ${indicatorHTML} <strong>${escapeHtml(ref)}</strong> ${type !== "Type inconnu" ? `<span class="component-type">${escapeHtml(type)}</span>` : ''} </div>`; if (isLocal) { responseHTML += `<div class="local-info">📍 Stock local: <strong>${localQty}</strong>${localDrawer ? ` (Tiroir: ${escapeHtml(localDrawer)})` : ''}</div>`; } else if (reason) { responseHTML += `<div class="equivalent-reason">${escapeHtml(reason)}</div>`; } else { responseHTML += `<div class="stock-status-info">Non trouvé localement.</div>`; } let specsTableHTML = ''; const specKeys = Object.keys(specs); const hasValidSpecs = specKeys.some(key => specs[key] !== null && specs[key] !== undefined && String(specs[key]).trim() !== ''); if (hasValidSpecs) { specsTableHTML += `<div class="specs-container"> <table class="specs-table"><tbody>`; const specMapping = { 'value': 'Valeur', 'voltage': 'Tension', 'current': 'Courant', 'power': 'Puissance', 'tolerance': 'Tolérance', 'package': 'Boîtier', 'gain': 'Gain (hFE)', 'rds_on': 'Rds(on)', 'vgs_th': 'Vgs(th)', 'capacity': 'Capacité', 'frequency': 'Fréquence', 'noise': 'Bruit', 'speed': 'Vitesse', 'temperature': 'Température', 'dielectric': 'Diélectrique' }; for (const key of specKeys) { const value = specs[key]; if (value !== null && value !== undefined && String(value).trim() !== '') { const displayName = specMapping[key] || key.charAt(0).toUpperCase() + key.slice(1); specsTableHTML += `<tr> <td class="spec-key">${escapeHtml(displayName)}:</td> <td class="spec-value">${escapeHtml(value)}</td> </tr>`; } } specsTableHTML += `</tbody></table></div>`; responseHTML += specsTableHTML; } let linksHTML = ''; if (availability.digikey) linksHTML += `<a href="${escapeHtml(availability.digikey)}" target="_blank" rel="noopener noreferrer" class="external-link digikey" title="Chercher ${escapeHtml(ref)} sur Digi-Key.ca">Digi-Key</a>`; if (availability.mouser) linksHTML += `<a href="${escapeHtml(availability.mouser)}" target="_blank" rel="noopener noreferrer" class="external-link mouser" title="Chercher ${escapeHtml(ref)} sur Mouser.ca">Mouser</a>`; if (availability.aliexpress) linksHTML += `<a href="${escapeHtml(availability.aliexpress)}" target="_blank" rel="noopener noreferrer" class="external-link aliexpress" title="Chercher ${escapeHtml(ref)} sur AliExpress">AliExpress</a>`; if (linksHTML) { responseHTML += `<div class="external-links-block">${linksHTML}</div>`; } if (isLocal && localQty > 0 && currentUser) { const itemDataForModal = { ref: ref, local_qty: localQty, specs: specs }; const itemDataStr = JSON.stringify(itemDataForModal); responseHTML += `<div class="action-container">`; responseHTML += `<button class="choice-button take-button" data-item-data='${escapeHtml(itemDataStr)}' title="Prendre ${escapeHtml(ref)}">Prendre</button>`; responseHTML += `</div>`; foundActionableItem = true; } else if (isLocal && localQty <= 0) { responseHTML += `<div class="stock-status-info"><i>(Stock épuisé)</i></div>`; } else if (isLocal && !currentUser) { responseHTML += `<div class="stock-status-info"><i>(Connectez-vous pour prendre)</i></div>`; } responseHTML += `</div>`; }); responseHTML += `</div>`; if (!foundActionableItem && results.some(item => item.is_local && item.local_qty > 0) && !currentUser) { responseHTML += "<br/><i>Connectez-vous pour pouvoir prendre les composants disponibles localement.</i>"; } await addMessageToChat('ai', responseHTML, true); }
     async function promptLoginBeforeAction(actionDesc) { await addMessageToChat('ai', `Vous devez être connecté pour ${actionDesc}.`); loginCodeInput?.focus(); }
-    async function handleQuantityResponse(userInput) { const ref = conversationState.chosenRefForStockCheck; const maxQty = conversationState.availableQuantity; const threshold = conversationState.criticalThreshold; if (!conversationState.awaitingQuantityConfirmation || !ref || !currentUser) { console.warn("handleQuantityResponse appelé hors contexte (peut-être normal si la modale est utilisée maintenant)."); resetConversationState(); return; } console.log(`[handleQuantityResponse] Réponse reçue pour ${ref}: "${userInput}"`); const lowerInput = userInput.toLowerCase(); if (lowerInput === 'non' || lowerInput === 'annuler' || lowerInput === '0' || lowerInput === 'cancel' || lowerInput === 'no') { await addMessageToChat('ai', "Ok, opération annulée."); resetConversationState(); updateSevenSegmentForComponent(null); await delay(300); await addMessageToChat('ai', "Autre chose ?"); return; } const match = userInput.match(/\d+/); const quantityToTake = match ? parseInt(match[0], 10) : NaN; if (isNaN(quantityToTake) || quantityToTake <= 0) { await addMessageToChat('ai', "Quantité non comprise. Veuillez entrer un nombre positif, ou 'non' pour annuler."); return; } if (quantityToTake > maxQty) { await addMessageToChat('ai', `Stock insuffisant. Il ne reste que ${maxQty} ${escapeHtml(ref)}. Combien voulez-vous en prendre (max ${maxQty}) ? Ou entrez 'non' pour annuler.`); return; } await addMessageToChat('ai', `Ok, enregistrement de la sortie de ${quantityToTake} x ${escapeHtml(ref)}...`); loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Mise à jour stock ${escapeHtml(ref)}...`; const change = -quantityToTake; try { console.log(`Calling RPC update_stock_and_log from Chat (handleQuantityResponse) for ${ref}, change: ${change}`); const { data: newQuantity, error: rpcError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: change, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Chat Take Qty' }); if (rpcError) { if (rpcError.message.includes('new_quantity_below_zero')) throw new Error("Stock devenu insuffisant (vérification RPC)."); if (rpcError.message.includes('component_not_found')) throw new Error("Composant non trouvé lors de la mise à jour."); throw new Error(`Erreur RPC: ${rpcError.message}`); } const statusIndicatorHTML = createStockIndicatorHTML(newQuantity, threshold); await addMessageToChat('ai', `${statusIndicatorHTML} Sortie enregistrée ! Stock restant pour <strong>${escapeHtml(ref)}</strong> : ${newQuantity}.`); if (inventoryView.classList.contains('active-view')) await displayInventory(currentInventoryPage); if (auditView.classList.contains('active-view')) await displayAudit(); if (logView.classList.contains('active-view')) await displayLog(1); await updateSevenSegmentForComponent(ref); const kitIndex = currentKitSelection.findIndex(k => k.ref === ref); if (kitIndex > -1) { currentKitSelection[kitIndex].quantity = newQuantity; await saveKitToSupabase(); if (kitView.classList.contains('active-view')) displayCurrentKitDrawers(); } } catch (err) { console.error("Erreur lors de la mise à jour du stock via handleQuantityResponse:", err); await addMessageToChat('ai', `Désolé, une erreur est survenue : ${err.message}. L'opération a échoué.`); } finally { loadingIndicatorChat.style.display = 'none'; resetConversationState(); await delay(300); await addMessageToChat('ai', "Besoin d'autre chose ?"); } }
+    async function handleQuantityResponse(userInput) { const ref = conversationState.chosenRefForStockCheck; const maxQty = conversationState.availableQuantity; const threshold = conversationState.criticalThreshold; if (!conversationState.awaitingQuantityConfirmation || !ref || !currentUser) { console.warn("handleQuantityResponse appelé hors contexte (peut-être normal si la modale est utilisée maintenant)."); resetConversationState(); return; } console.log(`[handleQuantityResponse] Réponse reçue pour ${ref}: "${userInput}"`); const lowerInput = userInput.toLowerCase(); if (lowerInput === 'non' || lowerInput === 'annuler' || lowerInput === '0' || lowerInput === 'cancel' || lowerInput === 'no') { await addMessageToChat('ai', "Ok, opération annulée."); resetConversationState(); updateSevenSegmentForComponent(null); await delay(300); await addMessageToChat('ai', "Autre chose ?"); return; } const match = userInput.match(/\d+/); const quantityToTake = match ? parseInt(match[0], 10) : NaN; if (isNaN(quantityToTake) || quantityToTake <= 0) { await addMessageToChat('ai', "Quantité non comprise. Veuillez entrer un nombre positif, ou 'non' pour annuler."); return; } if (quantityToTake > maxQty) { await addMessageToChat('ai', `Stock insuffisant. Il ne reste que ${maxQty} ${escapeHtml(ref)}. Combien voulez-vous en prendre (max ${maxQty}) ? Ou entrez 'non' pour annuler.`); return; } await addMessageToChat('ai', `Ok, enregistrement de la sortie de ${quantityToTake} x ${escapeHtml(ref)}...`); loadingIndicatorChat.style.display = 'block'; loadingIndicatorChat.querySelector('i').textContent = `Mise à jour stock ${escapeHtml(ref)}...`; const change = -quantityToTake; try { console.log(`Calling RPC update_stock_and_log from Chat (handleQuantityResponse) for ${ref}, change: ${change}`); const { data: newQuantity, error: rpcError } = await supabase.rpc('update_stock_and_log', { p_ref: ref, p_quantity_change: change, p_user_id: currentUser.id, p_user_code: currentUserCode, p_action_type: 'Chat Take Qty' }); if (rpcError) { if (rpcError.message.includes('new_quantity_below_zero')) throw new Error("Stock devenu insuffisant (vérification RPC)."); if (rpcError.message.includes('component_not_found')) throw new Error("Composant non trouvé lors de la mise à jour."); throw new Error(`Erreur RPC: ${rpcError.message}`); } const statusIndicatorHTML = createStockIndicatorHTML(newQuantity, threshold); await addMessageToChat('ai', `${statusIndicatorHTML} Sortie enregistrée ! Stock restant pour <strong>${escapeHtml(ref)}</strong> : ${newQuantity}.`); if (inventoryView.classList.contains('active-view')) await displayInventory(currentInventoryPage); if (auditView.classList.contains('active-view')) await displayAudit(); if (logView.classList.contains('active-view')) await displayLog(1); await updateSevenSegmentForComponent(ref); const kitIndex = currentKitSelection.findIndex(k => k.ref === ref); if (kitIndex > -1) { currentKitSelection[kitIndex].quantity = newQuantity; await saveKitToSupabase(); if (kitView.classList.contains('active-view')) displayCurrentKitDrawers(); } } catch (err) { console.error("Erreur lors de la mise à jour du stock via handleQuantityResponse:", err); await addMessageToChat('ai', `Désolé, une erreur s'est produite : ${err.message}. L'opération a échoué.`); } finally { loadingIndicatorChat.style.display = 'none'; resetConversationState(); await delay(300); await addMessageToChat('ai', "Besoin d'autre chose ?"); } }
     function resetConversationState() { conversationState = { awaitingQuantityConfirmation: false, chosenRefForStockCheck: null, availableQuantity: 0, criticalThreshold: null }; console.log("Conversation state reset."); }
     async function getStockInfoFromSupabase(ref) { if (!supabase) { console.error("getStockInfoFromSupabase: Supabase non initialisé."); return null; } if (!ref) { console.warn("getStockInfoFromSupabase: Référence manquante."); return null; } const upperRef = ref.toUpperCase(); try { console.log(`getStockInfoFromSupabase: Fetching details for ${upperRef}...`); const { data, error } = await supabase .from('inventory') .select(`*, categories ( name )`) .eq('ref', upperRef) .maybeSingle(); if (error && error.code !== 'PGRST116') { throw new Error(`Erreur base de données getStockInfo: ${error.message}`); } if (data) { data.category_name = data.categories?.name || null; if (data.category_id) data.category_id = String(data.category_id); delete data.categories; console.log(`getStockInfoFromSupabase: Data found for ${upperRef}:`, data); } return data; } catch (err) { console.error(`Erreur JS dans getStockInfoFromSupabase pour ${upperRef}:`, err); return null; } }
+    async function handleUserInput() {
+        if (!componentInputChat || !searchButtonChat || !loadingIndicatorChat || !responseOutputChat || !supabase) {
+            console.error("handleUserInput: Un ou plusieurs éléments DOM ou Supabase sont manquants.");
+            if(responseOutputChat) addMessageToChat('ai', "Erreur: Impossible d'initialiser le composant de chat.", false);
+            return;
+        }
+
+        const userMessageContent = componentInputChat.value.trim();
+        if (!userMessageContent) return;
+
+        addMessageToChat('user', userMessageContent);
+        componentInputChat.value = '';
+        componentInputChat.disabled = true;
+        searchButtonChat.disabled = true;
+        loadingIndicatorChat.style.display = 'block';
+        loadingIndicatorChat.querySelector('i').textContent = 'Analyse en cours...';
+        responseOutputChat.scrollTop = 0;
+
+        try {
+            // --- 1. Vérification rapide stock local ---
+             const simpleStockQueryRegex = /^(?:stock|inventaire|dispo(?:nible)?|combien\s*(?:de)?|quantit[ée]\s*(?:de)?|cherch(?:e|er)|trouv(?:e|er))\s+(?:pour\s+|de\s+)?([\w\-\+]{3,})\s*(?:en\s*stock|dans\s*le\s*stock)?\??$/i;
+            const simpleMatch = userMessageContent.match(simpleStockQueryRegex);
+
+            if (simpleMatch && simpleMatch[1]) {
+                const refToCheck = simpleMatch[1].toUpperCase();
+                console.log(`[handleUserInput Routing V2] Simple Stock Check: ${refToCheck}`);
+                loadingIndicatorChat.querySelector('i').textContent = `Vérification stock local pour ${escapeHtml(refToCheck)}...`;
+                await delay(100);
+                const itemInfo = await getStockInfoFromSupabase(refToCheck);
+
+                if (itemInfo) {
+                    // ... (logique affichage stock local inchangée) ...
+                    const qty = itemInfo.quantity;
+                    const drawer = itemInfo.drawer || 'N/A';
+                    const indicatorHTML = createStockIndicatorHTML(qty, itemInfo.critical_threshold);
+                    let responseText = `${indicatorHTML} Oui, <strong>${escapeHtml(refToCheck)}</strong> est dans le stock.`;
+                    responseText += `\nQuantité: ${qty}`;
+                    responseText += `\nTiroir: ${escapeHtml(drawer)}`;
+                    if (qty > 0 && currentUser) {
+                        const modalItemData = { ref: itemInfo.ref, local_qty: itemInfo.quantity, specs: itemInfo.attributes || {} };
+                        const itemDataStr = JSON.stringify(modalItemData);
+                        responseText += `\n<button class="choice-button take-button direct-take-button" data-item-data='${escapeHtml(itemDataStr)}' title="Prendre ${escapeHtml(refToCheck)}">Prendre</button>`;
+                        await addMessageToChat('ai', responseText, true);
+                    } else if (qty <= 0) {
+                        responseText += "\n(Stock épuisé)";
+                        await addMessageToChat('ai', responseText, false);
+                    } else {
+                        responseText += "\n<i>(Connectez-vous pour pouvoir prendre)</i>";
+                        await addMessageToChat('ai', responseText, true);
+                    }
+                    updateSevenSegmentForComponent(refToCheck);
+                } else {
+                    await addMessageToChat('ai', `Non, <strong>${escapeHtml(refToCheck)}</strong> n'a pas été trouvé dans le stock local.`);
+                    updateSevenSegmentForComponent(null);
+                }
+                // --- Nettoyage final DANS le bloc if (important) ---
+                componentInputChat.disabled = false;
+                searchButtonChat.disabled = false;
+                loadingIndicatorChat.style.display = 'none';
+                componentInputChat.focus();
+                return; // Sortir de la fonction
+            } // Fin simple stock check
+
+            // --- 2. Vérification attente quantité (inchangé) ---
+            if (conversationState.awaitingQuantityConfirmation) {
+                console.log("[handleUserInput Routing V2] Awaiting Quantity Confirmation: Calling handleQuantityResponse.");
+                await handleQuantityResponse(userMessageContent);
+                // --- Nettoyage final DANS le bloc if (important) ---
+                // handleQuantityResponse gère déjà son propre nettoyage final normalement
+                // mais par sécurité on le met ici aussi au cas où il sortirait prématurément
+                componentInputChat.disabled = false;
+                searchButtonChat.disabled = false;
+                loadingIndicatorChat.style.display = 'none';
+                componentInputChat.focus();
+                return;
+            }
+
+            // --- 3. Gestion messages triviaux (inchangé) ---
+            const isTrivial = /^\s*(ok|merci|oui|non|d'accord|super|parfait|compris|bye|salut|bonjour|coucou|au revoir|a plus|ça va)[.,!?;:]*\s*$/i.test(userMessageContent);
+            if (isTrivial && userMessageContent.length < 20) {
+                console.log("[handleUserInput Routing V2] Trivial Message: Responding locally.");
+                loadingIndicatorChat.querySelector('i').textContent = 'Réponse rapide...';
+                await delay(200);
+                const randomReplies = ["D'accord.", "Ok.", "Bien noté.", "Parfait.", "Compris.", "Avec plaisir !", "Pas de problème."];
+                await addMessageToChat('ai', randomReplies[Math.floor(Math.random() * randomReplies.length)], false);
+                // --- Nettoyage final DANS le bloc if (important) ---
+                componentInputChat.disabled = false;
+                searchButtonChat.disabled = false;
+                loadingIndicatorChat.style.display = 'none';
+                componentInputChat.focus();
+                return;
+            }
+
+            // --- 4. Logique de Routage Principale (V2 - Affinée) ---
+            resetConversationState();
+            let functionToCall = 'ai-general-chat'; // Default
+            const lowerQuery = userMessageContent.toLowerCase();
+
+            // Définitions (inchangées)
+            const advancedSearchKeywords = ['équivalent', 'equivalent', 'cherch', 'trouve', 'composant pour', 'spec:', 'spécification:', 'specs:', 'recherche composant', 'alternative'];
+            const valuePattern = /\b\d+(\.\d+)?\s?(k|m|g|µ|u|n|p)?(ohm|f|h|v|a|w)\b/i;
+            const generalInfoKeywords = [
+                'brochage', 'pinout', 'comment utiliser', 'fonctionnement', 'datasheet', 'explique', 'aide',
+                'schéma', 'circuit', 'application', 'tension max', 'courant max', 'puissance max',
+                'c\'est quoi', 'qu\'est-ce que', 'définition', 'différence entre', 'role de', 'avantage', 'inconvénient',
+                'utilisation', 'utilisé', 'utile', 'pourquoi', 'comment' // Ajout de mots généraux demandant info
+            ];
+            const strongReferencePattern = /\b(([a-zA-Z]{2,}[0-9]+[\w\-\+]*)|([0-9]+[a-zA-Z]{2,}[\w\-\+]*)|([A-Z0-9]{6,}))\b/i;
+
+            // Analyse de l'intention (inchangée)
+            const requiresAdvancedSearchIntent = advancedSearchKeywords.some(kw => lowerQuery.includes(kw)) || valuePattern.test(lowerQuery);
+            const requiresGeneralInfoIntent = generalInfoKeywords.some(kw => lowerQuery.includes(kw));
+            const containsStrongReference = strongReferencePattern.test(userMessageContent);
+
+            // --- Arbre de décision pour le routage (V2 - Affiné) ---
+            if (requiresGeneralInfoIntent) {
+                // Priorité 1: Si des mots-clés demandant une info générale sont présents, c'est pour ai-general-chat
+                // Peu importe si une référence est présente ou non (ex: "quelle utilisation pour NE555?")
+                functionToCall = 'ai-general-chat';
+                loadingIndicatorChat.querySelector('i').textContent = `Recherche d'informations via IA...`;
+                console.log(`[handleUserInput Routing V2] General Info Request (Keywords detected): Calling ${functionToCall}`);
+
+            } else if (requiresAdvancedSearchIntent) {
+                // Priorité 2: Si des mots-clés de recherche avancée ou des specs sont présents (et pas de mots clés d'info générale prioritaires)
+                functionToCall = 'ai-advanced-search';
+                loadingIndicatorChat.querySelector('i').textContent = `Recherche composant via IA...`;
+                console.log(`[handleUserInput Routing V2] Advanced Search Request (Keywords/Specs detected): Calling ${functionToCall}`);
+
+            } else if (containsStrongReference) {
+                // Priorité 3: Si une référence est présente, mais SANS mots-clés clairs d'info générale ou de recherche avancée
+                // Ex: l'utilisateur tape juste "NE555"
+                // On suppose une recherche implicite d'équivalents/infos de base -> advanced-search
+                functionToCall = 'ai-advanced-search';
+                loadingIndicatorChat.querySelector('i').textContent = `Recherche composant via IA...`;
+                console.log(`[handleUserInput Routing V2] Strong Reference Only (No other keywords): Calling ${functionToCall}`);
+
+            } else {
+                // Cas par défaut: Pas de mots-clés spécifiques, pas de référence forte. Conversation générale.
+                // Ex: "bonjour", "recette omelette"
+                functionToCall = 'ai-general-chat';
+                loadingIndicatorChat.querySelector('i').textContent = `Réponse IA en cours...`;
+                console.log(`[handleUserInput Routing V2] Default / General Conversation: Calling ${functionToCall}`);
+            }
+            // --- Fin de la logique de routage (V2) ---
+
+
+            // --- 5. Préparation et Appel de la Fonction Edge choisie (inchangé) ---
+            const localStock = await buildLocalStockContext();
+            const HISTORY_LENGTH = 4;
+            const recentHistory = chatHistory.slice(-HISTORY_LENGTH);
+
+            console.log(`   -> Calling Edge Function: ${functionToCall}`);
+            const { data, error: invokeError } = await supabase.functions.invoke(functionToCall, {
+                body: {
+                    query: userMessageContent,
+                    history: recentHistory,
+                    localStockContext: (functionToCall === 'ai-advanced-search') ? localStock : null
+                }
+            });
+
+            // --- 6. Traitement de la Réponse de la Fonction Edge (inchangé) ---
+            if (invokeError) {
+                let detail = invokeError.message || "Erreur inconnue";
+                 // ... (gestion détaillée des erreurs d'appel inchangée) ...
+                 if (invokeError instanceof Error && invokeError.message) {
+                    if (invokeError.message.includes("Failed to send") || invokeError.message.includes("network error") || invokeError.message.includes("fetch failed")) { detail = "Impossible de contacter le service IA (réseau)."; }
+                    else if (invokeError.message.includes("500") || invokeError.message.includes("non-2xx") || invokeError.message.includes("non-OK") || invokeError.message.includes("Bad Gateway") || invokeError.message.includes("invocation error")) { detail = "Le service IA a retourné une erreur serveur."; }
+                    else if (invokeError.message.includes("timeout")) { detail = "Le service IA a mis trop de temps à répondre."; }
+                    else if (invokeError.message.includes("429")) { detail = "Limite d'appels atteinte pour le service IA. Réessayez plus tard."; }
+                 }
+                console.error("Erreur brute appel fonction Edge:", invokeError);
+                throw new Error(`Erreur appel fonction Edge (${functionToCall}): ${detail}`);
+            }
+
+            // Traiter la réponse spécifique à la fonction appelée
+            if (functionToCall === 'ai-advanced-search') {
+                 if (data.error) {
+                     console.warn(`Erreur retournée par la fonction Edge '${functionToCall}':`, data.error);
+                     await addMessageToChat('ai', escapeHtml(data.error));
+                 } else if (data.results && Array.isArray(data.results)) {
+                     console.log(`[handleUserInput] Received ${data.results.length} results from ai-advanced-search.`);
+                     if (data.results.length > 0 && data.results[0].type !== 'error') {
+                         if (lowerQuery.includes('équivalent')) { await addMessageToChat('ai', `Voici des équivalents possibles :`, false); }
+                         else { await addMessageToChat('ai', `Voici les résultats pour votre recherche :`, false); }
+                         await delay(50);
+                     }
+                     await displayStructuredResults(data.results);
+                 } else {
+                     console.warn(`Réponse valide de ${functionToCall} mais format incorrect:`, data);
+                     await addMessageToChat('ai', "Désolé, je n'ai pas pu obtenir de résultats structurés.", false);
+                 }
+            }
+            else if (functionToCall === 'ai-general-chat') {
+                 if (data.error) {
+                     console.warn(`Erreur retournée par la fonction Edge '${functionToCall}':`, data.error);
+                     await addMessageToChat('ai', escapeHtml(data.error));
+                 } else if (typeof data.reply === 'string') {
+                     console.log(`[handleUserInput] Received reply from ai-general-chat.`);
+                     await addMessageToChat('ai', data.reply, false);
+                 } else {
+                     console.warn(`Réponse valide de ${functionToCall} mais format incorrect:`, data);
+                     await addMessageToChat('ai', "Désolé, je n'ai pas pu obtenir de réponse textuelle valide.", false);
+                 }
+            }
+             else {
+                 console.error("Erreur de logique: functionToCall non reconnue:", functionToCall);
+                 await addMessageToChat('ai', "Oups, erreur interne dans le traitement de la réponse IA.");
+            }
+
+        } catch (error) { // Gérer les erreurs lancées
+            console.error("Erreur majeure handleUserInput:", error);
+            await addMessageToChat('ai', `Oups ! Erreur technique: ${error.message}.`);
+            resetConversationState();
+        } finally {
+            // --- 7. Nettoyage et réactivation UI ---
+            // Ce bloc finally s'exécute toujours, même après un return anticipé
+            // (sauf si une exception non catchée survient avant)
+            componentInputChat.disabled = false;
+            searchButtonChat.disabled = false;
+            loadingIndicatorChat.style.display = 'none';
+            componentInputChat.focus();
+        }
+    }
 
     // --- Gestion Modale Quantité (+/-) (inchangée) ---
     // ... (handleInventoryRowClick, getBadgeClassForKey, showQuantityModal, hideQuantityModal, updateModalButtonStates, listeners boutons modale) ...
@@ -721,15 +929,303 @@ document.addEventListener('DOMContentLoaded', () => {
     async function updateSevenSegmentForComponent(ref) { if (!sevenSegmentDisplay || !currentUser) { lastDisplayedDrawerRef = null; lastDisplayedDrawerThreshold = null; if (sevenSegmentDisplay) updateSevenSegmentDisplayVisuals('    ', 'off'); return; } lastDisplayedDrawerRef = ref; if (!ref) { updateSevenSegmentDisplayVisuals('----', 'off'); lastDisplayedDrawerThreshold = null; return; } try { const { data: item, error } = await supabase.from('inventory').select('drawer, quantity, critical_threshold').eq('ref', ref).maybeSingle(); if (error && error.code !== 'PGRST116') { throw new Error(`Erreur DB récupération 7seg: ${error.message}`); } if (item && item.drawer) { const drawer = item.drawer.toUpperCase().replace(/\s/g, '_').slice(0, 4).padEnd(4, ' '); const status = getStockStatus(item.quantity, item.critical_threshold); lastDisplayedDrawerThreshold = item.critical_threshold; updateSevenSegmentDisplayVisuals(drawer, status); } else if (item && !item.drawer) { updateSevenSegmentDisplayVisuals('----', 'unknown'); lastDisplayedDrawerThreshold = item.critical_threshold; } else { console.log(`7seg: Composant ${ref} non trouvé.`); updateSevenSegmentDisplayVisuals('NFND', 'critical'); lastDisplayedDrawerThreshold = null; } } catch (err) { console.error(`Erreur mise à jour 7 segments pour ${ref}:`, err); updateSevenSegmentDisplayVisuals('ERR ', 'critical'); lastDisplayedDrawerThreshold = null; } }
     function updateSevenSegmentDisplayVisuals(drawerValue, status = 'unknown') { if (!sevenSegmentDisplay || !segmentDigits || segmentDigits.length < 4) return; if (status === 'off' || !drawerValue || String(drawerValue).trim() === '') { sevenSegmentDisplay.className = 'seven-segment-display display-off'; status = 'off'; } else { sevenSegmentDisplay.className = 'seven-segment-display'; sevenSegmentDisplay.classList.add(`status-${status}`); } for (let i = 0; i < 4; i++) { const digitElement = segmentDigits[i]; if (!digitElement) continue; const char = (drawerValue[i] || ' ').toUpperCase(); const segmentsOn = segmentMap[char] ?? segmentMap['?']; ['a', 'b', 'c', 'd', 'e', 'f', 'g'].forEach(seg => { const segmentElement = digitElement.querySelector(`.segment-${seg}`); if (segmentElement) { if (status !== 'off' && segmentsOn.includes(seg)) { segmentElement.classList.add('on'); } else { segmentElement.classList.remove('on'); } } }); } }
 
-    // --- Logique Vue Paramètres (inchangée) ---
-    // ... (loadSettingsData, showSettingsFeedback, downloadFile, handleExportInventoryCSV, handleExportLogTXT, handleImportInventoryCSV, resetImportState, addSettingsEventListeners) ...
+    // --- Logique Vue Paramètres (MODIFIED: handleImportInventoryCSV - Utilise Map et Batching) ---
+    // ... (fonctions loadSettingsData, showSettingsFeedback, downloadFile, handleExportInventoryCSV, handleExportLogTXT, resetImportState INCHANGÉES) ...
     function loadSettingsData() { console.log("Vue Paramètres chargée."); if(exportFeedbackDiv) { exportFeedbackDiv.style.display = 'none'; exportFeedbackDiv.textContent = '';} if(importFeedbackDiv) { importFeedbackDiv.style.display = 'none'; importFeedbackDiv.textContent = '';} resetImportState(); }
     function showSettingsFeedback(type, message, level = 'info') { let feedbackDiv; if (type === 'export') feedbackDiv = exportFeedbackDiv; else if (type === 'import') feedbackDiv = importFeedbackDiv; else feedbackDiv = genericFeedbackDiv; if (!feedbackDiv) { console.log(`Settings Feedback (${type}, ${level}): ${message}`); return; } feedbackDiv.textContent = message; feedbackDiv.className = `feedback-area ${level}`; feedbackDiv.style.display = message ? 'block' : 'none'; if (level !== 'error') { setTimeout(() => { if (feedbackDiv.textContent === message) { feedbackDiv.style.display = 'none'; } }, level === 'info' ? 3000 : 5000); } }
     function downloadFile(filename, content, mimeType) { try { const blob = new Blob([content], { type: mimeType }); if (typeof saveAs !== 'undefined') { saveAs(blob, filename); } else { console.warn("FileSaver.js non détecté, utilisation de la méthode de téléchargement standard."); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); } console.log(`Fichier "${filename}" préparé pour le téléchargement.`); } catch (e) { console.error("Erreur lors de la création/téléchargement du fichier:", e); showSettingsFeedback('export', `Erreur lors de la création du fichier: ${e.message}`, 'error'); } }
     async function handleExportInventoryCSV() { showSettingsFeedback('export', 'Préparation de l\'export CSV de l\'inventaire...', 'info'); if (!supabase) { showSettingsFeedback('export', 'Erreur: Client Supabase non initialisé.', 'error'); return; } if (typeof Papa === 'undefined') { showSettingsFeedback('export', 'Erreur: Librairie PapaParse (pour CSV) non chargée.', 'error'); return; } try { console.log("Export CSV: Récupération de tout l'inventaire..."); const { data: allItems, error: fetchError } = await supabase.from('inventory').select(`ref, description, quantity, manufacturer, datasheet, drawer, critical_threshold, attributes, categories ( name )`).order('ref'); if (fetchError) throw new Error(`Erreur lors de la récupération des données: ${fetchError.message}`); console.log(`Export CSV: ${allItems?.length || 0} éléments récupérés.`); if (!allItems || allItems.length === 0) { showSettingsFeedback('export', 'L\'inventaire est vide, rien à exporter.', 'warning'); return; } const csvData = allItems.map(item => ({ ref: item.ref, quantity: item.quantity, description: item.description || '', manufacturer: item.manufacturer || '', datasheet: item.datasheet || '', drawer: item.drawer || '', category_name: item.categories?.name || '', critical_threshold: item.critical_threshold ?? '', attributes: (item.attributes && typeof item.attributes === 'object') ? JSON.stringify(item.attributes) : '' })); const csvString = Papa.unparse(csvData, { header: true, quotes: true, delimiter: ",", newline: "\r\n" }); const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-'); const filename = `stockav_inventory_${timestamp}.csv`; downloadFile(filename, "\uFEFF" + csvString, 'text/csv;charset=utf-8'); showSettingsFeedback('export', `Export CSV (${allItems.length} éléments) réussi.`, 'success'); } catch (err) { console.error("Erreur lors de l'export CSV:", err); showSettingsFeedback('export', `Erreur lors de l'export CSV: ${err.message}`, 'error'); } }
     async function handleExportLogTXT() { showSettingsFeedback('export', 'Préparation de l\'export TXT de l\'historique...', 'info'); if (!supabase) { showSettingsFeedback('export', 'Erreur: Client Supabase non initialisé.', 'error'); return; } try { console.log("Export Log TXT: Récupération de tout l'historique..."); const { data: allLogs, error: fetchError } = await supabase.from('log').select('created_at, user_code, action, item_ref, quantity_change, final_quantity').order('created_at', { ascending: true }); if (fetchError) throw new Error(`Erreur lors de la récupération de l'historique: ${fetchError.message}`); console.log(`Export Log TXT: ${allLogs?.length || 0} entrées récupérées.`); if (!allLogs || allLogs.length === 0) { showSettingsFeedback('export', 'L\'historique est vide, rien à exporter.', 'warning'); return; } let fileContent = `Historique StockAV - Export du ${new Date().toLocaleString('fr-FR')}\n`; fileContent += `=========================================================================================\n`; const dateWidth = 20; const userWidth = 8; const actionWidth = 18; const refWidth = 18; const changeWidth = 10; const finalQtyWidth = 12; fileContent += 'Date & Heure'.padEnd(dateWidth) + ' | ' + 'Tech.'.padEnd(userWidth) + ' | ' + 'Action'.padEnd(actionWidth) + ' | ' + 'Référence'.padEnd(refWidth) + ' | ' + '+/-'.padEnd(changeWidth) + ' | ' + 'Stock Final'.padEnd(finalQtyWidth) + '\n'; fileContent += ''.padEnd(dateWidth, '-') + '-+-' + ''.padEnd(userWidth, '-') + '-+-' + ''.padEnd(actionWidth, '-') + '-+-' + ''.padEnd(refWidth, '-') + '-+-' + ''.padEnd(changeWidth, '-') + '-+-' + ''.padEnd(finalQtyWidth, '-') + '\n'; allLogs.forEach(log => { const date = formatLogTimestamp(log.created_at).padEnd(dateWidth); const user = (log.user_code || 'N/A').toUpperCase().padEnd(userWidth); const action = (log.action || 'Inconnue').padEnd(actionWidth); const ref = (log.item_ref || 'N/A').padEnd(refWidth); const changeNum = log.quantity_change; let changeStr = 'N/A'; if (changeNum !== null && changeNum !== undefined) { changeStr = changeNum > 0 ? `+${changeNum}` : String(changeNum); } const change = changeStr.padEnd(changeWidth); const finalQty = (log.final_quantity === null || log.final_quantity === undefined ? 'N/A' : log.final_quantity).toString().padEnd(finalQtyWidth); fileContent += `${date} | ${user} | ${action} | ${ref} | ${change} | ${finalQty}\n`; }); const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-'); const filename = `stockav_log_${timestamp}.txt`; downloadFile(filename, fileContent, 'text/plain;charset=utf-8'); showSettingsFeedback('export', `Export TXT (${allLogs.length} entrées) réussi.`, 'success'); } catch (err) { console.error("Erreur lors de l'export TXT de l'historique:", err); showSettingsFeedback('export', `Erreur lors de l'export TXT: ${err.message}`, 'error'); } }
-    async function handleImportInventoryCSV() { if (!importCsvFileInput?.files || importCsvFileInput.files.length === 0) { showSettingsFeedback('import', 'Veuillez d\'abord sélectionner un fichier CSV.', 'warning'); return; } if (!supabase) { showSettingsFeedback('import', 'Erreur: Client Supabase non initialisé.', 'error'); return; } if (typeof Papa === 'undefined') { showSettingsFeedback('import', 'Erreur: Librairie PapaParse (pour CSV) non chargée.', 'error'); return; } const file = importCsvFileInput.files[0]; const modeRadio = document.querySelector('input[name="import-mode"]:checked'); const importMode = modeRadio ? modeRadio.value : 'enrich'; if (importMode === 'overwrite') { if (!confirm("ATTENTION !\n\nLe mode 'Écraser et Remplacer' va SUPPRIMER TOUT l'inventaire et TOUT l'historique actuels avant d'importer le nouveau fichier.\n\nCette action est IRRÉVERSIBLE.\n\nÊtes-vous absolument sûr de vouloir continuer ?")) { showSettingsFeedback('import', 'Importation annulée par l\'utilisateur.', 'info'); resetImportState(); return; } } showSettingsFeedback('import', `Importation CSV en mode '${importMode}'... Lecture du fichier "${file.name}"...`, 'info'); importInventoryCsvButton.disabled = true; importCsvFileInput.disabled = true; document.querySelectorAll('input[name="import-mode"]').forEach(radio => radio.disabled = true); try { await getCategories(); const categoryNameToIdMap = new Map(categoriesCache.map(cat => [cat.name.toLowerCase(), cat.id])); console.log("Import CSV: Map Nom Catégorie -> ID créée:", categoryNameToIdMap); Papa.parse(file, { header: true, skipEmptyLines: 'greedy', encoding: "UTF-8", transformHeader: header => header.trim().toLowerCase().replace(/\s+/g, '_'), complete: async (results) => { const data = results.data; const errors = results.errors; const headers = results.meta.fields; console.log("Import CSV: Parsing terminé.", results.meta); console.log("Import CSV: Headers détectés:", headers); if (errors.length > 0) { console.error("Import CSV: Erreurs lors du parsing PapaParse:", errors); const firstError = errors[0]; throw new Error(`Erreur de parsing CSV à la ligne ${firstError.row + 2}: ${firstError.message}. Vérifiez le format du fichier.`); } const requiredHeaders = ['ref', 'quantity']; const missingHeaders = requiredHeaders.filter(h => !headers.includes(h)); if (missingHeaders.length > 0) { throw new Error(`Erreur CSV: Les colonnes suivantes sont manquantes: ${missingHeaders.join(', ')}.`); } if (data.length === 0) { showSettingsFeedback('import', 'Le fichier CSV est vide ou ne contient aucune donnée valide.', 'warning'); resetImportState(); return; } showSettingsFeedback('import', `Lecture CSV réussie (${data.length} lignes trouvées). Validation des données...`, 'info'); let itemsToUpsert = []; const processingErrors = []; let uniqueRefs = new Set(); if (importMode === 'overwrite') { showSettingsFeedback('import', `Mode Écraser: Suppression de l'historique existant...`, 'info'); console.log("Import CSV (Overwrite): Deleting log entries..."); const { error: deleteLogError } = await supabase.from('log').delete().neq('id', 0); if (deleteLogError) throw new Error(`Échec de la suppression de l'historique: ${deleteLogError.message}`); showSettingsFeedback('import', `Mode Écraser: Suppression de l'inventaire existant...`, 'info'); console.log("Import CSV (Overwrite): Deleting inventory items..."); const { error: deleteInvError } = await supabase.from('inventory').delete().neq('ref', 'dummy'); if (deleteInvError) throw new Error(`Échec de la suppression de l'inventaire: ${deleteInvError.message}`); console.log("Import CSV (Overwrite): Ancien stock et historique supprimés."); showSettingsFeedback('import', `Ancien stock/log supprimé. Validation et préparation de ${data.length} lignes...`, 'info'); } for (let i = 0; i < data.length; i++) { const row = data[i]; const lineNumber = i + 2; const ref = row.ref?.trim().toUpperCase(); if (!ref) { processingErrors.push(`L${lineNumber}: Référence manquante.`); continue; } if (ref.length > 50) { processingErrors.push(`L${lineNumber} (${ref}): Référence trop longue (max 50).`); continue; } if (uniqueRefs.has(ref)) { processingErrors.push(`L${lineNumber}: Référence "${ref}" est dupliquée dans le fichier.`); continue; } uniqueRefs.add(ref); const quantityRaw = row.quantity; const quantity = parseInt(quantityRaw, 10); if (quantityRaw === null || quantityRaw === undefined || quantityRaw === '' || isNaN(quantity) || quantity < 0) { processingErrors.push(`L${lineNumber} (${ref}): Quantité invalide ou négative: "${quantityRaw}". Sera mis à 0.`); row.quantity = 0; } else { row.quantity = quantity; } let categoryId = null; const categoryName = row.category_name?.trim().toLowerCase(); if (categoryName) { categoryId = categoryNameToIdMap.get(categoryName); if (!categoryId) { processingErrors.push(`L${lineNumber} (${ref}): Catégorie "${row.category_name}" non trouvée. Sera importé sans catégorie.`); } } const thresholdRaw = row.critical_threshold?.trim(); let critical_threshold = null; if (thresholdRaw && thresholdRaw !== '') { const threshold = parseInt(thresholdRaw, 10); if (!isNaN(threshold) && threshold >= 0) { critical_threshold = threshold; } else { processingErrors.push(`L${lineNumber} (${ref}): Seuil critique invalide: "${thresholdRaw}". Sera ignoré.`); } } let attributes = null; const attributesRaw = row.attributes?.trim(); if (attributesRaw) { try { attributes = JSON.parse(attributesRaw); if (typeof attributes !== 'object' || attributes === null || Array.isArray(attributes)) { processingErrors.push(`L${lineNumber} (${ref}): La colonne 'attributes' doit contenir un objet JSON. Reçu: "${attributesRaw}". Ignoré.`); attributes = null; } } catch (e) { processingErrors.push(`L${lineNumber} (${ref}): Erreur de parsing JSON pour les attributs: ${e.message}. Reçu: "${attributesRaw}". Ignoré.`); attributes = null; } } itemsToUpsert.push({ ref: ref, quantity: row.quantity, description: row.description?.trim() || null, manufacturer: row.manufacturer?.trim() || null, datasheet: row.datasheet?.trim() || null, drawer: row.drawer?.trim().toUpperCase() || null, category_id: categoryId, critical_threshold: critical_threshold, attributes: attributes }); } if (processingErrors.length > 0) { const errorMsg = `Validation terminée avec ${processingErrors.length} erreurs/warnings (voir console). ${itemsToUpsert.length} lignes seront importées.`; showSettingsFeedback('import', errorMsg, 'warning'); console.warn("Import CSV: Erreurs/Warnings de validation:", processingErrors); if (itemsToUpsert.length === 0) { throw new Error("Aucune ligne valide à importer après validation."); } } else { showSettingsFeedback('import', `Validation OK. ${itemsToUpsert.length} lignes prêtes pour l'importation...`, 'info'); } const batchSize = 500; let importedCount = 0; console.log(`Import CSV: Début de l'upsert par lots de ${batchSize}...`); for (let i = 0; i < itemsToUpsert.length; i += batchSize) { const batch = itemsToUpsert.slice(i, i + batchSize); const batchNum = Math.floor(i / batchSize) + 1; const totalBatches = Math.ceil(itemsToUpsert.length / batchSize); showSettingsFeedback('import', `Importation du lot ${batchNum}/${totalBatches} (${batch.length} lignes)...`, 'info'); console.log(`Import CSV: Upserting batch ${batchNum} (${batch.length} items)...`); const { error: upsertError } = await supabase.from('inventory').upsert(batch, { onConflict: 'ref' }); if (upsertError) { let detailMsg = upsertError.message; if (upsertError.details) detailMsg += ` | Détails: ${upsertError.details}`; if (upsertError.hint) detailMsg += ` | Indice: ${upsertError.hint}`; console.error("Import CSV: Erreur lors de l'Upsert du lot:", detailMsg, upsertError); throw new Error(`Erreur lors de l'importation du lot ${batchNum}: ${detailMsg}`); } importedCount += batch.length; console.log(`Import CSV: Lot ${batchNum} importé avec succès.`); } let successMsg = `Importation en mode '${importMode}' terminée. ${importedCount} composants traités.`; if (processingErrors.length > 0) { successMsg += ` (${processingErrors.length} lignes ignorées ou avec warnings - voir console).`; } showSettingsFeedback('import', successMsg, 'success'); console.log("Import CSV: Importation terminée."); if (inventoryView.classList.contains('active-view')) await displayInventory(1); if (auditView.classList.contains('active-view')) await displayAudit(); if (importMode === 'overwrite' && logView.classList.contains('active-view')) await displayLog(1); }, error: (err, file) => { console.error("Import CSV: Erreur majeure PapaParse:", err, file); showSettingsFeedback('import', `Erreur critique lors de la lecture du fichier CSV: ${err.message}`, 'error'); resetImportState(); } }); } catch (err) { console.error("Erreur globale lors du processus d'importation CSV:", err); showSettingsFeedback('import', `Erreur d'importation: ${err.message}`, 'error'); resetImportState(); } finally { if (!importFeedbackDiv?.classList.contains('error')) { resetImportState(); } } }
     function resetImportState() { if(importCsvFileInput) { importCsvFileInput.value = ''; importCsvFileInput.disabled = false; } if(importInventoryCsvButton) importInventoryCsvButton.disabled = false; document.querySelectorAll('input[name="import-mode"]').forEach(radio => radio.disabled = false); const enrichRadio = document.getElementById('import-mode-enrich'); if (enrichRadio) enrichRadio.checked = true; if (importFeedbackDiv && !importFeedbackDiv.classList.contains('error')) { importFeedbackDiv.style.display = 'none'; importFeedbackDiv.textContent = ''; } }
+
+    // --- MODIFIED: handleImportInventoryCSV - Utilise Map pour garder dernière occurrence ET Batching pour l'upsert ---
+    async function handleImportInventoryCSV() {
+        if (!importCsvFileInput?.files || importCsvFileInput.files.length === 0) {
+            showSettingsFeedback('import', 'Veuillez d\'abord sélectionner un fichier CSV.', 'warning');
+            return;
+        }
+        if (!supabase) {
+            showSettingsFeedback('import', 'Erreur: Client Supabase non initialisé.', 'error');
+            return;
+        }
+        if (typeof Papa === 'undefined') {
+            showSettingsFeedback('import', 'Erreur: Librairie PapaParse (pour CSV) non chargée.', 'error');
+            return;
+        }
+
+        const file = importCsvFileInput.files[0];
+        const modeRadio = document.querySelector('input[name="import-mode"]:checked');
+        const importMode = modeRadio ? modeRadio.value : 'enrich';
+
+        if (importMode === 'overwrite') {
+            if (!confirm("ATTENTION !\n\nLe mode 'Écraser et Remplacer' va SUPPRIMER TOUT l'inventaire et TOUT l'historique actuels avant d'importer le nouveau fichier.\n\nCette action est IRRÉVERSIBLE.\n\nÊtes-vous absolument sûr de vouloir continuer ?")) {
+                showSettingsFeedback('import', 'Importation annulée par l\'utilisateur.', 'info');
+                resetImportState();
+                return;
+            }
+        }
+
+        showSettingsFeedback('import', `Importation CSV en mode '${importMode}'... Lecture du fichier "${file.name}"...`, 'info');
+        importInventoryCsvButton.disabled = true;
+        importCsvFileInput.disabled = true;
+        document.querySelectorAll('input[name="import-mode"]').forEach(radio => radio.disabled = true);
+
+        try {
+            await getCategories(); // Assurer que le cache des catégories est à jour
+            const categoryNameToIdMap = new Map(categoriesCache.map(cat => [cat.name.toLowerCase(), cat.id]));
+            // console.log("Import CSV: Map Nom Catégorie -> ID créée:", categoryNameToIdMap); // Log commenté
+
+            const standardColumns = new Set([
+                'ref', 'quantity', 'description', 'manufacturer', 'mfg',
+                'datasheet', 'drawer', 'category_name', 'critical_threshold', 'threshold',
+                'attributes'
+            ]);
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: 'greedy',
+                encoding: "UTF-8", // Assurer l'encodage UTF-8
+                transformHeader: header => header.trim().toLowerCase().replace(/\s+/g, '_'),
+                complete: async (results) => {
+                    const data = results.data;
+                    const errors = results.errors;
+                    const headers = results.meta.fields;
+                    // console.log("Import CSV: Parsing terminé.", results.meta); // Log commenté
+                    // console.log("Import CSV: Headers détectés (après transformation):", headers); // Log commenté
+
+                    if (errors.length > 0) {
+                        console.error("Import CSV: Erreurs lors du parsing PapaParse:", errors);
+                        const firstError = errors[0];
+                        throw new Error(`Erreur de parsing CSV à la ligne ${firstError.row + 2}: ${firstError.message}. Vérifiez le format du fichier.`);
+                    }
+
+                    const requiredHeaders = ['ref', 'quantity'];
+                    const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+                    if (missingHeaders.length > 0) {
+                        throw new Error(`Erreur CSV: Les colonnes requises suivantes sont manquantes: ${missingHeaders.join(', ')}.`);
+                    }
+
+                    if (data.length === 0) {
+                        showSettingsFeedback('import', 'Le fichier CSV est vide ou ne contient aucune donnée valide.', 'warning');
+                        resetImportState();
+                        return;
+                    }
+
+                    showSettingsFeedback('import', `Lecture CSV réussie (${data.length} lignes trouvées). Validation et préparation des données finales...`, 'info');
+                    let itemsDataMap = new Map(); // <<< CORRECTION: Utilisation d'une Map pour stocker la dernière version de chaque ref >>>
+                    const processingErrors = [];
+
+                    if (importMode === 'overwrite') {
+                        showSettingsFeedback('import', `Mode Écraser: Suppression de l'historique existant...`, 'info');
+                        // console.log("Import CSV (Overwrite): Deleting log entries..."); // Log commenté
+                        const { error: deleteLogError } = await supabase.from('log').delete().neq('id', 0); // Adaptez si id n'est pas la clé primaire ou si vous ne voulez pas supprimer absolument tout
+                        if (deleteLogError) throw new Error(`Échec de la suppression de l'historique: ${deleteLogError.message}`);
+
+                        showSettingsFeedback('import', `Mode Écraser: Suppression de l'inventaire existant...`, 'info');
+                        // console.log("Import CSV (Overwrite): Deleting inventory items..."); // Log commenté
+                        const { error: deleteInvError } = await supabase.from('inventory').delete().neq('ref', 'dummy_ref_to_ensure_deletion'); // Utiliser une ref qui n'existe pas
+                        if (deleteInvError) throw new Error(`Échec de la suppression de l'inventaire: ${deleteInvError.message}`);
+                        // console.log("Import CSV (Overwrite): Ancien stock et historique supprimés."); // Log commenté
+                        showSettingsFeedback('import', `Ancien stock/log supprimé. Validation et préparation de ${data.length} lignes...`, 'info');
+                    }
+
+                    // --- Boucle de validation et de mise en Map ---
+                    for (let i = 0; i < data.length; i++) {
+                        const row = data[i];
+                        const lineNumber = i + 2; // +1 pour l'index 0, +1 pour le header
+                        let currentItemData = {}; // Données pour cette ligne spécifique
+                        let dynamicAttributes = {};
+                        let explicitAttributes = null;
+
+                        // --- Traitement de chaque colonne de la ligne ---
+                        for (const [rawHeader, rawValue] of Object.entries(row)) {
+                            const header = rawHeader.trim(); // Header déjà transformé par PapaParse
+                            const value = (rawValue !== null && rawValue !== undefined) ? String(rawValue).trim() : null;
+
+                            // Ignorer les cellules vides sauf pour la quantité qui peut être 0
+                            if (!header || (value === null || value === '') && header !== 'quantity') {
+                                continue;
+                            }
+
+                            // --- Traitement des colonnes standard connues ---
+                            if (standardColumns.has(header)) {
+                                switch (header) {
+                                    case 'ref': currentItemData.ref = value?.toUpperCase(); break;
+                                    case 'quantity':
+                                        const qty = parseInt(value, 10);
+                                        if (value === null || value === '' || isNaN(qty) || qty < 0) {
+                                            processingErrors.push(`L${lineNumber} (${currentItemData.ref || 'REF_MANQUANTE'}): Quantité invalide: "${value}". Sera mis à 0.`);
+                                            currentItemData.quantity = 0;
+                                        } else {
+                                            currentItemData.quantity = qty;
+                                        }
+                                        break;
+                                    case 'description': currentItemData.description = value; break;
+                                    case 'manufacturer': case 'mfg': currentItemData.manufacturer = value; break;
+                                    case 'datasheet': currentItemData.datasheet = value; break;
+                                    case 'drawer': currentItemData.drawer = value?.toUpperCase(); break;
+                                    case 'category_name':
+                                        const categoryName = value?.toLowerCase();
+                                        if (categoryName) {
+                                            currentItemData.category_id = categoryNameToIdMap.get(categoryName);
+                                            if (!currentItemData.category_id) {
+                                                processingErrors.push(`L${lineNumber} (${currentItemData.ref}): Catégorie "${value}" non trouvée.`);
+                                                currentItemData.category_id = null; // Mettre à null si non trouvée
+                                            }
+                                        } else { currentItemData.category_id = null; }
+                                        break;
+                                    case 'critical_threshold': case 'threshold':
+                                        const threshold = parseInt(value, 10);
+                                        if (value && !isNaN(threshold) && threshold >= 0) { currentItemData.critical_threshold = threshold; }
+                                        else if (value) { // Si une valeur est fournie mais invalide
+                                            processingErrors.push(`L${lineNumber} (${currentItemData.ref}): Seuil critique invalide: "${value}".`);
+                                            currentItemData.critical_threshold = null;
+                                        } else { currentItemData.critical_threshold = null; } // Pas de valeur fournie
+                                        break;
+                                    case 'attributes':
+                                        if (value) {
+                                            try {
+                                                explicitAttributes = JSON.parse(value);
+                                                if (typeof explicitAttributes !== 'object' || explicitAttributes === null || Array.isArray(explicitAttributes)) {
+                                                    processingErrors.push(`L${lineNumber} (${currentItemData.ref}): Colonne 'attributes' doit être un objet JSON valide. Ignoré.`);
+                                                    explicitAttributes = null;
+                                                }
+                                            } catch (e) {
+                                                processingErrors.push(`L${lineNumber} (${currentItemData.ref}): Erreur parsing JSON colonne 'attributes': ${e.message}. Ignoré.`);
+                                                explicitAttributes = null;
+                                            }
+                                        }
+                                        break;
+                                }
+                            }
+                            // --- Traitement des colonnes non standard (attributs dynamiques) ---
+                            else {
+                                // Ne stocker que si la valeur n'est pas vide
+                                if (value !== null && value !== '') {
+                                    dynamicAttributes[header] = value; // Le header est déjà nettoyé
+                                }
+                            }
+                        } // Fin boucle sur les colonnes de la ligne
+
+                        // --- Validation finale de la ligne courante ---
+                        if (!currentItemData.ref) { processingErrors.push(`L${lineNumber}: Référence manquante.`); continue; /* Passer à la ligne suivante */ }
+                        if (currentItemData.ref.length > 50) { processingErrors.push(`L${lineNumber} (${currentItemData.ref}): Référence trop longue.`); continue; }
+                         if (currentItemData.quantity === undefined) { // Vérifier si la quantité a été définie (même à 0)
+                             processingErrors.push(`L${lineNumber} (${currentItemData.ref}): Quantité manquante. Mis à 0.`);
+                             currentItemData.quantity = 0;
+                         }
+                         // Autres validations possibles ici (format tiroir, URL datasheet...)
+
+                        // --- Fusion des attributs explicites et dynamiques ---
+                        let finalAttributes = {};
+                        if (explicitAttributes) { finalAttributes = { ...explicitAttributes }; }
+                        // Les attributs dynamiques écrasent les attributs explicites s'ils ont le même nom (comportement choisi)
+                        if (Object.keys(dynamicAttributes).length > 0) { finalAttributes = { ...finalAttributes, ...dynamicAttributes }; }
+                        currentItemData.attributes = Object.keys(finalAttributes).length > 0 ? finalAttributes : null; // Mettre null si vide
+
+                        // --- Formatage final de l'objet pour Supabase ---
+                        const finalItemData = {
+                            ref: currentItemData.ref,
+                            quantity: currentItemData.quantity,
+                            description: currentItemData.description || null,
+                            manufacturer: currentItemData.manufacturer || null,
+                            datasheet: currentItemData.datasheet || null,
+                            drawer: currentItemData.drawer || null,
+                            category_id: currentItemData.category_id || null,
+                            critical_threshold: currentItemData.critical_threshold !== undefined ? currentItemData.critical_threshold : null,
+                            attributes: currentItemData.attributes // Est déjà null si vide
+                        };
+
+                        // <<< CORRECTION: Utilisation de la Map pour écraser les entrées précédentes avec la même ref >>>
+                        itemsDataMap.set(finalItemData.ref, finalItemData);
+
+                    } // Fin boucle FOR sur les lignes data
+
+                    // Convertir la Map en tableau pour l'upsert
+                    const itemsToUpsert = Array.from(itemsDataMap.values());
+                    // console.log(`Import CSV: ${itemsToUpsert.length} lignes uniques (basées sur 'ref') préparées pour l'upsert.`); // Log commenté
+
+                    // --- Gestion des erreurs de validation ---
+                    if (processingErrors.length > 0) {
+                        const errorMsg = `Validation terminée avec ${processingErrors.length} erreurs/warnings (voir console). ${itemsToUpsert.length} lignes uniques seront traitées pour import/mise à jour.`;
+                        showSettingsFeedback('import', errorMsg, 'warning');
+                        console.warn("Import CSV: Erreurs/Warnings de validation (n'inclut pas les écrasements de lignes pour même ref):", processingErrors);
+                        // Ne pas arrêter si des lignes valides restent, sauf si aucune ligne n'est valide
+                        if (itemsToUpsert.length === 0) {
+                             throw new Error("Aucune ligne valide à importer après validation.");
+                         }
+                    } else {
+                         showSettingsFeedback('import', `Validation OK. ${itemsToUpsert.length} lignes uniques prêtes pour import/mise à jour...`, 'info');
+                     }
+
+                    // --- <<< CORRECTION: Upsert par lots >>> ---
+                    const batchSize = 500; // Taille de lot raisonnable, ajustable si nécessaire
+                    let processedCount = 0;
+                    // console.log(`Import CSV: Début de l'upsert par lots de ${batchSize}...`); // Log commenté
+
+                    for (let i = 0; i < itemsToUpsert.length; i += batchSize) {
+                        const batch = itemsToUpsert.slice(i, i + batchSize);
+                        const batchNum = Math.floor(i / batchSize) + 1;
+                        const totalBatches = Math.ceil(itemsToUpsert.length / batchSize);
+                        showSettingsFeedback('import', `Traitement du lot ${batchNum}/${totalBatches} (${batch.length} lignes)...`, 'info');
+                        // console.log(`Import CSV: Upserting batch ${batchNum} (${batch.length} items)...`); // Log commenté
+
+                        // L'erreur "cannot affect row a second time" ne devrait plus se produire ici grâce à la Map
+                        const { error: upsertError } = await supabase
+                            .from('inventory')
+                            .upsert(batch, { onConflict: 'ref' }); // Important: garder onConflict pour le mode 'enrich'
+
+                        if (upsertError) {
+                            let detailMsg = upsertError.message;
+                            if (upsertError.details) detailMsg += ` | Détails: ${upsertError.details}`;
+                            if (upsertError.hint) detailMsg += ` | Indice: ${upsertError.hint}`;
+                            console.error("Import CSV: Erreur lors de l'Upsert du lot:", detailMsg, upsertError);
+                            throw new Error(`Erreur lors de l'importation du lot ${batchNum}: ${detailMsg}`);
+                        }
+                        processedCount += batch.length;
+                        // console.log(`Import CSV: Lot ${batchNum} traité avec succès.`); // Log commenté
+                    }
+                    // --- Fin de l'Upsert par lots ---
+
+                    // --- Message Final de Succès ---
+                    let successMsg = `Importation en mode '${importMode}' terminée. ${processedCount} références uniques traitées (basé sur la dernière occurrence dans le CSV).`;
+                    if (processingErrors.length > 0) {
+                         successMsg += ` (${processingErrors.length} erreurs/warnings durant la validation - voir console).`;
+                    }
+                    showSettingsFeedback('import', successMsg, 'success');
+                    // console.log("Import CSV: Importation terminée."); // Log commenté
+
+                    // --- Mise à jour de l'UI ---
+                    invalidateCategoriesCache(); // Regénérer cache catégories au cas où de nouvelles sont apparues via import
+                    if (inventoryView.classList.contains('active-view')) await displayInventory(1);
+                    if (auditView.classList.contains('active-view')) await displayAudit();
+                    if (importMode === 'overwrite' && logView.classList.contains('active-view')) await displayLog(1); // Rafraichir log si écrasement
+                    if(adminView.classList.contains('active-view')) await loadAdminData(); // Mettre à jour listes admin
+
+                }, // Fin 'complete'
+                error: (err, file) => {
+                    console.error("Import CSV: Erreur majeure PapaParse:", err, file);
+                    showSettingsFeedback('import', `Erreur critique lors de la lecture du fichier CSV: ${err.message}`, 'error');
+                }
+            }); // Fin Papa.parse
+
+        } catch (err) {
+            console.error("Erreur globale lors du processus d'importation CSV:", err);
+            showSettingsFeedback('import', `Erreur d'importation: ${err.message}`, 'error');
+        } finally {
+             // Ne réinitialiser l'état que si l'opération n'a pas terminé sur une erreur
+             if (!importFeedbackDiv?.classList.contains('error')) {
+                 resetImportState();
+             } else {
+                 // Garder les boutons désactivés en cas d'erreur pour éviter ré-essai accidentel
+                 importInventoryCsvButton.disabled = true;
+                 importCsvFileInput.disabled = true;
+                 document.querySelectorAll('input[name="import-mode"]').forEach(radio => radio.disabled = true);
+             }
+        }
+    }
+    // --- FIN MODIFIED: handleImportInventoryCSV ---
+
     function addSettingsEventListeners() { exportInventoryCsvButton?.addEventListener('click', handleExportInventoryCSV); exportLogTxtButton?.addEventListener('click', handleExportLogTXT); importInventoryCsvButton?.addEventListener('click', handleImportInventoryCSV); importCsvFileInput?.addEventListener('change', () => { if (importCsvFileInput.files && importCsvFileInput.files.length > 0) { showSettingsFeedback('import', `Fichier sélectionné: ${importCsvFileInput.files[0].name}`, 'info'); } else { showSettingsFeedback('import', '', 'info'); } }); }
 
     // --- FONCTIONS POUR L'AUDIT (inchangées) ---
@@ -757,16 +1253,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // ... (initializeApp et appel) ...
     function initializeApp() {
         console.log("Initialisation StockAV...");
-
-        // Configuration Items par page
         try { const userItemsPerPage = parseInt(localStorage.getItem('stockav_itemsPerPage') || '15', 10); ITEMS_PER_PAGE = (userItemsPerPage > 0 && userItemsPerPage <= 100) ? userItemsPerPage : 15; console.log(`Items par page chargés: ${ITEMS_PER_PAGE}`); if (itemsPerPageSelect) { itemsPerPageSelect.value = ITEMS_PER_PAGE; itemsPerPageSelect.addEventListener('change', (e) => { const newIPP = parseInt(e.target.value, 10); if (newIPP > 0 && newIPP <= 100) { ITEMS_PER_PAGE = newIPP; localStorage.setItem('stockav_itemsPerPage', ITEMS_PER_PAGE); console.log(`Items par page mis à jour: ${ITEMS_PER_PAGE}`); const activeView = document.querySelector('main.view-section.active-view'); if (activeView && (activeView.id === 'inventory-view' || activeView.id === 'log-view')) { if (activeView.id === 'inventory-view') currentInventoryPage = 1; if (activeView.id === 'log-view') currentLogPage = 1; reloadActiveViewData(activeView); } } }); } } catch (e) { console.warn("Erreur lecture/configuration items par page:", e); ITEMS_PER_PAGE = 15; }
-
-        // Vérification IDs HTML
         const requiredIds = [ 'login-area', 'login-code', 'login-password', 'login-button', 'login-error', 'user-info-area', 'user-display', 'logout-button', 'main-navigation', 'show-search-view', 'show-inventory-view', 'show-log-view', 'show-admin-view', 'show-settings-view', 'show-audit-view', 'show-bom-view', 'search-view', 'inventory-view', 'log-view', 'admin-view', 'settings-view', 'audit-view', 'bom-view', 'quantity-change-modal', 'modal-overlay', 'modal-component-ref', 'modal-current-quantity', 'modal-decrease-button', 'modal-increase-button', 'modal-change-amount', 'modal-confirm-button', 'modal-cancel-button', 'modal-feedback', 'modal-current-attributes', 'modal-attributes-list', 'seven-segment-display', 'inventory-table-body', 'inventory-category-filter', 'inventory-search-filter', 'apply-inventory-filter-button', 'inventory-prev-page', 'inventory-next-page', 'inventory-page-info', 'inventory-no-results', 'inventory-attribute-filters', 'log-table-body', 'log-prev-page', 'log-next-page', 'log-page-info', 'log-no-results', 'category-list', 'category-form', 'category-name', 'category-attributes', 'category-id-edit', 'cancel-edit-button', 'category-form-title', 'admin-feedback', 'stock-form', 'component-ref-admin', 'check-stock-button', 'component-actions', 'current-quantity', 'update-quantity-button', 'quantity-change', 'delete-component-button', 'component-category-select', 'category-specific-attributes', 'component-desc', 'component-mfg', 'component-datasheet', 'component-initial-quantity', 'component-drawer-admin', 'component-threshold', 'save-component-button', 'export-critical-txt-button', 'export-critical-feedback', 'component-details', 'search-button', 'component-input', 'response-output', 'loading-indicator', 'export-inventory-csv-button', 'export-log-txt-button', 'export-feedback', 'import-csv-file', 'import-inventory-csv-button', 'import-feedback', 'audit-category-filter', 'audit-drawer-filter', 'apply-audit-filter-button', 'audit-table-body', 'audit-no-results', 'audit-feedback', 'bom-feedback', 'current-kit-drawers', 'clear-kit-button', 'generic-feedback', 'items-per-page-select', 'export-qr-button' ];
         const missingIds = requiredIds.filter(id => !document.getElementById(id));
         if (missingIds.length > 0) { const errorMsg = `Erreur critique d'initialisation: Éléments HTML manquants: ${missingIds.join(', ')}.`; console.error(errorMsg); document.body.innerHTML = `<div style="padding:20px; background-color:#f8d7da; color:#721c24; border: 1px solid #f5c6cb; border-radius: 5px;"><h2>Erreur Critique</h2><p>${errorMsg}</p></div>`; return; }
-
-        // Écouteurs Événements
         searchTabButton?.addEventListener('click', () => setActiveView(searchView, searchTabButton));
         inventoryTabButton?.addEventListener('click', () => setActiveView(inventoryView, inventoryTabButton));
         logTabButton?.addEventListener('click', () => setActiveView(logView, logTabButton));
@@ -796,38 +1286,24 @@ document.addEventListener('DOMContentLoaded', () => {
         addCategoryEventListeners(); addComponentCategorySelectListener(); addStockEventListeners(); addSettingsEventListeners();
         currentKitDrawersDiv?.addEventListener('click', handleDrawerButtonClick);
         clearKitButton?.addEventListener('click', handleClearKit);
-
-        // Listener global chat (inchangé)
         responseOutputChat?.addEventListener('click', (event) => {
-             if (event.target.tagName === 'A' && (event.target.classList.contains('external-link') || event.target.classList.contains('external-link-inline'))) {
-                 event.preventDefault();
-                 window.open(event.target.href, '_blank', 'noopener,noreferrer');
-             }
+             if (event.target.tagName === 'A' && (event.target.classList.contains('external-link') || event.target.classList.contains('external-link-inline'))) { event.preventDefault(); window.open(event.target.href, '_blank', 'noopener,noreferrer'); }
              else if (event.target.classList.contains('direct-take-button')) {
-                 const targetButton = event.target;
-                 const itemDataStr = targetButton.dataset.itemData;
+                 const targetButton = event.target; const itemDataStr = targetButton.dataset.itemData;
                  if (!itemDataStr) { console.error("Erreur: data-item-data manquant sur le bouton direct-take-button", targetButton); addMessageToChat('ai', "Erreur interne lors de la tentative de prise directe."); return; }
                  if (!currentUser) { promptLoginBeforeAction("prendre ce composant"); return; }
-                 try {
-                     const itemData = JSON.parse(itemDataStr);
-                     console.log(`Clic sur bouton direct "Prendre" pour ${itemData.ref}. Ouverture modale.`);
-                     targetButton.disabled = true;
-                     updateSevenSegmentForComponent(itemData.ref);
-                     showQuantityModal(itemData.ref, itemData.local_qty, itemData.specs || {});
-                 } catch (e) { console.error("Erreur parsing/traitement bouton direct-take-button:", e, itemDataStr); addMessageToChat('ai', "Erreur lors du traitement de la prise directe."); }
+                 try { const itemData = JSON.parse(itemDataStr); console.log(`Clic sur bouton direct "Prendre" pour ${itemData.ref}. Ouverture modale.`); targetButton.disabled = true; updateSevenSegmentForComponent(itemData.ref); showQuantityModal(itemData.ref, itemData.local_qty, itemData.specs || {}); }
+                 catch (e) { console.error("Erreur parsing/traitement bouton direct-take-button:", e, itemDataStr); addMessageToChat('ai', "Erreur lors du traitement de la prise directe."); }
              }
         });
-
-        // Démarrer Auth et état initial
         setupAuthListener();
         updateSevenSegmentDisplayVisuals('----', 'off');
-        displayWelcomeMessage();
+        // displayWelcomeMessage(); // Est maintenant appelé conditionnellement par le listener d'auth
         console.log("StockAV initialisé et prêt.");
-
-    } // Fin initializeApp
+    }
 
     // --- Lancer l'app ---
     initializeApp();
 
 }); // Fin DOMContentLoaded
-// --- END OF FILE script.js (avec export QR révisé) ---
+// --- END OF FILE script.js ---
