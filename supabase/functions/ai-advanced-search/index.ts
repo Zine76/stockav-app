@@ -1,71 +1,68 @@
-// --- START OF FILE supabase/functions/ai-advanced-search/index.ts (V7 - Clean Revert) ---
+// --- START OF FILE supabase/functions/ai-advanced-search/index.ts (V-GoogleAI - MODIFIED MODEL + JSON Fallback) ---
+// Changements:
+// 1. Utilise gemini-1.5-flash-latest
+// 2. Ajout d'un fallback pour renvoyer un JSON d'erreur standard si l'extraction du JSON de l'IA échoue.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-// IMPORTANT: Ensure cors.ts is ALSO reverted or uses the corrected version from previous steps
 import { corsHeaders } from '../_shared/cors.ts';
 
-// --- Configuration ---
-const AI_MODEL = "meta-llama/llama-4-scout:free5";
+// --- Configuration Google AI ---
+const GOOGLE_AI_MODEL = 'gemini-1.5-flash-latest'; // Utilisation de Flash
 const MAX_RESULTS = 6;
-const MAX_TOKENS_SEARCH = 1600;
+const MAX_TOKENS_GOOGLE = 2048;
 
-console.log(`[ai-advanced-search V7 Revert] Initializing function... Model: ${AI_MODEL}, Max Results: ${MAX_RESULTS}`);
+console.log(`[ai-advanced-search V-GoogleAI Modified+Fallback] Initializing function... Model: ${GOOGLE_AI_MODEL}`);
 
-// --- Helper: extractJsonArray V2 (As provided in V7 context) ---
+// --- Helper: extractJsonArray (INCHANGÉ) ---
 function extractJsonArray(text: string): any[] | null {
-    console.log("[extractJsonArray V2] Attempting extraction from text:", text.substring(0, 300) + (text.length > 300 ? '...' : ''));
+    console.log("[extractJsonArray] Attempting extraction from text:", text.substring(0, 300) + (text.length > 300 ? '...' : ''));
     const codeBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
     if (codeBlockMatch && codeBlockMatch[1]) {
         try {
-            let potentialJson = codeBlockMatch[1];
-             potentialJson = potentialJson.replace(/,\s*([}\]])/g, '$1');
+            let potentialJson = codeBlockMatch[1].replace(/,\s*([}\]])/g, '$1');
             const parsed = JSON.parse(potentialJson);
             if (Array.isArray(parsed)) {
-                console.log("[extractJsonArray V2] Extracted JSON array from code block.");
+                console.log("[extractJsonArray] Extracted JSON array from code block.");
                 return parsed;
             }
         } catch (e) {
-            console.warn("[extractJsonArray V2] Failed to parse JSON from code block (even after cleanup):", e.message);
+            console.warn("[extractJsonArray] Failed to parse JSON from code block:", e.message);
         }
     }
     const startIndex = text.indexOf('[');
     const endIndex = text.lastIndexOf(']');
     if (startIndex !== -1 && endIndex > startIndex) {
-         const potentialJson = text.substring(startIndex, endIndex + 1).replace(/,\s*([}\]])/g, '$1');
+         let potentialJson = text.substring(startIndex, endIndex + 1).replace(/,\s*([}\]])/g, '$1');
          try {
              const parsed = JSON.parse(potentialJson);
              if (Array.isArray(parsed)) {
-                 console.log("[extractJsonArray V2] Extracted JSON array using fallback indexOf/lastIndexOf.");
+                 console.log("[extractJsonArray] Extracted JSON array using fallback.");
                  return parsed;
              }
          } catch (e) {
-             console.warn("[extractJsonArray V2] Fallback extraction failed:", e.message, "Snippet:", potentialJson.substring(0, 100));
+             console.warn("[extractJsonArray] Fallback extraction failed:", e.message);
          }
     }
-    console.error("[extractJsonArray V2] No valid JSON array found in text.");
+    console.error("[extractJsonArray] No valid JSON array found in text.");
     return null;
 }
-
 
 // --- Serve Function ---
 serve(async (req: Request) => {
   const requestStartTime = Date.now();
-  console.log(`[ai-advanced-search V7 Revert] Request received: ${req.method} ${req.url}`);
+  console.log(`[ai-advanced-search V-GoogleAI Modified+Fallback] Request received: ${req.method} ${req.url}`);
 
-  // --- CORS Handling ---
+  // --- CORS Handling (INCHANGÉ) ---
   if (req.method === 'OPTIONS') {
-    console.log("[ai-advanced-search V7 Revert] Handling OPTIONS request");
-    // Use the imported corsHeaders, ensure cors.ts is correct!
+    console.log("[ai-advanced-search V-GoogleAI Modified+Fallback] Handling OPTIONS request");
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const openRouterApiKey = Deno.env.get("OPENROUTER_API_KEY");
-  const appUrlReferer = Deno.env.get("APP_URL_REFERER");
-
-  if (!openRouterApiKey || !appUrlReferer) {
-    const missing = !openRouterApiKey ? "OPENROUTER_API_KEY" : "APP_URL_REFERER";
-    console.error(`[ai-advanced-search V7 Revert] CRITICAL: ${missing} secret is not set!`);
-    return new Response(JSON.stringify({ results: [], error: `Config serveur: Secret '${missing}' manquant.` }),
+  // --- Récupération des Secrets (INCHANGÉ) ---
+  const googleApiKey = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!googleApiKey) {
+    console.error(`[ai-advanced-search V-GoogleAI Modified+Fallback] CRITICAL: GOOGLE_AI_API_KEY secret is not set!`);
+    return new Response(JSON.stringify({ results: [], error: `Config serveur: Secret 'GOOGLE_AI_API_KEY' manquant.` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 });
   }
 
@@ -75,27 +72,22 @@ serve(async (req: Request) => {
 
   try {
     if (req.method !== 'POST') throw new Error("Méthode non autorisée.");
-
     const body = await req.json();
     userQuery = body.query?.trim() || null;
     localStockContext = body.localStockContext || null;
-
     if (body.history && Array.isArray(body.history)) {
-        history = body.history.filter(
-            (msg): msg is { role: string, content: string } =>
+        history = body.history.filter( /* ... (filtrage inchangé) ... */
+             (msg): msg is { role: string, content: string } =>
                 typeof msg === 'object' && msg !== null &&
                 typeof msg.role === 'string' && typeof msg.content === 'string'
-        ).slice(-4); // V7 history limit
+        ).map(msg => ({ role: msg.role === 'assistant' ? 'model' : msg.role, content: msg.content })).slice(-4);
     }
-
     if (!userQuery) throw new Error("Texte utilisateur (clé 'query') manquante.");
 
-    console.log(`[ai-advanced-search V7 Revert] Processing query: "${userQuery}"`);
-    console.log(`[ai-advanced-search V7 Revert] History length: ${history.length}`);
-    console.log(`[ai-advanced-search V7 Revert] Local stock context received: ${localStockContext ? 'Yes' : 'No'}`);
+    console.log(`[ai-advanced-search V-GoogleAI Modified+Fallback] Processing query: "${userQuery}"`);
 
-    // --- SYSTEM PROMPT (Exact V7 Prompt) ---
-    const systemPrompt = `Tu es StockAV, un assistant IA expert en composants électroniques. Analyse la requête et fournis des suggestions VÉRIFIABLES.
+    // --- SYSTEM PROMPT (INCHANGÉ) ---
+    const systemPromptText = `Tu es StockAV, un assistant IA expert en composants électroniques. Analyse la requête et fournis des suggestions VÉRIFIABLES.
 
     **Instructions STRICTES :**
 
@@ -136,47 +128,53 @@ serve(async (req: Request) => {
     \`\`\`json
     ${localStockContext ? JSON.stringify(localStockContext, null, 2) : "{}"}
     \`\`\`
-    `; // --- END OF SYSTEM PROMPT (V7) ---
+    `;
 
-    const messages = [
-        { role: "system", content: systemPrompt },
-        ...history,
-        { role: "user", content: userQuery }
-    ];
-
-    const requestPayload = {
-        model: AI_MODEL,
-        messages: messages,
-        max_tokens: MAX_TOKENS_SEARCH,
-        temperature: 0.1,
+    // --- Construction du Payload pour Google Gemini (INCHANGÉ) ---
+    const googleContents = history.map(msg => ({ role: msg.role, parts: [{ text: msg.content }] }));
+    googleContents.push({ role: 'user', parts: [{ text: userQuery }] });
+    const googleRequestPayload = {
+        contents: googleContents,
+        systemInstruction: { parts: [{ text: systemPromptText }] },
+        generationConfig: {
+            responseMimeType: "application/json",
+            maxOutputTokens: MAX_TOKENS_GOOGLE,
+            temperature: 0.1, topP: 0.9, topK: 1
+        },
+        safetySettings: [ /* ... (inchangé) ... */
+             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+             { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        ]
     };
 
-    console.log("[ai-advanced-search V7 Revert] Calling OpenRouter API...");
+    // --- Appel API Google Gemini (INCHANGÉ) ---
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_AI_MODEL}:generateContent?key=${googleApiKey}`;
+    console.log(`[ai-advanced-search V-GoogleAI Modified+Fallback] Calling Google AI API (Model: ${GOOGLE_AI_MODEL})...`);
     const apiStartTime = Date.now();
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await fetch(apiUrl, {
         method: "POST",
-        headers: {
-            "Authorization": `Bearer ${openRouterApiKey}`,
-            "Content-Type": "application/json",
-            "Accept": "application/json", // Keep headers from v9.x JS calls
-            "HTTP-Referer": appUrlReferer, // Keep headers from v9.x JS calls
-        },
-        body: JSON.stringify(requestPayload),
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(googleRequestPayload),
     });
     const apiEndTime = Date.now();
-    console.log(`[ai-advanced-search V7 Revert] API call duration: ${apiEndTime - apiStartTime} ms. Status: ${response.status}`);
+    console.log(`[ai-advanced-search V-GoogleAI Modified+Fallback] Google API call duration: ${apiEndTime - apiStartTime} ms. Status: ${response.status}`);
 
-    // --- Gestion Réponse (Identique à V7 originale) ---
-    if (!response.ok) {
+    // --- Gestion Réponse Google Gemini (INCHANGÉ jusqu'à l'extraction) ---
+    if (!response.ok) { /* ... (gestion erreur API inchangée) ... */
         const errorBodyText = await response.text();
-        console.error(`[ai-advanced-search V7 Revert] OpenRouter API Error: Status ${response.status}, Body: ${errorBodyText}`);
-        let detail = `Erreur API OpenRouter (${response.status})`;
+        console.error(`[ai-advanced-search V-GoogleAI Modified+Fallback] Google AI API Error: Status ${response.status}, Body: ${errorBodyText}`);
+        let detail = `Erreur API Google AI (${response.status})`;
          try {
              const errJson = JSON.parse(errorBodyText);
-             detail = errJson.error?.message || errJson.error || detail;
-             if (detail.toLowerCase().includes("rate limit exceeded")) {
-                 detail = "Limite d'appels OpenRouter atteinte.";
-             }
+             detail = errJson.error?.message || detail;
+             if (errJson.error?.status) detail += ` (${errJson.error.status})`;
+              if (detail.includes("API key not valid") || detail.includes("invalid API key")) {
+                  detail = "Clé API Google invalide ou non autorisée.";
+              } else if (detail.includes("quota") || response.status === 429) {
+                  detail = "Quota Google AI atteint. Réessayez plus tard.";
+              }
          } catch (_) { /* keep generated detail */ }
         return new Response(JSON.stringify({ results: [], error: detail }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: response.status === 429 ? 429 : 502 });
@@ -185,54 +183,82 @@ serve(async (req: Request) => {
     const data = await response.json();
     let searchResults: any[] = [];
     let errorFromAI: string | null = null;
+    let rawContent: string | null = null;
 
-    if (data?.choices?.[0]?.message?.content) {
-        const rawContent = data.choices[0].message.content.trim();
-        console.log("[ai-advanced-search V7 Revert] Raw content received from AI:", rawContent);
+    // Extraction de la réponse de Gemini (logique inchangée pour détecter erreurs sécurité/blocage/max_tokens)
+    try {
+        const candidate = data?.candidates?.[0];
+        if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+             console.warn(`[ai-advanced-search V-GoogleAI Modified+Fallback] Google AI response finished due to: ${candidate.finishReason}`);
+             if (candidate.finishReason === 'SAFETY') { errorFromAI = "La réponse (recherche avancée) a été bloquée par les filtres de sécurité de l'IA."; }
+             else if (candidate.finishReason === 'MAX_TOKENS') { rawContent = candidate?.content?.parts?.[0]?.text?.trim() || null; errorFromAI = "Réponse IA tronquée (MAX_TOKENS), tentative d'extraction JSON échouée."; }
+             else { errorFromAI = `La réponse (recherche avancée) a été interrompue (${candidate.finishReason}).`; }
+        } else if (data?.promptFeedback?.blockReason) {
+             console.warn(`[ai-advanced-search V-GoogleAI Modified+Fallback] Google AI blocked the prompt: ${data.promptFeedback.blockReason}`);
+             errorFromAI = `La requête (recherche avancée) a été bloquée par les filtres de sécurité de l'IA (${data.promptFeedback.blockReason}).`;
+        } else {
+             rawContent = candidate?.content?.parts?.[0]?.text?.trim() || null;
+        }
+        if (!rawContent && !errorFromAI) { errorFromAI = "Structure de réponse Google AI invalide ou vide."; }
+    } catch (parseError) {
+         console.error("[ai-advanced-search V-GoogleAI Modified+Fallback] Error processing Google AI response structure:", parseError);
+         errorFromAI = "Erreur interne lors du traitement de la réponse IA.";
+    }
+
+    // Extraction et Validation JSON
+    if (rawContent) {
+        console.log("[ai-advanced-search V-GoogleAI Modified+Fallback] Raw content received from AI:", rawContent);
         const parsedArray = extractJsonArray(rawContent);
 
         if (parsedArray !== null) {
-             searchResults = parsedArray.filter(item =>
-                 typeof item === 'object' && item !== null && typeof item.ref === 'string'
+             searchResults = parsedArray.filter( /* ... (filtrage inchangé) ... */
+                 item => typeof item === 'object' && item !== null && typeof item.ref === 'string'
              ).slice(0, MAX_RESULTS);
-
-             console.log(`[ai-advanced-search V7 Revert] Parsed and filtered results: ${searchResults.length} items.`);
-
+             console.log(`[ai-advanced-search V-GoogleAI Modified+Fallback] Parsed and filtered results: ${searchResults.length} items.`);
              if (searchResults.length === 1 && searchResults[0].type === 'error') {
-                 console.warn("[ai-advanced-search V7 Revert] AI returned the standard error message JSON.");
-                 errorFromAI = searchResults[0].ref;
-                 searchResults = [];
+                 console.warn("[ai-advanced-search V-GoogleAI Modified+Fallback] AI returned the standard error message JSON.");
+                 errorFromAI = searchResults[0].ref; // Utiliser l'erreur de l'IA
+                 searchResults = []; // Vider les résultats
+             } else {
+                 if (errorFromAI?.includes("MAX_TOKENS")) errorFromAI = null; // Réussite malgré troncature
              }
-             // NOTE: This version does NOT add links deterministically. It relies on the AI generating them.
         } else {
-             console.error("[ai-advanced-search V7 Revert] CRITICAL: Failed to extract valid JSON array from AI response. Raw content was:", rawContent);
-             throw new Error("Format de réponse IA invalide (JSON non trouvé/parsable).");
+             // <<< MODIFICATION : Fallback si extractJsonArray échoue >>>
+             console.error("[ai-advanced-search V-GoogleAI Modified+Fallback] CRITICAL: Failed to extract valid JSON array from AI response. Forcing standard error.");
+             // S'il n'y a pas déjà une erreur plus grave (sécurité, etc.)
+             if (!errorFromAI) {
+                 errorFromAI = "Désolé, je ne peux pas traiter cette demande précisément ou fournir de comparaison directe."; // L'erreur standard définie dans le prompt
+             }
+             // Dans tous les cas où le JSON n'est pas valide, on vide les résultats
+             searchResults = [];
+             // <<< FIN MODIFICATION >>>
         }
-    } else {
-        console.warn("[ai-advanced-search V7 Revert] Invalid or empty response structure received from OpenRouter:", data);
-        throw new Error("Structure de réponse IA invalide.");
+    } else if (errorFromAI) {
+        // S'il y a une erreur (sécurité, etc.) et pas de contenu brut, assurer que searchResults est vide
+        searchResults = [];
     }
 
+    // --- Construction de la réponse finale (INCHANGÉ) ---
     const finalResponse = {
-        results: searchResults,
-        error: errorFromAI
+        results: searchResults, // Sera [] si erreur ou extraction échouée
+        error: errorFromAI // Message d'erreur ou null
     };
     const requestEndTime = Date.now();
-    console.log(`[ai-advanced-search V7 Revert] Returning response. Found ${searchResults.length} results. AI Error flag: ${errorFromAI !== null}. Duration: ${requestEndTime - requestStartTime} ms.`);
+    console.log(`[ai-advanced-search V-GoogleAI Modified+Fallback] Returning response. Found ${searchResults.length} results. Error flag: ${errorFromAI !== null}. Duration: ${requestEndTime - requestStartTime} ms.`);
 
-    // IMPORTANT: Ensure correct headers are sent back, including CORS
+    // --- Retour de la réponse au frontend (INCHANGÉ) ---
     return new Response(JSON.stringify(finalResponse), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
 
   } catch (error) {
+    // --- Gestion des erreurs Top-Level (INCHANGÉ) ---
     const requestEndTime = Date.now();
-    console.error(`[ai-advanced-search V7 Revert] !!! TOP LEVEL CATCH ERROR (Query: ${userQuery || 'N/A'}, Duration: ${requestEndTime - requestStartTime} ms):`, error instanceof Error ? error.message : String(error));
-    // Ensure CORS headers are sent even on internal errors
+    console.error(`[ai-advanced-search V-GoogleAI Modified+Fallback] !!! TOP LEVEL CATCH ERROR:`, error);
     return new Response(JSON.stringify({
         results: [],
-        error: `Erreur interne fonction Edge (ai-advanced-search): ${error instanceof Error ? error.message : "Erreur interne inconnue."}`
+        error: `Erreur interne fonction Edge (ai-advanced-search V-GoogleAI Modified+Fallback): ${error instanceof Error ? error.message : "Erreur interne inconnue."}`
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
@@ -240,5 +266,5 @@ serve(async (req: Request) => {
   }
 });
 
-console.log("[ai-advanced-search V7 Revert] Edge Function listener started.");
-// --- END OF FILE supabase/functions/ai-advanced-search/index.ts (V7 - Clean Revert) ---
+console.log("[ai-advanced-search V-GoogleAI Modified+Fallback] Edge Function listener started.");
+// --- END OF FILE supabase/functions/ai-advanced-search/index.ts (V-GoogleAI - MODIFIED MODEL + JSON Fallback) ---
