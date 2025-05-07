@@ -1,4 +1,4 @@
-/* ----- DÉBUT DU FICHIER style.css (V9 - Affichage Horizontal Chat + Specs + Liens) ----- */
+/* ----- DÉBUT DU FICHIER style.css (V9 - Affichage Horizontal Chat + Specs + Liens + Onglet/Vue Recherche/Inventaire Conditionnel) ----- */
 
 /* --- Polices et Variables Globales --- */
 :root {
@@ -49,12 +49,11 @@
     --drawer-collected-text: #555;
     --drawer-collected-opacity: 0.75;
     --drawer-collected-hover-opacity: 0.85;
-    /* NOUVEAU: Couleur de fond pour les cartes de composants dans le chat */
     --chat-component-card-bg: #ffffff;
     --chat-component-card-border: #e0e0e0;
 }
 
-/* ... (styles body, *, container, app-header, logo, auth, nav inchangés) ... */
+/* ... (styles body, *, container, app-header, logo, auth inchangés) ... */
 body {
     font-family: var(--font-family-base);
     line-height: 1.6;
@@ -120,6 +119,7 @@ body {
 .user-info button { padding: 4px 8px; font-size: 0.8em; background-color: var(--secondary-color); color: white; border: none; border-radius: var(--border-radius); cursor: pointer; transition: background-color 0.2s ease; }
 .user-info button:hover { background-color: #5a6268; }
 
+/* === Barre de Navigation === */
 .view-navigation { margin-top: 0; margin-bottom: 30px; text-align: center; border-bottom: 1px solid var(--border-color); padding-left: 5px; }
 .nav-button { padding: 12px 22px; cursor: pointer; border: 1px solid transparent; border-top-width: 4px; border-top-style: solid; border-bottom: none; background-color: var(--light-gray); margin: 0 3px -1px 3px; border-radius: var(--border-radius) var(--border-radius) 0 0; font-size: 1em; font-weight: 500; color: var(--text-muted); position: relative; bottom: -1px; outline: none; transition: all 0.2s ease; }
 .nav-button.tab-recherche { border-top-color: var(--tab-recherche-border); }
@@ -130,17 +130,65 @@ body {
 .nav-button.tab-parametres { border-top-color: var(--tab-parametres-border); }
 .nav-button.tab-bom { border-top-color: var(--tab-bom-border); }
 .nav-button:not(.active):hover:not(:disabled) { color: var(--primary-color); background-color: #e9ecef; }
+/* Style actif par défaut (sera appliqué par JS ou par la règle ci-dessous) */
 .nav-button.active { background-color: #ffffff; border-left-color: var(--border-color); border-right-color: var(--border-color); border-bottom: 1px solid #ffffff; font-weight: 600; color: var(--primary-color-dark); z-index: 2; }
 .nav-button.protected:disabled { cursor: not-allowed; opacity: 0.6; color: var(--text-muted); background-color: #f8f9fa; }
 .nav-button.protected:disabled:hover { background-color: #f8f9fa; }
 
+/* --- AJOUT/MODIFICATION : Gestion affichage onglets ET VUES selon connexion --- */
+
+/* --- Buttons --- */
+/* 1. Cacher le bouton Recherche si déconnecté */
+body:not(.user-logged-in) #show-search-view {
+    display: none !important;
+}
+/* 2. Afficher le bouton Recherche quand l'utilisateur est connecté */
+body.user-logged-in #show-search-view {
+    display: inline-block; /* Rétablir l'affichage normal */
+}
+/* 3. Forcer l'onglet Inventaire à être ACTIF VISUELLEMENT si déconnecté */
+body:not(.user-logged-in) #show-inventory-view {
+    background-color: #ffffff; /* Style actif */
+    border-left-color: var(--border-color); /* Style actif */
+    border-right-color: var(--border-color); /* Style actif */
+    border-bottom: 1px solid #ffffff; /* Style actif */
+    font-weight: 600; /* Style actif */
+    color: var(--primary-color-dark); /* Style actif */
+    z-index: 2; /* Style actif */
+    opacity: 1; /* S'assurer qu'il n'est pas grisé */
+    cursor: pointer; /* Curseur normal */
+}
+/* 4. S'assurer que les autres boutons (non Inventaire) sont INACTIFS VISUELLEMENT si déconnecté */
+body:not(.user-logged-in) .nav-button:not(#show-inventory-view) {
+    background-color: var(--light-gray); /* Style inactif */
+    border-left-color: transparent; /* Style inactif */
+    border-right-color: transparent; /* Style inactif */
+    border-bottom: none; /* Style inactif */
+    font-weight: 500; /* Style inactif */
+    color: var(--text-muted); /* Style inactif */
+    z-index: 1; /* Style inactif */
+}
+
+/* --- Views (Content) --- */
+/* 5. Forcer la VUE Inventaire à être VISIBLE si déconnecté */
+body:not(.user-logged-in) main#inventory-view {
+    display: block !important;
+}
+/* 6. Forcer la VUE Recherche à être CACHÉE si déconnecté */
+body:not(.user-logged-in) main#search-view {
+    display: none !important;
+}
+/* --- FIN AJOUT/MODIFICATION --- */
+
+
 /* --- Styles Communs Sections/Vues --- */
-main.view-section { padding: 10px 5px 15px 5px; display: none; }
-main.view-section.active-view { display: block; }
+main.view-section { padding: 10px 5px 15px 5px; display: none; } /* Par défaut caché */
+main.view-section.active-view { display: block; } /* Le JS gère ça normalement */
 .view-title { text-align: center; margin-top: 0; margin-bottom: 35px; color: var(--text-color); font-size: 1.6em; font-weight: 600; }
 .section-subtitle { margin-bottom: 15px; color: var(--text-color); font-size: 1.2em; font-weight: 600; border-bottom: 1px solid #eee; padding-bottom: 8px; }
 
 /* --- Styles Vue Recherche (Chat) --- */
+/* ... (styles chat inchangés par rapport à la version V9 précédente) ... */
 .search-section { margin-top: 25px; }
 .search-box { display: flex; align-items: center; box-shadow: var(--box-shadow); border-radius: var(--border-radius); }
 #component-input { flex-grow: 1; padding: 12px 15px; border: 1px solid var(--border-color); border-right: none; border-radius: var(--border-radius) 0 0 var(--border-radius); font-size: 1em; outline: none; transition: border-color 0.2s ease; height: auto; box-sizing: border-box; position: relative; z-index: 1; }
@@ -149,196 +197,45 @@ main.view-section.active-view { display: block; }
 #search-button:hover:not(:disabled) { background-color: var(--primary-color-dark); border-color: var(--primary-color-dark); z-index: 2;}
 #search-button:disabled { background-color: var(--secondary-color); border-color: var(--secondary-color); cursor: not-allowed;}
 .response-section { margin-top: 0; }
-.chat-box { background-color: var(--light-gray); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 20px; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 15px; height: 500px; /* Augmenté légèrement pour potentiellement + de contenu horizontal */ }
-
-/* --- MODIFIE: Styles Messages AI --- */
-.message.ai {
-    background-color: transparent; /* Le fond sera sur le conteneur interne */
-    color: var(--text-color);
-    border: none; /* Plus de bordure sur le message lui-même */
-    border-radius: 0;
-    align-self: stretch; /* Prend toute la largeur disponible */
-    margin-right: 0;
-    padding: 0; /* Pas de padding sur le message AI global */
-    box-shadow: none; /* Pas d'ombre sur le message global */
-    max-width: 100%; /* Prend toute la largeur */
-}
-
-/* NOUVEAU: Conteneur pour les résultats horizontaux */
-.ai-results-container {
-    display: flex; /* Active Flexbox */
-    flex-wrap: wrap; /* Permet le retour à la ligne si manque de place */
-    gap: 15px; /* Espace entre les cartes */
-    padding: 10px 0; /* Ajoute un peu d'espace vertical autour des cartes */
-    width: 100%; /* Assure que le conteneur prend toute la largeur */
-}
-
-/* MODIFIE: Style de chaque carte d'équivalent */
-.message.ai .equivalent-item {
-    flex: 1 1 280px; /* Base flexible, permet de grandir, largeur de base 280px */
-    min-width: 250px; /* Largeur minimale avant retour à la ligne */
-    max-width: 350px; /* Largeur maximale pour éviter cartes trop larges */
-    border: 1px solid var(--chat-component-card-border); /* Bordure de la carte */
-    background-color: var(--chat-component-card-bg); /* Fond blanc pour la carte */
-    border-radius: var(--border-radius);
-    padding: 15px; /* Padding intérieur de la carte */
-    margin-bottom: 0; /* Plus de marge basse (gérée par gap) */
-    border-bottom: none; /* Plus de bordure basse */
-    box-shadow: var(--box-shadow); /* Légère ombre pour effet de carte */
-    display: flex; /* Permet d'utiliser flex-direction column */
-    flex-direction: column; /* Empile les éléments à l'intérieur verticalement */
-    transition: box-shadow 0.2s ease;
-}
-.message.ai .equivalent-item:hover {
-    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1); /* Ombre légèrement plus prononcée au survol */
-}
-
-/* Style en-tête de la carte */
-.message.ai .item-header {
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    border-bottom: 1px dashed #eee; /* Séparateur léger sous le titre */
-    padding-bottom: 8px;
-    flex-wrap: wrap; /* Permet au type de passer en dessous si manque de place */
-}
+.chat-box { background-color: var(--light-gray); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 20px; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 15px; height: 500px; }
+.message.ai { background-color: transparent; color: var(--text-color); border: none; border-radius: 0; align-self: stretch; margin-right: 0; padding: 0; box-shadow: none; max-width: 100%; }
+.ai-results-container { display: flex; flex-wrap: wrap; gap: 15px; padding: 10px 0; width: 100%; }
+.message.ai .equivalent-item { flex: 1 1 280px; min-width: 250px; max-width: 350px; border: 1px solid var(--chat-component-card-border); background-color: var(--chat-component-card-bg); border-radius: var(--border-radius); padding: 15px; margin-bottom: 0; border-bottom: none; box-shadow: var(--box-shadow); display: flex; flex-direction: column; transition: box-shadow 0.2s ease; }
+.message.ai .equivalent-item:hover { box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1); }
+.message.ai .item-header { margin-bottom: 10px; display: flex; align-items: center; border-bottom: 1px dashed #eee; padding-bottom: 8px; flex-wrap: wrap; }
 .message.ai .item-header strong { font-size: 1.05em; color: var(--primary-color-dark); margin-right: 6px; word-break: break-all; }
 .message.ai .item-header .component-type { color: var(--text-muted); font-size: 0.85em; font-style: italic; margin-left: 5px; white-space: nowrap; }
-
-/* Infos locales */
-.message.ai .local-info {
-    display: inline-block;
-    font-size: 0.9em;
-    color: var(--success-color);
-    margin-bottom: 10px;
-    background-color: var(--success-bg);
-    padding: 5px 10px; /* Padding ajusté */
-    border-radius: var(--border-radius);
-    border: 1px solid #c3e6cb;
-}
-
-/* Raison équivalent / Statut non local */
-.message.ai .equivalent-reason,
-.message.ai .stock-status-info {
-    font-size: 0.85em;
-    color: var(--text-muted);
-    margin-top: 5px; /* Réduit marge haute */
-    margin-bottom: 10px;
-    font-style: italic;
-}
-
-/* Message d'erreur spécifique */
-.message.ai .equivalent-item.error-message {
-    color: var(--error-color);
-    background-color: var(--error-bg);
-    border: 1px solid #f5c6cb;
-    padding: 15px;
-    flex-basis: 100%; /* Prend toute la largeur si c'est une erreur */
-    max-width: 100%;
-    flex-grow: 0; flex-shrink: 0;
-}
-
-/* Conteneur des Specs */
-.message.ai .specs-container {
-    margin-top: 10px;
-    margin-bottom: 15px; /* Espace après specs */
-    flex-grow: 1; /* Permet à cette section de prendre l'espace restant */
-}
-
-/* Table des Specs (style ajusté pour carte) */
-.message.ai table.specs-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85em; /* Police légèrement réduite */
-    margin-top: 5px;
-    border: none; /* Pas de bordure globale */
-    background-color: transparent; /* Fond transparent, hérite de la carte */
-    border-radius: 0;
-    overflow: visible;
-}
-.message.ai table.specs-table tbody tr { background-color: transparent !important; } /* Pas de fond alterné */
-.message.ai table.specs-table td {
-    padding: 3px 0; /* Padding vertical réduit, horizontal nul */
-    border: none;
-    border-bottom: 1px dotted #eee; /* Séparateur très léger entre specs */
-    vertical-align: top;
-}
+.message.ai .local-info { display: inline-block; font-size: 0.9em; color: var(--success-color); margin-bottom: 10px; background-color: var(--success-bg); padding: 5px 10px; border-radius: var(--border-radius); border: 1px solid #c3e6cb; }
+.message.ai .equivalent-reason, .message.ai .stock-status-info { font-size: 0.85em; color: var(--text-muted); margin-top: 5px; margin-bottom: 10px; font-style: italic; }
+.message.ai .equivalent-item.error-message { color: var(--error-color); background-color: var(--error-bg); border: 1px solid #f5c6cb; padding: 15px; flex-basis: 100%; max-width: 100%; flex-grow: 0; flex-shrink: 0; }
+.message.ai .specs-container { margin-top: 10px; margin-bottom: 15px; flex-grow: 1; }
+.message.ai table.specs-table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin-top: 5px; border: none; background-color: transparent; border-radius: 0; overflow: visible; }
+.message.ai table.specs-table tbody tr { background-color: transparent !important; }
+.message.ai table.specs-table td { padding: 3px 0; border: none; border-bottom: 1px dotted #eee; vertical-align: top; }
 .message.ai table.specs-table tr:last-child td { border-bottom: none; }
-.message.ai table.specs-table td.spec-key {
-    font-weight: 500;
-    color: var(--text-muted);
-    padding-right: 8px; /* Espace après la clé */
-    white-space: nowrap;
-    width: auto; /* Largeur auto */
-}
-.message.ai table.specs-table td.spec-value {
-    color: var(--text-color);
-    word-wrap: break-word;
-    text-align: right; /* Alignement à droite pour la valeur */
-}
-
-/* Bloc Liens Externes */
-.external-links-block {
-    margin-top: auto; /* Pousse en bas de la carte */
-    padding-top: 12px;
-    border-top: 1px dashed #ddd;
-    font-size: 0.9em;
-    text-align: center; /* Centrer les boutons */
-}
-.external-links-block strong { display: none; /* Cacher titre "Liens" si besoin */ }
-a.external-link {
-    display: inline-block; /* Ou flex pour centrer */
-    margin: 3px; /* Marge réduite */
-    padding: 5px 10px; /* Padding ajusté */
-    text-decoration: none;
-    border-radius: var(--border-radius);
-    font-size: 0.85em; /* Taille réduite */
-    font-weight: 500;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
-}
-/* Couleurs liens inchangées */
+.message.ai table.specs-table td.spec-key { font-weight: 500; color: var(--text-muted); padding-right: 8px; white-space: nowrap; width: auto; }
+.message.ai table.specs-table td.spec-value { color: var(--text-color); word-wrap: break-word; text-align: right; }
+.external-links-block { margin-top: auto; padding-top: 12px; border-top: 1px dashed #ddd; font-size: 0.9em; text-align: center; }
+.external-links-block strong { display: none; }
+a.external-link { display: inline-block; margin: 3px; padding: 5px 10px; text-decoration: none; border-radius: var(--border-radius); font-size: 0.85em; font-weight: 500; transition: all 0.2s ease; border: 1px solid transparent; }
 a.external-link.mouser { background-color: #ff6600; color: white; border-color: #e65c00;}
 a.external-link.digikey { background-color: #cc0000; color: white; border-color: #b30000;}
 a.external-link.lcsc { background-color: #00a0e9; color: white; border-color: #008fcf;}
 a.external-link.aliexpress { background-color: #e44236; color: white; border-color: #c73025; }
 a.external-link:hover { opacity: 0.85; box-shadow: var(--box-shadow); }
-
-/* Conteneur Bouton "Prendre" */
-.message.ai .action-container {
-    margin-top: 15px; /* Espace avant le bouton */
-    text-align: center;
-}
-.message.ai button.choice-button.take-button {
-    padding: 7px 15px; /* Padding ajusté */
-    font-size: 0.9em;
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition: background-color 0.2s;
-    display: inline-block; /* Assure que le bouton ne prend pas toute la largeur */
-}
+.message.ai .action-container { margin-top: 15px; text-align: center; }
+.message.ai button.choice-button.take-button { padding: 7px 15px; font-size: 0.9em; background-color: var(--primary-color); color: white; border: none; border-radius: var(--border-radius); cursor: pointer; transition: background-color 0.2s; display: inline-block; }
 .message.ai button.choice-button.take-button:hover:not(:disabled) { background-color: var(--primary-color-dark); }
 .message.ai button.choice-button.take-button:disabled { background-color: var(--secondary-color); opacity: 0.6; cursor: not-allowed; }
-
-/* Indicateur stock chat */
 .stock-indicator-chat { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background-color: var(--stock-unknown-color); margin-right: 6px; vertical-align: middle; box-shadow: 0 0 2px rgba(0,0,0,0.15); flex-shrink: 0;}
 .stock-indicator-chat.level-ok { background-color: var(--stock-ok-color); }
 .stock-indicator-chat.level-warning { background-color: var(--stock-warning-color); }
 .stock-indicator-chat.level-critical { background-color: var(--stock-critical-color); }
-/* --- FIN MODIFICATIONS CHAT --- */
-
-/* --- Styles Messages Utilisateur (inchangé) --- */
 .message.user { background: linear-gradient(to right, #0062cc, #0056b3); color: white; border-radius: 18px 18px 5px 18px; align-self: flex-end; margin-left: auto; padding: 10px 16px; max-width: 85%; line-height: 1.5; box-shadow: var(--box-shadow); word-wrap: break-word; font-size: 0.95em; }
-
-/* --- Indicateur de frappe (inchangé) --- */
 .typing-indicator { text-align: left; margin-top: 10px; height: 20px; padding-left: 10px; order: 1; }
 .typing-indicator i { color: var(--text-muted); font-style: italic; font-size: 0.9em; }
 
 /* ... (styles filter-box, attribute-filters, data-display-box, data-table, pagination, admin, modale, 7-segment, audit, kit actuel, footer, items-per-page, etc. INCHANGÉS) ... */
-
 /* Styles communs aux tableaux de données */
 .filter-box { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 25px; padding: 20px; background-color: var(--light-gray); border-radius: var(--border-radius); flex-wrap: wrap; border: 1px solid var(--border-color); }
 .filter-box .form-group { margin-bottom: 0; flex-grow: 1; flex-basis: 180px; }
@@ -380,7 +277,11 @@ a.external-link:hover { opacity: 0.85; box-shadow: var(--box-shadow); }
 .data-table tbody tr.inventory-item-row { cursor: default; }
 .data-table tbody tr.inventory-item-row:not(.drawer-collected-in-bom) td:not(.col-select) { cursor: pointer; }
 .data-table tbody tr.inventory-item-row td a { cursor: pointer; }
-body:not(.user-logged-in) #inventory-table th:nth-child(6), body:not(.user-logged-in) #inventory-table td:nth-child(6) { display: none; }
+/* Masquer la colonne Tiroir si non connecté */
+body:not(.user-logged-in) #inventory-table th:nth-child(6),
+body:not(.user-logged-in) #inventory-table td:nth-child(6) {
+    display: none;
+}
 
 #log-table td:nth-child(1) { white-space: nowrap; font-size: 0.9em; color: var(--text-muted); }
 #log-table td:nth-child(5) { text-align: center; font-weight: 600; }
@@ -570,26 +471,12 @@ button.drawer-button.collected:hover { opacity: 0.9; background-color: #5a6268 !
     #seven-segment-display { transform: scale(0.95); transform-origin: top left; left: 10px; }
     .attribute-filters-container .form-group { flex-basis: calc(33.33% - 15px); }
     button.drawer-button { font-size: 1em; padding: 10px 15px; }
-    /* MODIFIE: Retour à l'affichage vertical sur tablette pour le chat */
     .ai-results-container { flex-direction: column; gap: 15px; }
-    .message.ai .equivalent-item {
-        flex: 1 1 100%; /* Prend toute la largeur */
-        max-width: 100%; /* Permet de prendre toute la largeur */
-        border-bottom: 1px dashed var(--chat-component-card-border); /* Rétablir la bordure basse */
-        padding-bottom: 15px; /* Espace en bas */
-        margin-bottom: 15px; /* Espace entre items */
-        box-shadow: none; /* Enlever l'ombre en mode vertical */
-        border-left: none; border-right: none; border-top: none; /* Enlever autres bordures */
-        border-radius: 0;
-    }
-     .message.ai .equivalent-item:last-child {
-        border-bottom: none;
-        margin-bottom: 0;
-        padding-bottom: 0;
-    }
-     .message.ai table.specs-table { font-size: 0.88em; } /* Rétablir taille police */
-     .message.ai table.specs-table td.spec-key { width: 35%; } /* Rétablir largeur clé */
-     .message.ai table.specs-table td.spec-value { text-align: left; } /* Rétablir alignement valeur */
+    .message.ai .equivalent-item { flex: 1 1 100%; max-width: 100%; border-bottom: 1px dashed var(--chat-component-card-border); padding-bottom: 15px; margin-bottom: 15px; box-shadow: none; border-left: none; border-right: none; border-top: none; border-radius: 0; }
+     .message.ai .equivalent-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+     .message.ai table.specs-table { font-size: 0.88em; }
+     .message.ai table.specs-table td.spec-key { width: 35%; }
+     .message.ai table.specs-table td.spec-value { text-align: left; }
 }
 @media (max-width: 768px) {
     /* ... (autres styles responsives inchangés) ... */
@@ -603,12 +490,17 @@ button.drawer-button.collected:hover { opacity: 0.9; background-color: #5a6268 !
     .view-title { font-size: 1.4em; margin-bottom: 25px;}
     .pagination-controls { gap: 10px 15px; }
     .items-per-page-selector { margin-left: 0; flex-basis: 100%; text-align: center; margin-top: 10px; }
-    #inventory-table th:nth-child(5), #inventory-table td:nth-child(5) { display: none; }
-    #log-table th:nth-child(2), #log-table td:nth-child(2) { display: none; }
-    #audit-table th:nth-child(2), #audit-table td:nth-child(2) { display: none; }
+    #inventory-table th:nth-child(5), #inventory-table td:nth-child(5) { display: none; } /* Masquer Type */
+    /* Masquer Colonne Tiroir aussi sur mobile si non connecté */
+    body:not(.user-logged-in) #inventory-table th:nth-child(6),
+    body:not(.user-logged-in) #inventory-table td:nth-child(6) {
+        display: none;
+    }
+    #log-table th:nth-child(2), #log-table td:nth-child(2) { display: none; } /* Masquer Tech */
+    #audit-table th:nth-child(2), #audit-table td:nth-child(2) { display: none; } /* Masquer Desc */
     th, td { padding: 8px 8px; }
     #inventory-table td.col-select { width: 10%; }
-    #inventory-table td:nth-child(2) { padding-left: 25px; }
+    #inventory-table td:nth-child(2) { padding-left: 25px; } /* Ref */
     .stock-indicator { width: 10px; height: 10px; left: 8px; }
     #seven-segment-display { transform: scale(0.9); transform-origin: top left; left: 5px; }
     #quantity-change-modal { min-width: 300px; padding: 20px 25px 30px 25px; }
@@ -618,6 +510,7 @@ button.drawer-button.collected:hover { opacity: 0.9; background-color: #5a6268 !
     .attribute-badge { padding: 4px 8px; }
     .drawer-buttons-container { padding: 15px; gap: 10px; }
     button.drawer-button { font-size: 0.9em; padding: 8px 12px; min-width: 70px; }
+    #clear-kit-button { font-size: 0.9em; padding: 8px 15px;}
 }
 @media (max-width: 480px) {
     /* ... (autres styles responsives inchangés) ... */
@@ -626,13 +519,18 @@ button.drawer-button.collected:hover { opacity: 0.9; background-color: #5a6268 !
     .container { padding: 15px; margin-bottom: 10px;}
     .nav-button { font-size: 0.8em; padding: 8px 8px; margin: 0 1px -1px 1px;}
     th, td { padding: 6px 6px; font-size: 0.85em;}
-    #inventory-table th:nth-child(3), #inventory-table td:nth-child(3),
-    #inventory-table th:nth-child(4), #inventory-table td:nth-child(4),
-    #inventory-table th:nth-child(8), #inventory-table td:nth-child(8)
+    #inventory-table th:nth-child(3), #inventory-table td:nth-child(3), /* Masquer Desc */
+    #inventory-table th:nth-child(4), #inventory-table td:nth-child(4), /* Masquer Cat */
+    #inventory-table th:nth-child(8), #inventory-table td:nth-child(8) /* Masquer Datasheet */
     { display: none; }
-    #log-table th:nth-child(6), #log-table td:nth-child(6) { display: none; }
-    #audit-table th:nth-child(3), #audit-table td:nth-child(3) { display: none; }
-    #audit-table th:nth-child(4), #audit-table td:nth-child(4) { display: none; }
+    /* Masquer Colonne Tiroir aussi sur petit mobile si non connecté */
+    body:not(.user-logged-in) #inventory-table th:nth-child(6),
+    body:not(.user-logged-in) #inventory-table td:nth-child(6) {
+        display: none;
+    }
+    #log-table th:nth-child(6), #log-table td:nth-child(6) { display: none; } /* Masquer Stock Final */
+    #audit-table th:nth-child(3), #audit-table td:nth-child(3) { display: none; } /* Masquer Tiroir */
+    #audit-table th:nth-child(4), #audit-table td:nth-child(4) { display: none; } /* Masquer Qté Sys */
     .attribute-filters-container { display: none; }
     .message.ai button.choice-button { font-size: 0.85em; padding: 5px 10px;}
     .message.ai a.external-link, .message.ai a.external-link-inline { font-size: 0.80em; padding: 4px 8px; margin-right: 6px;}
@@ -644,7 +542,7 @@ button.drawer-button.collected:hover { opacity: 0.9; background-color: #5a6268 !
     .change-amount-display { font-size: 1.3em; min-width: 40px;}
     #quantity-change-modal .modal-actions button { font-size: 0.9em; padding: 8px 18px;}
     #inventory-table td.col-select { width: 15%; }
-    #inventory-table td:nth-child(2) { padding-left: 22px; }
+    #inventory-table td:nth-child(2) { padding-left: 22px; } /* Ref */
     .stock-indicator { width: 8px; height: 8px; left: 6px; }
     #modal-attributes-list { font-size: 0.8em; gap: 5px;}
     .attribute-badge { padding: 3px 7px; }
@@ -662,4 +560,4 @@ button.drawer-button.collected:hover { opacity: 0.9; background-color: #5a6268 !
 }
 
 
-/* ----- FIN DU FICHIER style.css (V9) ----- */
+/* ----- FIN DU FICHIER style.css (V9 + Onglet/Vue Recherche/Inventaire Conditionnel) ----- */
