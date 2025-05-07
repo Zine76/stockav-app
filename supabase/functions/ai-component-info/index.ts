@@ -4,7 +4,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { corsHeaders } from '../_shared/cors.ts'; // Import des headers
 
 // --- Configuration ---
-const AI_MODEL = "mistralai/mistral-7b-instruct:free"; // Utilisation de Gemini 2.5 Pro (vérifier dispo/nom exact si besoin)
+const AI_MODEL = "meta-llama/llama-4-scout:free5"; // Utilisation de Gemini 2.5 Pro (vérifier dispo/nom exact si besoin)
 const MAX_EQUIVALENTS = 5;
 const MAX_TOKENS_EQUIVALENTS = 250; // Un peu plus de tokens pour la sortie JSON
 
