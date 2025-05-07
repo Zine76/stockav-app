@@ -23,7 +23,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha512-dfX5uYVXzyU8+KHqj8bjo7UkOdg18PaOtpa48djpNbZHwExddghZ+ZmzWT06R5v6NSk3ZUfsH6FNEDepLx9hPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- Optional: FileSaver.js -->
-    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js" integrity="sha512-Qlv6VSKh1gDKGoJbovnlckEzUfPIFMfXaIzQWGM3LsaAEbkfsHxSXVfMGzMscFqFwfGDrBcsKUmzdvHGCF0yYg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
 
@@ -60,18 +60,20 @@
         </header>
 
         <!-- ===================== MAIN NAVIGATION ===================== -->
+        <!-- ORDRE MODIFIÉ : Recherche est maintenant à la fin -->
         <nav id="main-navigation" class="view-navigation">
-            <button id="show-search-view" class="nav-button tab-recherche active" title="Rechercher des composants">Recherche</button>
-            <button id="show-inventory-view" class="nav-button tab-inventaire" title="Voir tout le stock">Inventaire</button>
+            <button id="show-inventory-view" class="nav-button tab-inventaire active" title="Voir tout le stock">Inventaire</button> <!-- Mis 'active' ici par défaut (pour état déconnecté) -->
             <button id="show-bom-view" class="nav-button tab-bom protected" style="display: none;" disabled title="Connexion requise">Kit Actuel</button>
             <button id="show-log-view" class="nav-button tab-historique protected" style="display: none;" disabled title="Connexion requise">Historique</button>
             <button id="show-audit-view" class="nav-button tab-audit protected" style="display: none;" disabled title="Connexion requise">Audit Stock</button>
             <button id="show-admin-view" class="nav-button tab-admin protected" style="display: none;" disabled title="Connexion requise">Admin</button>
             <button id="show-settings-view" class="nav-button tab-parametres protected" style="display: none;" disabled title="Accès réservé à l'administrateur">Paramètres</button>
+            <button id="show-search-view" class="nav-button tab-recherche" title="Rechercher des composants">Recherche</button> <!-- Bouton Recherche déplacé ici, SANS 'active' par défaut -->
         </nav>
 
         <!-- ================== SEARCH VIEW (CHAT) ================== -->
-        <main id="search-view" class="view-section active-view">
+        <!-- Contenu de la vue Recherche reste ici, mais ne sera pas 'active-view' par défaut -->
+        <main id="search-view" class="view-section" style="display: none;">
              <h2 class="view-title">Recherche de Composants</h2>
              <div class="response-section">
                  <h3 class="section-subtitle">Conversation avec StockAV</h3>
@@ -91,7 +93,8 @@
         </main>
 
         <!-- ===================== INVENTORY VIEW ===================== -->
-        <main id="inventory-view" class="view-section" style="display: none;">
+        <!-- La vue Inventaire est marquée comme 'active-view' initialement (pour état déconnecté) -->
+        <main id="inventory-view" class="view-section active-view">
             <h2 class="view-title">Stock Actuel</h2>
             <div class="inventory-filters filter-box">
                 <div class="form-group">
@@ -353,7 +356,8 @@
                      <div class="form-group">
                          <label for="import-csv-file">Sélectionner fichier CSV (UTF-8) :</label>
                          <input type="file" id="import-csv-file" accept=".csv, text/csv">
-                         <small>Headers requis: <strong>ref, quantity</strong>. Optionnels: description, mfg, datasheet, drawer, category_name, threshold, attributes (JSON).</small>
+                         <!-- LIGNE MODIFIÉE ICI -->
+                         <small>Colonnes reconnues: <strong>ref, quantity</strong> (requis), description, mfg, datasheet, drawer, category_name, threshold, attributes (JSON). Toute autre colonne sera importée comme attribut spécifique.</small>
                      </div>
                      <div class="form-group import-mode-choice">
                          <label>Mode d'importation :</label>
